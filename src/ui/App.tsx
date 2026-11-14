@@ -4,6 +4,7 @@ import { message } from "../core/model";
 import { randomSeed, stageDebate, type StagedDebate } from "../core/stage";
 import {
   judgmentMarkdown,
+  motionOutcomeForDisplay,
   OUTCOME_SHORT,
   solveJudgment,
   type JudgmentRun
@@ -197,6 +198,12 @@ export default function App() {
     const verdictByEdge: GraphJudgment["verdictByEdge"] = {};
     for (const verdict of appliedVerdicts) verdictByEdge[verdict.edgeId] = verdict.verdict;
     const settled = judgmentComplete;
+    const motion = motionOutcomeForDisplay({
+      standard: judgment.run.standard,
+      step: judgment.step,
+      complete: settled,
+      outcome: judgmentSnapshot.outcome
+    });
     return {
       active: true,
       statuses: judgment.step > 0 || settled ? judgmentSnapshot.statuses : {},
@@ -206,6 +213,8 @@ export default function App() {
       verdictByEdge,
       complete: settled,
       outcome: settled ? judgmentSnapshot.outcome : undefined,
+      motionDisposition: motion.outcome,
+      motionProvisional: motion.provisional,
       unsupportedThesis: settled && judgmentSnapshot.unsupportedThesis
     };
   }, [judgment, judgmentSnapshot, judgmentComplete, appliedVerdicts, restored]);

@@ -5,6 +5,7 @@ import {
   clashEdges,
   judgmentMarkdown,
   judgmentSummary,
+  motionOutcomeForDisplay,
   orderVerdicts,
   solveJudgment,
   type ClashJudgment
@@ -292,5 +293,26 @@ describe("judgment solver", () => {
     expect(markdown).toContain("An objection");
     expect(markdown).toContain("## Warnings");
     expect(markdown).toContain("One clash was left open.");
+  });
+
+  it("gives the motion card a standard-aware provisional disposition", () => {
+    expect(
+      motionOutcomeForDisplay({ standard: "pro", step: 0, complete: false, outcome: "stands" })
+    ).toEqual({ outcome: "undecided", provisional: true });
+    expect(
+      motionOutcomeForDisplay({ standard: "preponderance", step: 0, complete: false, outcome: "stands" })
+    ).toEqual({ outcome: "undecided", provisional: true });
+    expect(
+      motionOutcomeForDisplay({ standard: "con", step: 0, complete: false, outcome: "undecided" })
+    ).toEqual({ outcome: "stands", provisional: true });
+  });
+
+  it("uses the live outcome after the first ruling and the final outcome when complete", () => {
+    expect(
+      motionOutcomeForDisplay({ standard: "pro", step: 1, complete: false, outcome: "falls" })
+    ).toEqual({ outcome: "falls", provisional: true });
+    expect(
+      motionOutcomeForDisplay({ standard: "pro", step: 2, complete: true, outcome: "undecided" })
+    ).toEqual({ outcome: "undecided", provisional: false });
   });
 });

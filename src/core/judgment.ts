@@ -149,6 +149,28 @@ export const STRICTNESS_NOTE: Record<JudgeStrictness, string> = {
   generous: "The judge's ruling stands, even when it is unsure."
 };
 
+/**
+ * The motion card speaks in outcomes, not in argument statuses. Before a run
+ * is complete, show a standard-aware provisional disposition: under a con
+ * burden the motion may stand until displaced, but under a pro burden or
+ * preponderance it is not yet established.
+ */
+export function motionOutcomeForDisplay(input: {
+  standard: StandardOfProof;
+  step: number;
+  complete: boolean;
+  outcome: JudgmentOutcome;
+}): { outcome: JudgmentOutcome; provisional: boolean } {
+  if (input.complete) return { outcome: input.outcome, provisional: false };
+  if (input.step === 0) {
+    return {
+      outcome: input.standard === "con" ? "stands" : "undecided",
+      provisional: true
+    };
+  }
+  return { outcome: input.outcome, provisional: true };
+}
+
 export function isClashEdge(edge: DebateEdge): edge is ClashEdge {
   return edge.type === "attack" || edge.type === "undercut";
 }

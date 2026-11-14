@@ -2030,6 +2030,20 @@ button:disabled { cursor: not-allowed; }
 .graph-node--thesis .node-judgment--defeated { color: #e3a096; }
 .graph-node--thesis .node-judgment--contested { color: #dec189; }
 .graph-node--thesis .node-judgment--unsupported { color: #c5b8a2; }
+.node-judgment--motion {
+  font-size: 7px;
+  letter-spacing: 0.08em;
+}
+.graph-node--thesis .node-judgment--stands { color: #a9d2b7; }
+.graph-node--thesis .node-judgment--falls { color: #e3a096; }
+.graph-node--thesis .node-judgment--undecided { color: #dec189; }
+.graph-node--thesis .node-judgment--unestablished { color: #c5b8a2; }
+.node-judgment-provisional {
+  font-style: normal;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  opacity: 0.66;
+}
 .node-restored {
   position: absolute;
   right: 8px; bottom: 7px;

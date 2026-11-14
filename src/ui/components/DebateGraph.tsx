@@ -25,6 +25,9 @@ export interface GraphJudgment {
   verdictByEdge: Record<string, ClashVerdict>;
   complete: boolean;
   outcome?: JudgmentOutcome;
+  /** Outcome shown on the motion card; may be provisional while in session. */
+  motionDisposition: JudgmentOutcome;
+  motionProvisional: boolean;
   unsupportedThesis: boolean;
 }
 
@@ -455,6 +458,8 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
                   judging={Boolean(judgment?.active)}
                   judgmentStatus={judgmentStatus}
                   judgmentRole={judgmentRole}
+                  motionDisposition={judgment?.motionDisposition}
+                  motionProvisional={Boolean(judgment?.motionProvisional)}
                   reinstated={Boolean(judgment?.reinstated.includes(card.node.id))}
                   unsupported={Boolean(judgment?.unsupportedThesis && card.node.id === debate.thesisId)}
                   onHover={setHoverId}
@@ -482,6 +487,8 @@ interface NodeCardProps {
   judging: boolean;
   judgmentStatus?: ArgumentStatus;
   judgmentRole?: "source" | "target";
+  motionDisposition?: JudgmentOutcome;
+  motionProvisional: boolean;
   reinstated: boolean;
   unsupported: boolean;
   onHover: (id: string | null) => void;
@@ -500,6 +507,8 @@ function NodeCard({
   judging,
   judgmentStatus,
   judgmentRole,
+  motionDisposition,
+  motionProvisional,
   reinstated,
   unsupported,
   onHover,
@@ -507,8 +516,9 @@ function NodeCard({
 }: NodeCardProps) {
   const node = card.node;
   const tags = node.tags.filter((tag) => !["motion", "thesis", "pro", "con", "neutral", "advocate", "challenger", "moderator", "you", "user"].includes(tag)).slice(0, 2);
-  const displayStatus = unsupported && judgmentStatus === "standing" ? "unsupported" : judgmentStatus;
-  const statusLabel = displayStatus ? STATUS_LABEL[displayStatus] : null;
+  const motion = isThesis && judging ? motionDisposition : undefined;
+  const displayStatus = !motion && unsupported && judgmentStatus === "standing" ? "unsupported" : judgmentStatus;
+  const statusLabel = motion ? OUTCOME_SHORT[motion] : displayStatus ? STATUS_LABEL[displayStatus] : null;
   return (
     <button
       type="button"
@@ -524,7 +534,7 @@ function NodeCard({
         judgmentDim ? "is-judgment-dim" : "",
         staged ? "is-staged" : "",
         judging ? "is-judging" : "",
-        displayStatus ? `is-${displayStatus}` : "",
+        motion ? `is-motion-${motion}` : displayStatus ? `is-${displayStatus}` : "",
         judgmentRole ? `is-clash-${judgmentRole}` : "",
         reinstated ? "is-reinstated" : ""
       ].join(" ")}
@@ -536,14 +546,20 @@ function NodeCard({
       }}
       onPointerEnter={() => onHover(node.id)}
       onPointerLeave={() => onHover(null)}
-      aria-label={`${node.kind === "argument" ? "Argument" : "Statement"}: ${node.title}. ${node.stance === "pro" ? "For the motion" : node.stance === "con" ? "Against the motion" : "Neutral"}.${statusLabel ? ` Status: ${statusLabel}.` : ""}`}
+      aria-label={`${node.kind === "argument" ? "Argument" : "Statement"}: ${node.title}. ${node.stance === "pro" ? "For the motion" : node.stance === "con" ? "Against the motion" : "Neutral"}.${statusLabel ? ` ${motion ? "Motion status" : "Status"}: ${statusLabel}${motion && motionProvisional ? " (in session)" : ""}.` : ""}`}
     >
       <div className="node-top">
         <span className={`node-kind ${isThesis ? "node-kind--motion" : ""}`}>
           {isThesis ? "The motion" : node.kind === "argument" ? "Argument" : "Statement"}
         </span>
         {statusLabel ? (
-          <span className={`node-judgment node-judgment--${displayStatus}`}>{statusLabel}</span>
+          <span
+            className={`node-judgment ${motion ? `node-judgment--motion node-judgment--${motion}` : `node-judgment--${displayStatus}`}`}
+            title={motion && motionProvisional ? "Provisional while the bench is in session" : undefined}
+          >
+            {statusLabel}
+            {motion && motionProvisional && <i className="node-judgment-provisional">in session</i>}
+          </span>
         ) : !isThesis ? (
           <span className={`node-stance stance-dot-${node.stance}`}>
             {node.stance === "pro" ? "For" : node.stance === "con" ? "Against" : "Context"}
