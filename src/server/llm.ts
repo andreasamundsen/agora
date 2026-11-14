@@ -74,13 +74,15 @@ Design rules:
 1. The thesis is the user's own claim, stated precisely and charitably. Preserve its meaning; sharpen its wording. Never substitute a nearby claim the user did not make.
 2. If the user gave reasons, include them as argument nodes tagged "user", attributed to "you". A fair reconstruction may fill gaps, but do not invent opinions they did not express.
 3. Build the strongest case for and against the thesis. Steelman both sides. No strawmen and no false balance: the map should show where the real pressure lies, including asymmetries in evidence.
-4. Produce 12–18 nodes. At least 4 pro and 4 con arguments, and at least 3 nodes that respond to a specific argument (attack or undercut), not merely to the thesis. Do not answer every objection: where the con side has a serious unanswered objection, leave it unanswered rather than inventing a weak reply. The map should preserve real pressure.
-5. Argument nodes need 2–3 premises and one conclusion. Their text is a compact explanation (max 45 words) that makes the inference explicit. Prefer concrete mechanisms, evidence and trade-offs over slogans.
-6. Edge semantics: support = source is a reason for target; attack = source is a reason against target; undercut = source challenges the target's premise, evidence or inference without directly denying its conclusion.
-7. Every non-thesis node must connect to the map. Prefer a connected tree with cross-links only where they mark a genuine clash.
-8. Stance is relative to the thesis. Speakers: advocate (pro), challenger (con), you (the user's own case), moderator (framing).
-9. The motion is a neutral question the map answers, in question form.
-10. Do not repeat the same point in different words, and do not pad the map with generic filler.
+4. Map the arguments that are genuinely load-bearing for this motion. Include the strongest direct reasons for and against the thesis, and the specific replies those arguments provoke. Most maps will land around 12–18 argument nodes, but that is a guideline, not a quota: use fewer for a narrow question, and more only when the additional arguments are distinct, relevant, and change the shape of the case. Do not pad with generic filler, and do not omit a serious line merely to stay inside the range. Do not answer every objection: where the con side has a serious unanswered objection, leave it unanswered rather than inventing a weak reply. The map should preserve real pressure.
+5. An argument node may bear directly on the thesis or respond to another argument. When it responds to another argument, attach it to that argument with attack or undercut; do not route every objection through the thesis. Stance remains relative to the thesis, not to the target. Use cross-links where there is a genuine clash, but do not invent relations merely to connect the graph.
+6. If one side is materially weaker, show that asymmetry rather than manufacturing balance. Do not invent evidence, statistics, citations, or quotations.
+7. Argument nodes need 2–3 premises and one conclusion. Each node should make one inferential move; split compound claims into separate nodes. The text is a compact explanation (max 45 words) that makes the inference explicit. Prefer concrete mechanisms, evidence and trade-offs over slogans.
+8. Edge semantics: support = source is a reason for target; attack = source is a reason against target; undercut = source challenges the target's premise, evidence or inference without directly denying its conclusion.
+9. Every non-thesis node must connect to the map. Prefer a connected tree with cross-links only where they mark a genuine clash.
+10. Stance is relative to the thesis. Speakers: advocate (pro), challenger (con), you (the user's own case), moderator (framing).
+11. The motion is a neutral question the map answers, in question form.
+12. Do not repeat the same point in different words, and do not pad the map with generic filler.
 
 Return JSON only, with no markdown fences and no commentary outside the object.`;
 
@@ -140,6 +142,7 @@ You are extending an existing map. Return a JSON patch only:
 }
 
 Rules for the patch:
+- The coverage rules describe a complete map. For this patch, add only the 2–5 new nodes and edges needed for the request; do not rebuild the map.
 - Add 2–5 nodes that respond to the request and attach them to existing ids.
 - Do not redefine existing nodes. Use new unique ids for new nodes.
 - Use an edge type that expresses the actual move: attack, support or undercut.
