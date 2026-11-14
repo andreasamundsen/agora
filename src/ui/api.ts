@@ -5,11 +5,14 @@ import type {
   StandardOfProof
 } from "../core/judgment";
 
+export type ReasoningEffort = "off" | "low" | "high" | "max";
+
 export interface UiSettings {
   provider: string;
   baseUrl: string;
   model: string;
   temperature: number;
+  reasoningEffort: ReasoningEffort;
   hasKey: boolean;
   ready: boolean;
   source: "settings" | "env" | "none";
@@ -89,6 +92,7 @@ export function saveSettings(input: {
   model: string;
   apiKey?: string;
   temperature: number;
+  reasoningEffort: ReasoningEffort;
 }): Promise<{ settings: UiSettings }> {
   return request("/settings", { method: "PUT", body: JSON.stringify(input) });
 }

@@ -32,7 +32,7 @@ npm start
 npm run dist
 ```
 
-This produces `release/Agora-Setup-0.1.1.exe`, a per-user Windows NSIS installer. The installer is intentionally **unsigned** and does not auto-update. It bundles Electron and the compiled server, so testers do not need Node.
+This produces `release/Agora-Setup-0.1.2.exe`, a per-user Windows NSIS installer. The installer is intentionally **unsigned** and does not auto-update. It bundles Electron and the compiled server, so testers do not need Node.
 
 `npm run electron` runs the desktop shell directly; `npm run pack` produces an unpacked build for inspection.
 
@@ -63,12 +63,14 @@ Judgment controls: `Space` play/pause, `←`/`→` previous/next ruling, click a
 Open **Settings** (the gear). Agora speaks to any OpenAI-compatible `/chat/completions` endpoint:
 
 - **OpenAI** — `https://api.openai.com/v1`, e.g. `gpt-4o-mini`
-- **DeepSeek** — `https://api.deepseek.com/v1`, e.g. `deepseek-chat`
+- **DeepSeek** — `https://api.deepseek.com`, `deepseek-flash` (V4.1 Flash)
 - **LM Studio** — `http://127.0.0.1:1234/v1`, pick the model loaded there; no key needed
 - **Ollama** — `http://127.0.0.1:11434/v1`, e.g. `llama3.1`; no key needed
 - **Custom** — any compatible base URL and model
 
-`Save & test` sends a tiny completion and reports the result. A key is stored only in `data/settings.json` on this machine (gitignored) and is never returned to the browser; the UI only learns whether a key exists. Environment fallbacks are supported (`AGORA_LLM_BASE_URL`, `AGORA_LLM_MODEL`, `AGORA_LLM_API_KEY`, `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY`). Copy `.env.example` to `.env` if you prefer that route; a saved settings file wins over the environment.
+DeepSeek Flash supports thinking. Its **Reasoning effort** control offers **Off / Low / High / Max**; High is the default. Higher effort can improve difficult judgments, but it costs more and takes longer. Temperature is disabled for DeepSeek because the model ignores it; use reasoning effort instead. The app raises the output budget automatically when thinking is active so the JSON graph is not cut off.
+
+`Save & test` sends a tiny completion and reports the result. A key is stored only in `data/settings.json` on this machine (gitignored) and is never returned to the browser; the UI only learns whether a key exists. Environment fallbacks are supported (`AGORA_LLM_BASE_URL`, `AGORA_LLM_MODEL`, `AGORA_LLM_REASONING_EFFORT`, `AGORA_LLM_API_KEY`, `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY`). Copy `.env.example` to `.env` if you prefer that route; a saved settings file wins over the environment.
 
 The bench uses the same provider and key. Its **Judge model** field defaults to your configured model but can be overridden for the run — useful if you want a different model to judge the cartographer's map. The judge is intentional about its view of the arguments; if you want a different bias, point it at a different model. Judgment makes **one model call per attack/undercut**, four at a time. Maps are capped at 40 clashes per sitting. Without a key, the bench runs a **local structural review** that demonstrates the procedure but is not a substantive judgment; the UI says so in the record.
 

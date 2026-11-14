@@ -17,7 +17,7 @@ import {
   uniqueId
 } from "../core/model";
 import { debateContext } from "../core/argdown";
-import { getSettings, isReady, StoredSettings } from "./settings";
+import { getSettings, isReady, StoredSettings, ReasoningEffort } from "./settings";
 
 /**
  * Authoring adapter. The rest of the app only sees Debate objects; whether
@@ -162,22 +162,47 @@ function endpoint(baseUrl: string): string {
   return `${trimmed}/chat/completions`;
 }
 
+const DEEPSEEK_THINKING_MODELS = new Set(["deepseek-flash", "deepseek-v4-flash", "deepseek-v4-pro"]);
+
+export function supportsDeepSeekThinking(settings: Pick<StoredSettings, "provider" | "model">): boolean {
+  return settings.provider === "deepseek" && DEEPSEEK_THINKING_MODELS.has(settings.model);
+}
+
+const THINKING_TOKEN_BUDGET: Record<ReasoningEffort, number> = {
+  off: 4200,
+  low: 8192,
+  high: 16384,
+  max: 32768
+};
+
 export async function callModel(
   settings: StoredSettings,
   messages: { role: "system" | "user"; content: string }[],
   options: { temperature?: number; maxTokens?: number } = {}
 ): Promise<string> {
   if (!isReady(settings)) throw new Error("No model is configured.");
+  const thinkingModel = supportsDeepSeekThinking(settings);
+  const thinking = thinkingModel && settings.reasoningEffort !== "off";
+  const maxTokens = thinking
+    ? Math.max(options.maxTokens ?? 0, THINKING_TOKEN_BUDGET[settings.reasoningEffort])
+    : options.maxTokens ?? 4200;
   const body: Record<string, unknown> = {
     model: settings.model,
     messages,
-    temperature: options.temperature ?? settings.temperature,
-    max_tokens: options.maxTokens ?? 4200
+    max_tokens: maxTokens
   };
+
+  if (thinkingModel) {
+    body.thinking = { type: thinking ? "enabled" : "disabled" };
+    if (thinking) body.reasoning_effort = settings.reasoningEffort;
+  }
+  if (!thinking) {
+    body.temperature = options.temperature ?? settings.temperature;
+  }
 
   const send = async (useJsonMode: boolean): Promise<Response> => {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 150_000);
+    const timer = setTimeout(() => controller.abort(), thinking ? 240_000 : 150_000);
     try {
       return await fetch(endpoint(settings.baseUrl), {
         method: "POST",
@@ -203,9 +228,18 @@ export async function callModel(
   }
 
   const payload = (await response.json()) as {
-    choices?: { message?: { content?: string | { type?: string; text?: string }[] } }[];
+    choices?: {
+      finish_reason?: string;
+      message?: { content?: string | { type?: string; text?: string }[] };
+    }[];
   };
-  const content = payload.choices?.[0]?.message?.content;
+  const choice = payload.choices?.[0];
+  const content = choice?.message?.content;
+  if (choice?.finish_reason === "length") {
+    throw new Error(
+      "The model reached its output limit before finishing. Lower the reasoning effort or raise the token budget."
+    );
+  }
   if (typeof content === "string") return content;
   if (Array.isArray(content)) {
     return content.map((part) => (typeof part === "string" ? part : part?.text ?? "")).join("\n");

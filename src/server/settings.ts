@@ -1,12 +1,21 @@
 import fs from "node:fs";
 import path from "node:path";
 
+export type ReasoningEffort = "off" | "low" | "high" | "max";
+
+export const REASONING_EFFORTS: ReasoningEffort[] = ["off", "low", "high", "max"];
+
+export function isReasoningEffort(value: unknown): value is ReasoningEffort {
+  return value === "off" || value === "low" || value === "high" || value === "max";
+}
+
 export interface StoredSettings {
   provider: string;
   baseUrl: string;
   model: string;
   apiKey: string;
   temperature: number;
+  reasoningEffort: ReasoningEffort;
 }
 
 export interface PublicSettings {
@@ -14,6 +23,7 @@ export interface PublicSettings {
   baseUrl: string;
   model: string;
   temperature: number;
+  reasoningEffort: ReasoningEffort;
   hasKey: boolean;
   ready: boolean;
   source: "settings" | "env" | "none";
@@ -25,7 +35,8 @@ const DEFAULTS: StoredSettings = {
   baseUrl: "",
   model: "",
   apiKey: "",
-  temperature: 0.7
+  temperature: 0.7,
+  reasoningEffort: "high"
 };
 
 export function dataDir(): string {
@@ -56,7 +67,8 @@ function readJson(file: string): Partial<StoredSettings> {
       baseUrl: typeof parsed.baseUrl === "string" ? parsed.baseUrl : undefined,
       model: typeof parsed.model === "string" ? parsed.model : undefined,
       apiKey: typeof parsed.apiKey === "string" ? parsed.apiKey : undefined,
-      temperature: typeof parsed.temperature === "number" ? parsed.temperature : undefined
+      temperature: typeof parsed.temperature === "number" ? parsed.temperature : undefined,
+      reasoningEffort: isReasoningEffort(parsed.reasoningEffort) ? parsed.reasoningEffort : undefined
     };
   } catch {
     return {};
@@ -73,12 +85,16 @@ function envSettings(): Partial<StoredSettings> {
   const baseUrl =
     process.env.AGORA_LLM_BASE_URL ??
     process.env.OPENAI_BASE_URL ??
-    (process.env.DEEPSEEK_API_KEY && !process.env.OPENAI_API_KEY ? "https://api.deepseek.com/v1" : "");
+    (process.env.DEEPSEEK_API_KEY && !process.env.OPENAI_API_KEY ? "https://api.deepseek.com" : "");
   const model = process.env.AGORA_LLM_MODEL ?? process.env.OPENAI_MODEL ?? "";
+  const reasoningEffort = isReasoningEffort(process.env.AGORA_LLM_REASONING_EFFORT)
+    ? process.env.AGORA_LLM_REASONING_EFFORT
+    : undefined;
   return {
     apiKey: apiKey || undefined,
     baseUrl: baseUrl || undefined,
     model: model || undefined,
+    reasoningEffort,
     provider: apiKey ? "env" : undefined
   };
 }
@@ -92,7 +108,8 @@ export function getSettings(): StoredSettings {
     baseUrl: file.baseUrl?.trim() || env.baseUrl || DEFAULTS.baseUrl,
     model: file.model?.trim() || env.model || DEFAULTS.model,
     apiKey: file.apiKey?.trim() || env.apiKey || DEFAULTS.apiKey,
-    temperature: file.temperature ?? DEFAULTS.temperature
+    temperature: file.temperature ?? DEFAULTS.temperature,
+    reasoningEffort: file.reasoningEffort || env.reasoningEffort || DEFAULTS.reasoningEffort
   };
 }
 
@@ -116,6 +133,7 @@ export function publicSettings(): PublicSettings {
     baseUrl: s.baseUrl,
     model: s.model,
     temperature: s.temperature,
+    reasoningEffort: s.reasoningEffort,
     hasKey: Boolean(s.apiKey),
     ready: isReady(s),
     source: settingsSource(),
@@ -136,7 +154,10 @@ export function saveSettings(input: Partial<StoredSettings>): PublicSettings {
     temperature:
       typeof input.temperature === "number" && Number.isFinite(input.temperature)
         ? Math.max(0, Math.min(2, input.temperature))
-        : current.temperature
+        : current.temperature,
+    reasoningEffort: isReasoningEffort(input.reasoningEffort)
+      ? input.reasoningEffort
+      : current.reasoningEffort
   };
   if (input.apiKey === "") next.apiKey = "";
   fs.mkdirSync(dataDir(), { recursive: true });

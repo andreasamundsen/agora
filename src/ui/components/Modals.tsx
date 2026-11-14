@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { Debate } from "../../core/model";
-import type { UiSettings } from "../api";
+import type { UiSettings, ReasoningEffort } from "../api";
 import { downloadArgdown, fetchArgdown, saveSettings, testSettings } from "../api";
 
 /* ------------------------------------------------------------------ */
@@ -452,10 +452,17 @@ export function ExportModal({ debate, onClose }: { debate: Debate; onClose: () =
 const PRESETS: { id: string; label: string; baseUrl: string; model: string; hint: string }[] = [
   { id: "local", label: "Local only", baseUrl: "", model: "", hint: "No model. Structural scaffolding; every feature still works." },
   { id: "openai", label: "OpenAI", baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini", hint: "An API key is required." },
-  { id: "deepseek", label: "DeepSeek", baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat", hint: "An API key is required." },
+  { id: "deepseek", label: "DeepSeek", baseUrl: "https://api.deepseek.com", model: "deepseek-flash", hint: "DeepSeek V4.1 Flash. Thinking effort is configurable below." },
   { id: "lmstudio", label: "LM Studio", baseUrl: "http://localhost:1234/v1", model: "local-model", hint: "Run the local server on port 1234. No key needed." },
   { id: "ollama", label: "Ollama", baseUrl: "http://localhost:11434/v1", model: "llama3.2", hint: "Start Ollama with an OpenAI-compatible endpoint. No key needed." },
   { id: "custom", label: "Custom", baseUrl: "", model: "", hint: "Any OpenAI-compatible chat-completions endpoint." }
+];
+
+const EFFORT_OPTIONS: { id: ReasoningEffort; label: string }[] = [
+  { id: "off", label: "Off" },
+  { id: "low", label: "Low" },
+  { id: "high", label: "High" },
+  { id: "max", label: "Max" }
 ];
 
 export function SettingsModal({
@@ -473,6 +480,7 @@ export function SettingsModal({
   const [model, setModel] = useState(settings.model);
   const [apiKey, setApiKey] = useState("");
   const [temperature, setTemperature] = useState(settings.temperature);
+  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>(settings.reasoningEffort ?? "high");
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [status, setStatus] = useState<{ ok: boolean; message: string } | null>(null);
@@ -486,6 +494,7 @@ export function SettingsModal({
       setBaseUrl(preset.baseUrl);
       setModel(preset.model);
     }
+    if (id === "deepseek") setReasoningEffort("high");
     setStatus(null);
   };
 
@@ -499,7 +508,8 @@ export function SettingsModal({
         provider,
         baseUrl: baseUrl.trim(),
         model: model.trim(),
-        temperature
+        temperature,
+        reasoningEffort
       };
       if (apiKey.trim()) payload.apiKey = apiKey.trim();
       if (forgetKey) payload.apiKey = "";
@@ -616,6 +626,32 @@ export function SettingsModal({
         </div>
       </label>
 
+      {provider === "deepseek" && (
+        <div className="field">
+          <span className="field-label">
+            Reasoning effort <em>DeepSeek thinking</em>
+          </span>
+          <div className="judge-segmented">
+            {EFFORT_OPTIONS.map((option) => (
+              <button
+                type="button"
+                key={option.id}
+                className={`judge-segment ${reasoningEffort === option.id ? "is-selected" : ""}`}
+                aria-pressed={reasoningEffort === option.id}
+                onClick={() => { setReasoningEffort(option.id); setStatus(null); }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <span className="field-hint">
+            {reasoningEffort === "off"
+              ? "Thinking disabled. Fastest option; the authoring JSON uses the normal output budget."
+              : `Thinking enabled at ${reasoningEffort} effort. Higher effort takes longer and costs more, but can improve difficult judgments.`}
+          </span>
+        </div>
+      )}
+
       <label className="field">
         <span className="field-label">Temperature <em>{temperature.toFixed(2)}</em></span>
         <input
@@ -625,9 +661,14 @@ export function SettingsModal({
           max={1.1}
           step={0.05}
           value={temperature}
+          disabled={provider === "deepseek"}
           onChange={(event) => setTemperature(Number(event.target.value))}
         />
-        <span className="field-hint">Lower is more literal; higher produces more varied maps and rebuttals.</span>
+        <span className="field-hint">
+          {provider === "deepseek"
+            ? "DeepSeek Flash ignores temperature; use reasoning effort to control its depth."
+            : "Lower is more literal; higher produces more varied maps and rebuttals."}
+        </span>
       </label>
 
       {status && (

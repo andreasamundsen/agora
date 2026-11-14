@@ -5,7 +5,7 @@ import { judgeDebate, MAX_CLASHES } from "./judge";
 import { ArgdownImportError, importArgdown } from "./argdown-import";
 import { toArgdown } from "../core/argdown";
 import { message } from "../core/model";
-import { getSettings, isReady, publicSettings, saveSettings } from "./settings";
+import { getSettings, isReady, isReasoningEffort, publicSettings, saveSettings } from "./settings";
 
 export function createApi(store: DebateStore): Router {
   const api = Router();
@@ -152,7 +152,8 @@ export function createApi(store: DebateStore): Router {
       baseUrl: typeof body.baseUrl === "string" ? body.baseUrl : undefined,
       model: typeof body.model === "string" ? body.model : undefined,
       apiKey: typeof body.apiKey === "string" ? body.apiKey : undefined,
-      temperature: typeof body.temperature === "number" ? body.temperature : undefined
+      temperature: typeof body.temperature === "number" ? body.temperature : undefined,
+      reasoningEffort: isReasoningEffort(body.reasoningEffort) ? body.reasoningEffort : undefined
     });
     res.json({ settings });
   });
