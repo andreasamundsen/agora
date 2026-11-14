@@ -22,7 +22,7 @@ Provider calls go directly from your machine to the provider you choose. Agora d
 ## What to try
 
 - Open a demo debate and explore the argument map.
-- Press **Judge**, choose a standard, and run a judgment.
+- Press **Judge**, choose a standard, and run a judgment. A **weakens** or **undecided** direct objection is live pressure: under the pro standard the motion is unestablished rather than defaulting to stands. Only a **defeats** ruling strikes an argument.
 - Press **Stage Debate** to watch the exchange.
 - Use **Import** / **Export** to move a debate as Argdown.
 - Ask the chamber for a counterargument or a missing premise.
