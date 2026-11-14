@@ -1,0 +1,170 @@
+# Agora — a debate harness
+
+> Every argument has a shape. Find it, then argue with it.
+
+Agora turns a position into a map of arguments, lets you interrogate and extend that map, exports it as **Argdown**, stages the debate as a sequence of turns with a live camera on the graph, and then **convenes a bench** to judge it: a model rules on each clash, and the map shows arguments falling, surviving, or returning until the motion stands or falls.
+
+It is built in the spirit of a learning harness: the model is not there to agree with you. It builds the strongest case for your position, the strongest case against it, and the places where the two actually collide.
+
+## Quick start
+
+Requirements: **Node 20+** (developed on Node 26) and npm.
+
+```bash
+npm install
+npm run dev
+```
+
+Open <http://localhost:5173>.
+
+For a production-style run:
+
+```bash
+npm run build
+npm start
+```
+
+`npm start` serves the built app and the API from the same Node process. The server binds to `127.0.0.1` by default. Set `HOST=0.0.0.0` only if you deliberately want to expose it on your network — there is no authentication.
+
+### Desktop tester build
+
+```bash
+npm run dist
+```
+
+This produces `release/Agora-Setup-0.1.0.exe`, a per-user Windows NSIS installer. The installer is intentionally **unsigned** and does not auto-update. It bundles Electron and the compiled server, so testers do not need Node.
+
+`npm run electron` runs the desktop shell directly; `npm run pack` produces an unpacked build for inspection.
+
+The packaged app stores its data under `%APPDATA%\Agora\data`, not in the project's `data/` directory. This first tester build keeps the existing settings format, so the API key is plain JSON inside `settings.json`; use a test key you can rotate. `TESTERS.md` contains the tester instructions.
+
+The app works **before you connect a model**. Two reference debates are seeded on first run, and the local scaffolder can still author and extend maps (labelled honestly as a scaffold). A connected model makes the arguments topic-specific.
+
+## The five surfaces
+
+**The library** — every debate is stored as plain JSON under `data/debates/`. Click a card to open it, `×` to remove it.
+
+**The map** — a pan/zoom argument graph. Thesis in the centre, pro arguments on the left, con arguments on the right, rebuttals in an outer ring. Dense maps open as a complete overview; small maps open at a readable scale. Drag to pan, scroll to zoom, use `Fit` to recover the whole shape. Select any card for the inspector: full text, premises, conclusion, relations, and two actions that send a targeted request to the chamber.
+
+**The chamber** — a conversation with the cartographer. Ask for the strongest counterargument, attack a weak premise, steel-man the other side, or request a specific missing branch. With a model connected, the reply extends the graph and updates the map. Without one, the local scaffolder adds a structural node and says so.
+
+**The stage** — `Stage Debate` turns the map into a performance. The order is a **seeded random walk** through the graph: the motion opens, you state your position, advocates and challengers take turns, rebuttals surface where they connect, and the moderator closes. Each run samples a new sequence; `Cut a new sequence` resamples without leaving the stage. The graph camera follows the argument being made.
+
+Stage controls: `Space` play/pause, `←`/`→` previous/next turn, speed selector, optional browser speech, `Esc` to close. The stage records nothing; it is a way of reading the map aloud.
+
+**The bench** — `Judge` puts the map on trial. The model rules on one attack or undercut at a time and returns a verdict — **defeats**, **weakens**, **undecided**, or **irrelevant** — with a criterion, a target component, a confidence, and short reasoning. A deterministic engine then propagates the consequences through the graph. Arguments can be **standing**, **defeated**, or **contested**; an argument that was defeated can be **reinstated** when its attacker is itself defeated. The animation runs through the clashes in waves, then closes with one of four outcomes: **stands**, **falls**, **undecided**, or **unestablished**.
+
+Choose the **standard of proof** (pro must establish, con must establish, or preponderance) and how strict the bench is. Strict only lets high-confidence strikes remove an argument; balanced also allows medium-confidence strikes; generous lets the ruling stand even when the judge is unsure. The standard decides what an unresolved direct contest means: under a pro burden it leaves the motion **unestablished**, under a con burden the motion **stands** if support survives, and under preponderance it is **undecided**. `Save judgment report` downloads the full record as Markdown. `Exit` returns the map to normal without touching the underlying debate.
+
+Judgment controls: `Space` play/pause, `←`/`→` previous/next ruling, click any tick or record row to seek, speed selector, `Esc` to close. A judgment run is a **sidecar**: it never edits the debate, its nodes, or its edges. Only a **defeats** ruling removes an argument from the live fixed point; **weakens** is recorded as damage and stays visible in the record. Replay is free; running the bench again is a new model call for each clash.
+
+## Connecting a model
+
+Open **Settings** (the gear). Agora speaks to any OpenAI-compatible `/chat/completions` endpoint:
+
+- **OpenAI** — `https://api.openai.com/v1`, e.g. `gpt-4o-mini`
+- **DeepSeek** — `https://api.deepseek.com/v1`, e.g. `deepseek-chat`
+- **LM Studio** — `http://127.0.0.1:1234/v1`, pick the model loaded there; no key needed
+- **Ollama** — `http://127.0.0.1:11434/v1`, e.g. `llama3.1`; no key needed
+- **Custom** — any compatible base URL and model
+
+`Save & test` sends a tiny completion and reports the result. A key is stored only in `data/settings.json` on this machine (gitignored) and is never returned to the browser; the UI only learns whether a key exists. Environment fallbacks are supported (`AGORA_LLM_BASE_URL`, `AGORA_LLM_MODEL`, `AGORA_LLM_API_KEY`, `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY`). Copy `.env.example` to `.env` if you prefer that route; a saved settings file wins over the environment.
+
+The bench uses the same provider and key. Its **Judge model** field defaults to your configured model but can be overridden for the run — useful if you want a different model to judge the cartographer's map. The judge is intentional about its view of the arguments; if you want a different bias, point it at a different model. Judgment makes **one model call per attack/undercut**, four at a time. Maps are capped at 40 clashes per sitting. Without a key, the bench runs a **local structural review** that demonstrates the procedure but is not a substantive judgment; the UI says so in the record.
+
+## Argdown
+
+Argdown is the interchange format, not a side export. `Export` gives you the source and a `.argdown` download. Relations are written **underneath the node they apply to**, which is how the official parser reads them:
+
+```argdown
+[Cities should fund night buses]: Cities should fund a dense network of night buses.
+  + <Night workers need it>
+  - <The demand is too thin>
+
+<Night workers need it>: Hospitals, kitchens and warehouses run through the night.
+
+(1) Hundreds of thousands of people finish work after midnight.
+(2) Taxis are unaffordable for a large share of those workers.
+----
+(3) A city that runs at night needs a public way home.
+```
+
+The exporter writes each argument's reasoning as `//` comments beneath its relations, so the map survives a round trip through the official parser without inventing edges. Premise–conclusion structures (`(1) … ---- (3) …`) are imported and shown in the inspector.
+
+`Import` accepts a paste or a file (`.argdown`, `.ad`, `.md`, `.txt`). It uses `@argdown/core`'s parser and model builder, reports syntax errors with line numbers, and refuses prose that contains no argument structure. A blank motion title falls back to the document's first heading/claim.
+
+Round-trip verified: **16-node reference map → Argdown → import → same 16 nodes and 16 relations** (`src/server/argdown-import.test.ts`).
+
+## How it is put together
+
+```
+src/
+  core/                 pure domain layer — no DOM, no network, no filesystem
+    model.ts            Debate/Node/Edge types, reconciliation, prompt cleanup
+    argdown.ts          Debate → Argdown serializer
+    layout.ts           deterministic two-wing graph layout
+    stage.ts            seeded random-walk staging + speaker narration
+    judgment.ts         pure clash adjudication, grounded propagation, verdict summary, Markdown report
+    demo.ts             two hand-authored reference debates
+  server/
+    index.ts            Express entry, Vite middleware in dev, static dist in prod
+    routes.ts           REST API (below)
+    store.ts            JSON debate store + first-run seeding
+    settings.ts         provider settings, env fallbacks, secret redaction
+    llm.ts              intake/extension prompts, zod validation, local fallback
+    judge.ts            per-clash model adjudication and strictness enforcement
+    argdown-import.ts   Argdown → Debate using @argdown/core
+  ui/
+    App.tsx             workspace, library, chamber, stage controller, judgment controller
+    components/         DebateGraph, ChatPanel, StagePanel, NodeInspector, JudgmentModal, JudgmentPanel, Modals
+    styles.css          editorial paper / library ink / dark wood stage
+```
+
+The domain layer is shared by server and browser. The graph layout and staging algorithm are deterministic given a seed, so the same map stages identically in a test and in the browser.
+
+### API
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/health` | liveness and provider readiness |
+| `GET` | `/api/debates` | library summaries |
+| `POST` | `/api/debates` | author from `{ text }` |
+| `GET` | `/api/debates/:id` | full debate |
+| `DELETE` | `/api/debates/:id` | remove |
+| `GET` | `/api/debates/:id/argdown` | download source |
+| `POST` | `/api/debates/:id/chat` | extend from `{ message }` |
+| `POST` | `/api/debates/:id/judge` | `{ standard, strictness, model? }` → judgment run |
+| `POST` | `/api/import` | `{ source, motion? }` |
+| `GET`/`PUT` | `/api/settings` | provider settings (key never returned) |
+| `POST` | `/api/settings/test` | one-token completion test |
+
+## Tests and checks
+
+```bash
+npm test          # vitest: staging, Argdown export/import, judgment propagation/reinstatement/cycles/report
+npm run typecheck # tsc --noEmit
+npm run build     # vite production build
+```
+
+## Privacy
+
+- Debates and settings live in `data/`, which is gitignored.
+- API keys are stored server-side only. The browser receives `hasKey: true/false`.
+- Keys are never logged or included in API responses.
+- The server binds to loopback by default.
+- Speech synthesis is the browser's own; no audio leaves the machine.
+
+## Limits, honestly
+
+- The **local scaffolder** produces a structurally useful map, not a topic-specific debate. Connect a model for actual arguments.
+- The **local bench** is a structural demonstration, not a substantive judgment. Connect a model for real rulings.
+- Judgment is **one model call per clash** and is not cached; a large map can take a while and cost accordingly.
+- A judgment run lives in the browser session as a sidecar. Export the report if you want the record to survive a reload.
+- The model path is non-streaming: creating or extending a map can take up to a minute and the UI shows progress.
+- Staging is a textual performance with optional browser speech, not audio mixing or avatars.
+- Single-user, local-first. There is no authentication, collaboration, or cloud sync.
+- Argdown import is graph-first. Formatting details that have no graph meaning are not preserved.
+
+## Why the name
+
+The agora was the public square where a city argued with itself. The interface is deliberately editorial: warm paper, serif headings, ink for the motion, faded red for the challenge, and a dark wood stage for the performance. The map is the argument; the stage is the argument being made; the bench is the argument being judged.

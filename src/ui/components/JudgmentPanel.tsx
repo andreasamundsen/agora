@@ -1,0 +1,369 @@
+import { useMemo } from "react";
+import type { Debate } from "../../core/model";
+import {
+  CRITERION_LABEL,
+  OUTCOME_LABEL,
+  OUTCOME_SHORT,
+  STANDARD_LABEL,
+  STANDARD_NOTE,
+  STATUS_LABEL,
+  VERDICT_LABEL,
+  VERDICT_NOTE,
+  type ClashJudgment,
+  type JudgmentRun,
+  type JudgmentSnapshot,
+  type TargetComponent
+} from "../../core/judgment";
+
+const COMPONENT_LABEL: Record<TargetComponent, string> = {
+  conclusion: "the conclusion",
+  inference: "the inference",
+  premise: "a premise",
+  scope: "the scope",
+  unknown: "the target"
+};
+
+function PlayIcon({ playing }: { playing: boolean }) {
+  return playing ? (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+      <path d="M4 3h3v10H4zM9 3h3v10H9z" fill="currentColor" />
+    </svg>
+  ) : (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+      <path d="M4 2.5 13 8l-9 5.5z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function StepIcon({ direction }: { direction: "prev" | "next" }) {
+  return direction === "prev" ? (
+    <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+      <path d="M10.5 3 5.5 8l5 5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ) : (
+    <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+      <path d="m5.5 3 5 5-5 5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function titleFor(debate: Debate, id: string): string {
+  return debate.nodes.find((node) => node.id === id)?.title ?? "an argument";
+}
+
+function effectLine(judgment: ClashJudgment, snapshot: JudgmentSnapshot): string {
+  const source = snapshot.statuses[judgment.from];
+  const target = snapshot.statuses[judgment.to];
+  if (judgment.verdict === "defeats") {
+    if (source === "defeated") return "The ruling is recorded, but the attacker is itself defeated; it cannot carry.";
+    if (source === "contested") return "The ruling is recorded, but the attacker is itself contested; it cannot carry.";
+    if (!source) return "The ruling is recorded, but the attacker is no longer standing; it cannot carry.";
+    if (target === "defeated") return "The target is struck from the record.";
+    if (target === "contested") return "The target remains contested; this strike does not settle it.";
+  }
+  if (target === "defeated") return "The target was already defeated by another clash.";
+  if (target === "contested") return "The target remains contested on the record.";
+  return "The target survives this clash.";
+}
+
+export function JudgmentPanel({
+  debate,
+  run,
+  step,
+  playing,
+  speed,
+  snapshot,
+  restored,
+  onTogglePlay,
+  onNext,
+  onPrevious,
+  onRestart,
+  onSeek,
+  onSpeedChange,
+  onExit,
+  onNewRun,
+  onOpenSettings,
+  onReport
+}: {
+  debate: Debate;
+  run: JudgmentRun;
+  step: number;
+  playing: boolean;
+  speed: number;
+  snapshot: JudgmentSnapshot;
+  restored: string[];
+  onTogglePlay: () => void;
+  onNext: () => void;
+  onPrevious: () => void;
+  onRestart: () => void;
+  onSeek: (step: number) => void;
+  onSpeedChange: (speed: number) => void;
+  onExit: () => void;
+  onNewRun: () => void;
+  onOpenSettings: () => void;
+  onReport: () => void;
+}) {
+  const total = run.verdicts.length;
+  const complete = step >= total;
+  const current = step > 0 ? run.verdicts[step - 1] : undefined;
+  const waveFor = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const wave of run.waves) for (const id of wave.verdictIds) map.set(id, wave.label);
+    return map;
+  }, [run.waves]);
+  const currentWave = current ? waveFor.get(current.edgeId) : undefined;
+  const applied = run.verdicts.slice(0, step);
+  const restoredTitles = restored.slice(0, 2).map((id) => titleFor(debate, id));
+
+  return (
+    <aside className="chamber judgment-panel" aria-label="Judgment record">
+      <header className="chamber-head judgment-head">
+        <div>
+          <div className="eyebrow">The bench</div>
+          <h2 className="chamber-title">{complete ? "Judgment" : "In session"}</h2>
+        </div>
+        <div className={`judge-pill ${run.engine === "local" ? "is-local" : ""}`}>
+          <span className="judge-pill-dot" />
+          <span>{run.engine === "local" ? "structural" : run.judge.model}</span>
+        </div>
+      </header>
+
+      <div className="judgment-scroll">
+        {run.engine === "local" && !complete && (
+          <div className="judge-mode-note">
+            <b>Structural demonstration</b>
+            <p>No judge model is connected. These rulings exercise the procedure, not the substance of the arguments.</p>
+            <button type="button" className="text-link" onClick={onOpenSettings}>Connect a judge model</button>
+          </div>
+        )}
+
+        {!complete && step > 0 && (
+          <div className="judgment-session-line">
+            <span><b>{step}</b> of {total} rulings</span>
+            <span className="judgment-session-sep" />
+            <span>{snapshot.counts.standing} standing</span>
+            <span>{snapshot.counts.defeated} struck</span>
+            <span>{snapshot.counts.contested} contested</span>
+          </div>
+        )}
+
+        {restoredTitles.length > 0 && (
+          <div className="judgment-restored" role="status">
+            <span className="restored-mark">↺</span>
+            <p><b>“{restoredTitles.join("”, “")}”</b> {restoredTitles.length === 1 ? "returns" : "return"} to the record.</p>
+          </div>
+        )}
+
+        {step === 0 && !complete && (
+          <section className="bench-intro-card">
+            <div className="bench-intro-mark">§</div>
+            <div className="eyebrow">The bench is in session</div>
+            <h3>One clash at a time.</h3>
+            <p>
+              The judge reads the attacker and the target, rules only on their collision, and the engine follows the
+              consequences through the map.
+            </p>
+            <div className="bench-intro-meta">
+              <span>{STANDARD_LABEL[run.standard]}</span>
+              <span>{run.strictness}</span>
+              <span>{run.engine === "local" ? "local review" : run.judge.model}</span>
+            </div>
+          </section>
+        )}
+
+        {current && !complete && (
+          <article className={`ruling-card ruling-card--${current.verdict}`} key={current.edgeId}>
+            <div className="ruling-head">
+              <span className="ruling-index">Ruling {String(step).padStart(2, "0")} <i>/ {String(total).padStart(2, "0")}</i></span>
+              <span className="ruling-wave">{currentWave}</span>
+            </div>
+            <div className={`ruling-verdict ruling-verdict--${current.verdict}`}>
+              <span>{VERDICT_LABEL[current.verdict]}</span>
+              <i>{VERDICT_NOTE[current.verdict]}</i>
+            </div>
+            <div className="ruling-clash">
+              <div className="ruling-party">
+                <span>Attacker</span>
+                <b>{titleFor(debate, current.from)}</b>
+              </div>
+              <div className={`ruling-arrow ruling-arrow--${current.type}`} aria-hidden="true">
+                {current.type === "undercut" ? "⌁" : "→"}
+              </div>
+              <div className="ruling-party ruling-party--target">
+                <span>Target</span>
+                <b>{titleFor(debate, current.to)}</b>
+              </div>
+            </div>
+            <div className="ruling-meta">
+              <span className="ruling-criterion">{CRITERION_LABEL[current.criterion]}</span>
+              <span className={`ruling-confidence confidence--${current.confidence}`}>{current.confidence} confidence</span>
+              <span>targets {COMPONENT_LABEL[current.targetComponent]}</span>
+            </div>
+            <blockquote className="ruling-reasoning">{current.reasoning}</blockquote>
+            <div className="ruling-effect">
+              <span className={`effect-mark effect-mark--${snapshot.statuses[current.to] ?? "contested"}`} />
+              {effectLine(current, snapshot)}
+            </div>
+          </article>
+        )}
+
+        {complete && (
+          <section className={`judgment-finale judgment-finale--${run.outcome}`}>
+            <div className="finale-eyebrow">{run.engine === "local" ? "Structural review" : "Judgment"}</div>
+            <div className="finale-outcome">
+              <span>{OUTCOME_SHORT[run.outcome]}</span>
+              <b>{OUTCOME_LABEL[run.outcome]}</b>
+            </div>
+            <p className="finale-summary">{run.summary}</p>
+            <div className="finale-standard">
+              <span>{STANDARD_LABEL[run.standard]}</span>
+              <i>{STANDARD_NOTE[run.standard]}</i>
+            </div>
+
+            {run.decisive.length > 0 && (
+              <div className="finale-path">
+                <div className="finale-label">Decisive path</div>
+                <ol>
+                  {run.decisive.map((stepItem) => (
+                    <li key={`${stepItem.edgeId}-${stepItem.from}`}>
+                      <span className={`path-mark path-mark--${stepItem.kind}`} />
+                      <span><b>{titleFor(debate, stepItem.from)}</b> <i>→</i> {titleFor(debate, stepItem.to)}</span>
+                      {stepItem.verdict && <em>{VERDICT_LABEL[stepItem.verdict]}</em>}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+
+            <div className="finale-counts">
+              <span><b>{snapshot.counts.standing}</b> standing</span>
+              <span><b>{snapshot.counts.defeated}</b> struck</span>
+              <span><b>{snapshot.counts.contested}</b> contested</span>
+            </div>
+
+            {run.warnings.length > 0 && (
+              <div className="finale-warnings">
+                {run.warnings.slice(0, 2).map((warning) => <p key={warning}>{warning}</p>)}
+              </div>
+            )}
+
+            <div className="finale-actions">
+              <button type="button" className="btn btn--primary btn--small" onClick={onReport}>Save judgment report</button>
+              <button type="button" className="btn btn--quiet btn--small" onClick={onNewRun}>New run</button>
+            </div>
+          </section>
+        )}
+
+        {total > 0 && (
+          <div className="judgment-timeline">
+            <div className="timeline-head">
+              <span>Record</span>
+              <span>{step} / {total}</span>
+            </div>
+            {run.waves.map((wave) => (
+              <div className="judge-wave" key={wave.id}>
+                <span className="judge-wave-label">{wave.label}</span>
+                <div className="judge-ticks">
+                  {wave.verdictIds.map((edgeId) => {
+                    const verdict = run.verdicts.find((item) => item.edgeId === edgeId);
+                    if (!verdict) return null;
+                    const index = run.verdicts.findIndex((item) => item.edgeId === edgeId);
+                    const appliedTick = index < step;
+                    const currentTick = index === step - 1;
+                    return (
+                      <button
+                        key={edgeId}
+                        type="button"
+                        className={`judge-tick judge-tick--${verdict.verdict} ${appliedTick ? "is-applied" : ""} ${currentTick ? "is-current" : ""}`}
+                        onClick={() => onSeek(index + 1)}
+                        title={`${titleFor(debate, verdict.from)} → ${titleFor(debate, verdict.to)}: ${VERDICT_LABEL[verdict.verdict]}`}
+                        aria-label={`Go to ruling ${index + 1}`}
+                      >
+                        <span />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {applied.length > 0 && (
+          <div className="judgment-record">
+            <div className="record-head">
+              <span>Rulings</span>
+              <span>{applied.length} entered</span>
+            </div>
+            <ol>
+              {applied.map((verdict, index) => (
+                <li key={verdict.edgeId}>
+                  <button
+                    type="button"
+                    className={`record-row ${index === step - 1 ? "is-current" : ""}`}
+                    onClick={() => onSeek(index + 1)}
+                  >
+                    <span className={`record-dot record-dot--${verdict.verdict}`} />
+                    <span className="record-number">{String(index + 1).padStart(2, "0")}</span>
+                    <span className="record-clash">
+                      <b>{titleFor(debate, verdict.from)}</b>
+                      <i>→</i>
+                      {titleFor(debate, verdict.to)}
+                    </span>
+                    <span className={`record-verdict record-verdict--${verdict.verdict}`}>{VERDICT_LABEL[verdict.verdict]}</span>
+                  </button>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+
+        {snapshot.unsupportedThesis && complete && (
+          <div className="judgment-unsupported-note">
+            The motion itself is still standing, but no supporting argument survives. It is unestablished.
+          </div>
+        )}
+      </div>
+
+      <footer className="judgment-controls">
+        <div className="judgment-transport">
+          <button type="button" className="judge-control" onClick={onPrevious} disabled={step === 0} aria-label="Previous ruling">
+            <StepIcon direction="prev" />
+          </button>
+          <button type="button" className="judge-control judge-control--play" onClick={complete ? onRestart : onTogglePlay} aria-label={complete ? "Replay" : playing ? "Pause" : "Play"}>
+            <PlayIcon playing={playing && !complete} />
+          </button>
+          <button type="button" className="judge-control" onClick={onNext} disabled={complete} aria-label="Next ruling">
+            <StepIcon direction="next" />
+          </button>
+          <button type="button" className="judge-control judge-control--restart" onClick={onRestart} aria-label="Restart judgment">
+            ↺
+          </button>
+        </div>
+        <div className="judgment-speed">
+          {[0.5, 1, 1.5].map((value) => (
+            <button
+              key={value}
+              type="button"
+              className={`speed-btn ${speed === value ? "is-active" : ""}`}
+              onClick={() => onSpeedChange(value)}
+            >
+              {value}×
+            </button>
+          ))}
+        </div>
+        {complete && (
+          <>
+            <button type="button" className="judgment-report" onClick={onNewRun} title="Convene a new judgment">
+              New run
+            </button>
+            <button type="button" className="judgment-report" onClick={onReport} title="Download the judgment report">
+              Report
+            </button>
+          </>
+        )}
+        <button type="button" className="judgment-exit" onClick={onExit}>Exit</button>
+      </footer>
+    </aside>
+  );
+}
