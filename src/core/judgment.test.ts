@@ -115,6 +115,96 @@ describe("judgment solver", () => {
     expect(snapshot.outcome).toBe("unestablished");
   });
 
+  it("treats weakened and undecided direct attacks as live pressure", () => {
+    const debate = debateWith([
+      { from: "support", to: "thesis", type: "support" },
+      { from: "objection", to: "thesis", type: "attack" }
+    ]);
+    for (const value of ["weakens", "undecided"] as const) {
+      const verdicts = [verdict("e_objection_thesis", "objection", "thesis", value)];
+      const pro = solveJudgment(debate, verdicts, "pro");
+      expect(pro.outcome).toBe("unestablished");
+      expect(pro.liveAttacks).toEqual(["e_objection_thesis"]);
+      expect(solveJudgment(debate, verdicts, "preponderance").outcome).toBe("undecided");
+      expect(solveJudgment(debate, verdicts, "con").outcome).toBe("stands");
+    }
+  });
+
+  it("does not let a defeated objection remain live pressure", () => {
+    const debate = debateWith([
+      { from: "support", to: "thesis", type: "support" },
+      { from: "objection", to: "thesis", type: "attack" },
+      { from: "rebuttal", to: "objection", type: "attack" }
+    ]);
+    const snapshot = solveJudgment(
+      debate,
+      [
+        verdict("e_objection_thesis", "objection", "thesis", "weakens"),
+        verdict("e_rebuttal_objection", "rebuttal", "objection")
+      ],
+      "pro"
+    );
+    expect(snapshot.statuses.objection).toBe("defeated");
+    expect(snapshot.liveAttacks).toHaveLength(0);
+    expect(snapshot.cleanSupports).toEqual(["e_support_thesis"]);
+    expect(snapshot.outcome).toBe("stands");
+  });
+
+  it("treats a damaged support as live pressure on the burden carrier", () => {
+    const debate = debateWith([
+      { from: "support", to: "thesis", type: "support" },
+      { from: "objection", to: "support", type: "attack" }
+    ]);
+    const verdicts = [verdict("e_objection_support", "objection", "support", "weakens")];
+    expect(solveJudgment(debate, verdicts, "pro").outcome).toBe("unestablished");
+    expect(solveJudgment(debate, verdicts, "preponderance").outcome).toBe("undecided");
+    expect(solveJudgment(debate, verdicts, "con").outcome).toBe("stands");
+  });
+
+  it("lets an irrelevant direct attack leave the motion standing", () => {
+    const debate = debateWith([
+      { from: "support", to: "thesis", type: "support" },
+      { from: "objection", to: "thesis", type: "attack" }
+    ]);
+    const snapshot = solveJudgment(
+      debate,
+      [verdict("e_objection_thesis", "objection", "thesis", "irrelevant")],
+      "pro"
+    );
+    expect(snapshot.liveAttacks).toHaveLength(0);
+    expect(snapshot.outcome).toBe("stands");
+  });
+
+  it("writes the live objection into the unestablished summary", () => {
+    const debate = debateWith([
+      { from: "support", to: "thesis", type: "support" },
+      { from: "objection", to: "thesis", type: "attack" }
+    ]);
+    const summary = judgmentSummary(
+      debate,
+      [verdict("e_objection_thesis", "objection", "thesis", "weakens")],
+      "pro"
+    );
+    expect(summary.outcome).toBe("unestablished");
+    expect(summary.summary).toContain("live objection");
+    expect(summary.decisive[0]?.kind).toBe("attack");
+  });
+
+  it("shows a pressured support when no direct objection is live", () => {
+    const debate = debateWith([
+      { from: "support", to: "thesis", type: "support" },
+      { from: "objection", to: "support", type: "attack" }
+    ]);
+    const summary = judgmentSummary(
+      debate,
+      [verdict("e_objection_support", "objection", "support", "weakens")],
+      "pro"
+    );
+    expect(summary.outcome).toBe("unestablished");
+    expect(summary.summary).toContain("supporting case remains contested");
+    expect(summary.decisive[0]?.kind).toBe("support");
+  });
+
   it("orders direct clashes before replies and labels the waves", () => {
     const debate = debateWith([
       { from: "support", to: "thesis", type: "support" },

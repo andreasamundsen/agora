@@ -63,6 +63,7 @@ function effectLine(judgment: ClashJudgment, snapshot: JudgmentSnapshot): string
   }
   if (target === "defeated") return "The target was already defeated by another clash.";
   if (target === "contested") return "The target remains contested on the record.";
+  if (snapshot.liveAttacks.includes(judgment.edgeId)) return "The objection remains live against the motion.";
   return "The target survives this clash.";
 }
 
@@ -321,6 +322,18 @@ export function JudgmentPanel({
         {snapshot.unsupportedThesis && complete && (
           <div className="judgment-unsupported-note">
             The motion itself is still standing, but no supporting argument survives. It is unestablished.
+          </div>
+        )}
+
+        {complete && snapshot.outcome === "unestablished" && snapshot.liveAttacks.length > 0 && !snapshot.unsupportedThesis && (
+          <div className="judgment-unsupported-note">
+            A live objection remains against the motion. Under the selected burden, the supporting case has not carried it.
+          </div>
+        )}
+
+        {complete && snapshot.outcome === "unestablished" && snapshot.liveAttacks.length === 0 && snapshot.liveSupports.length > 0 && snapshot.cleanSupports.length === 0 && (
+          <div className="judgment-unsupported-note">
+            The supporting arguments remain contested. Under the selected burden, the supporting case has not carried the motion.
           </div>
         )}
       </div>

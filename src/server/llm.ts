@@ -74,7 +74,7 @@ Design rules:
 1. The thesis is the user's own claim, stated precisely and charitably. Preserve its meaning; sharpen its wording. Never substitute a nearby claim the user did not make.
 2. If the user gave reasons, include them as argument nodes tagged "user", attributed to "you". A fair reconstruction may fill gaps, but do not invent opinions they did not express.
 3. Build the strongest case for and against the thesis. Steelman both sides. No strawmen and no false balance: the map should show where the real pressure lies, including asymmetries in evidence.
-4. Produce 12–18 nodes. At least 4 pro and 4 con arguments, and at least 3 nodes that respond to a specific argument (attack or undercut), not merely to the thesis.
+4. Produce 12–18 nodes. At least 4 pro and 4 con arguments, and at least 3 nodes that respond to a specific argument (attack or undercut), not merely to the thesis. Do not answer every objection: where the con side has a serious unanswered objection, leave it unanswered rather than inventing a weak reply. The map should preserve real pressure.
 5. Argument nodes need 2–3 premises and one conclusion. Their text is a compact explanation (max 45 words) that makes the inference explicit. Prefer concrete mechanisms, evidence and trade-offs over slogans.
 6. Edge semantics: support = source is a reason for target; attack = source is a reason against target; undercut = source challenges the target's premise, evidence or inference without directly denying its conclusion.
 7. Every non-thesis node must connect to the map. Prefer a connected tree with cross-links only where they mark a genuine clash.

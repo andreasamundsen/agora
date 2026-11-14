@@ -50,6 +50,10 @@ export interface JudgmentSnapshot {
   thesisStatus: ArgumentStatus;
   /** Support edges from a standing argument to the thesis. */
   liveSupports: string[];
+  /** Direct thesis attacks that remain live without striking the thesis. */
+  liveAttacks: string[];
+  /** Live supports with no live attack against their source. */
+  cleanSupports: string[];
   unsupportedThesis: boolean;
   outcome: JudgmentOutcome;
   counts: { standing: number; defeated: number; contested: number };
@@ -235,30 +239,76 @@ export function solveJudgment(
 
   const thesis = nodeById(debate, debate.thesisId);
   const thesisStatus = statuses[debate.thesisId] ?? "contested";
-  const liveSupports = debate.edges
-    .filter((edge) => edge.type === "support" && edge.to === debate.thesisId)
+  const verdictByEdge = new Map(verdicts.map((verdict) => [verdict.edgeId, verdict]));
+
+  const supportEdges = debate.edges.filter(
+    (edge) => edge.type === "support" && edge.to === debate.thesisId
+  );
+  const liveSupports = supportEdges
     .filter((edge) => statuses[edge.from] === "standing")
     .map((edge) => edge.id);
+
+  // A support only carries the pro burden cleanly if no live attack remains
+  // against its source. A weakened or unresolved support is still on the
+  // record, but it is not an untouched part of the case.
+  const cleanSupports = supportEdges
+    .filter((edge) => statuses[edge.from] === "standing")
+    .filter((edge) => {
+      const incoming = debate.edges.filter(
+        (candidate) => candidate.to === edge.from && isClashEdge(candidate)
+      );
+      return incoming.every((candidate) => {
+        const ruling = verdictByEdge.get(candidate.id);
+        return !ruling || ruling.verdict === "irrelevant" || statuses[candidate.from] === "defeated";
+      });
+    })
+    .map((edge) => edge.id);
+
+  // Weakens and undecided are not strikes, but they are still live pressure.
+  // Counting only "defeats" here would let a judge say "this has real force"
+  // and then let the motion stand as if nothing had happened.
+  const liveAttacks = debate.edges
+    .filter((edge) => edge.to === debate.thesisId && isClashEdge(edge))
+    .filter((edge) => {
+      const ruling = verdictByEdge.get(edge.id);
+      return Boolean(
+        ruling &&
+          ruling.verdict !== "irrelevant" &&
+          statuses[edge.from] &&
+          statuses[edge.from] !== "defeated"
+      );
+    })
+    .map((edge) => edge.id);
+
   const unsupportedThesis = Boolean(thesis) && thesisStatus === "standing" && liveSupports.length === 0;
+  const hasLiveAttack = liveAttacks.length > 0;
+  const hasLiveSupport = liveSupports.length > 0;
+  const hasCleanSupport = cleanSupports.length > 0;
 
-  const outcomeBase: JudgmentOutcome =
-    thesisStatus === "defeated"
-      ? "falls"
-      : thesisStatus === "contested"
-        ? "undecided"
-        : liveSupports.length > 0
+  // The standard of proof decides what live, unresolved pressure means for
+  // the motion. A defeat still falls outright; a weakened or open clash can
+  // stop "stands" without pretending the argument was struck from the map.
+  let outcome: JudgmentOutcome;
+  if (thesisStatus === "defeated") {
+    outcome = "falls";
+  } else if (thesisStatus === "contested") {
+    outcome =
+      standard === "pro"
+        ? "unestablished"
+        : standard === "con" && hasLiveSupport
           ? "stands"
-          : "unestablished";
-
-  // The standard of proof decides what an unresolved clash means for the
-  // motion. It never turns a contested argument into a defeated one, but it
-  // does decide whether the burden-carrier has established the motion.
-  const outcome: JudgmentOutcome =
-    outcomeBase === "undecided" && standard === "pro"
-      ? "unestablished"
-      : outcomeBase === "undecided" && standard === "con" && liveSupports.length > 0
-        ? "stands"
-        : outcomeBase;
+          : "undecided";
+  } else if (!hasLiveSupport) {
+    outcome = "unestablished";
+  } else if (!hasLiveAttack && hasCleanSupport) {
+    outcome = "stands";
+  } else if (standard === "pro") {
+    outcome = "unestablished";
+  } else if (standard === "con") {
+    outcome = "stands";
+  } else {
+    outcome = "undecided";
+  }
 
   return {
     statuses,
@@ -267,6 +317,8 @@ export function solveJudgment(
     contested,
     thesisStatus,
     liveSupports,
+    liveAttacks,
+    cleanSupports,
     unsupportedThesis,
     outcome,
     counts: {
@@ -374,6 +426,15 @@ export function judgmentSummary(
   const directStanding = directAttacks.filter(
     (edge) => standingById.has(edge.from) && judgmentForEdge(verdicts, edge.id)?.verdict === "defeats"
   );
+  const directLive = directAttacks.filter((edge) => {
+    const ruling = judgmentForEdge(verdicts, edge.id);
+    return Boolean(
+      ruling &&
+        ruling.verdict !== "irrelevant" &&
+        snapshot.statuses[edge.from] &&
+        snapshot.statuses[edge.from] !== "defeated"
+    );
+  });
   const directSupports = debate.edges.filter(
     (edge) => edge.to === debate.thesisId && edge.type === "support"
   );
@@ -400,6 +461,23 @@ export function judgmentSummary(
   }
 
   if (snapshot.outcome === "stands") {
+    if (snapshot.liveAttacks.length > 0) {
+      const live = snapshot.liveAttacks.slice(0, 3).map((id) => {
+        const edge = debate.edges.find((candidate) => candidate.id === id)!;
+        return {
+          edgeId: edge.id,
+          from: edge.from,
+          to: edge.to,
+          kind: "attack" as const,
+          verdict: judgmentForEdge(verdicts, edge.id)?.verdict
+        };
+      });
+      return {
+        outcome: snapshot.outcome,
+        summary: `The motion stands under the con burden. The con case has live objections, but it has not established that the motion falls.`,
+        decisive: live
+      };
+    }
     if (snapshot.thesisStatus === "contested") {
       return {
         outcome: snapshot.outcome,
@@ -429,7 +507,8 @@ export function judgmentSummary(
   }
 
   if (snapshot.outcome === "undecided") {
-    const open = verdicts.find(
+    const direct = directLive[0] ? judgmentForEdge(verdicts, directLive[0].id) : undefined;
+    const open = direct ?? verdicts.find(
       (verdict) => verdict.verdict === "weakens" || verdict.verdict === "undecided"
     ) ?? verdicts.find((verdict) => verdict.verdict !== "defeats");
     const source = open ? titleOf(debate, open.from) : "A live clash";
@@ -442,21 +521,44 @@ export function judgmentSummary(
     };
   }
 
+  const liveSteps = directLive.slice(0, 3).map((edge) => ({
+    edgeId: edge.id,
+    from: edge.from,
+    to: edge.to,
+    kind: "attack" as const,
+    verdict: judgmentForEdge(verdicts, edge.id)?.verdict
+  }));
+  const failedSupports = directSupports
+    .filter((edge) => !snapshot.liveSupports.includes(edge.id))
+    .slice(0, 3)
+    .map((edge) => ({
+      edgeId: edge.id,
+      from: edge.from,
+      to: edge.to,
+      kind: "support" as const
+    }));
+  const pressuredSupports = directSupports
+    .filter(
+      (edge) =>
+        snapshot.liveSupports.includes(edge.id) && !snapshot.cleanSupports.includes(edge.id)
+    )
+    .slice(0, 3)
+    .map((edge) => ({
+      edgeId: edge.id,
+      from: edge.from,
+      to: edge.to,
+      kind: "support" as const
+    }));
+
   return {
     outcome: snapshot.outcome,
     summary:
-      liveSupports.length > 0
-        ? `The motion is unestablished under the ${burden} standard. A live clash remains unresolved, so the supporting case has not carried the motion.`
-        : "The motion is unestablished. No supporting argument survives the record, although no standing objection defeats the motion outright.",
-    decisive: directSupports
-      .filter((edge) => !snapshot.liveSupports.includes(edge.id))
-      .slice(0, 3)
-      .map((edge) => ({
-        edgeId: edge.id,
-        from: edge.from,
-        to: edge.to,
-        kind: "support" as const
-      }))
+      snapshot.liveAttacks.length > 0
+        ? `The motion is unestablished under the ${burden} standard. A live objection remains on the record, and the supporting case has not carried the motion.`
+        : liveSupports.length > 0
+          ? `The motion is unestablished under the ${burden} standard. The supporting case remains contested and has not carried the motion.`
+          : "The motion is unestablished. No supporting argument survives the record, although no standing objection defeats the motion outright.",
+    decisive: liveSteps.length ? liveSteps : pressuredSupports.length ? pressuredSupports : failedSupports
   };
 }
 
