@@ -1,14 +1,18 @@
 import { useMemo } from "react";
 import type { Debate } from "../../core/model";
 import {
+  BURDEN_THRESHOLDS,
   CRITERION_LABEL,
+  IMPACT_LABEL,
   OUTCOME_LABEL,
   OUTCOME_SHORT,
+  QUALITY_LABEL,
   STANDARD_LABEL,
   STANDARD_NOTE,
   STATUS_LABEL,
   VERDICT_LABEL,
   VERDICT_NOTE,
+  type CaseBalance,
   type ClashJudgment,
   type JudgmentRun,
   type JudgmentSnapshot,
@@ -65,6 +69,116 @@ function effectLine(judgment: ClashJudgment, snapshot: JudgmentSnapshot): string
   if (target === "contested") return "The target remains contested on the record.";
   if (snapshot.liveAttacks.includes(judgment.edgeId)) return "The objection remains live against the motion.";
   return "The target survives this clash.";
+}
+
+function formatPoints(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+function thresholdText(standard: JudgmentRun["standard"]): string {
+  if (standard === "pro") return `Pro must lead by at least ${formatPoints(BURDEN_THRESHOLDS.pro)} points.`;
+  if (standard === "con") return `Con must lead by at least ${formatPoints(BURDEN_THRESHOLDS.con)} points.`;
+  return `The margin must clear ±${formatPoints(BURDEN_THRESHOLDS.preponderance)} points.`;
+}
+
+function BalanceCard({
+  debate,
+  balance,
+  standard
+}: {
+  debate: Debate;
+  balance: CaseBalance;
+  standard: JudgmentRun["standard"];
+}) {
+  const lines = [...balance.lines].sort((a, b) => b.weight - a.weight || a.edgeId.localeCompare(b.edgeId));
+  const marginLabel = `${balance.margin >= 0 ? "+" : ""}${formatPoints(balance.margin)}`;
+  return (
+    <section className="case-balance" aria-label="Weighted balance of the record">
+      <div className="case-balance-head">
+        <div>
+          <div className="eyebrow">Weighted record</div>
+          <h3>Balance of the case</h3>
+        </div>
+        <span className={`balance-basis ${balance.assessed ? "is-judged" : "is-structural"}`}>
+          {balance.assessed ? "judge-rated" : "structural"}
+        </span>
+      </div>
+
+      <div className="balance-score">
+        <div className="balance-side balance-side--pro">
+          <span>Pro case</span>
+          <b>{formatPoints(balance.pro)}</b>
+        </div>
+        <div className={`balance-margin ${balance.margin >= 0 ? "is-pro" : "is-con"}`}>
+          <span>Margin</span>
+          <b>{marginLabel}</b>
+        </div>
+        <div className="balance-side balance-side--con">
+          <span>Con case</span>
+          <b>{formatPoints(balance.con)}</b>
+        </div>
+      </div>
+
+      <div className="balance-threshold">
+        <span>Burden threshold</span>
+        <b>{thresholdText(standard)}</b>
+      </div>
+
+      <details className="balance-lines">
+        <summary>
+          <span>Case lines</span>
+          <em>{lines.length}</em>
+        </summary>
+        {lines.length ? (
+          <ul>
+            {lines.map((line) => {
+              const rating = line.side === "pro"
+                ? line.quality ? QUALITY_LABEL[line.quality] : "Moderate"
+                : line.impact ? IMPACT_LABEL[line.impact] : "Material";
+              return (
+                <li
+                  key={line.edgeId}
+                  className={`balance-line balance-line--${line.side}`}
+                  title={`${rating} ${formatPoints(line.base)} × ${line.confidenceLabel} confidence ${formatPoints(line.confidence)} × ${
+                    line.side === "pro"
+                      ? line.pressure === 1
+                        ? "clean"
+                        : "under attack"
+                      : line.survival === 1
+                        ? "standing"
+                        : "contested"
+                  } ${formatPoints(line.side === "pro" ? line.pressure : line.survival)} × overlap ${formatPoints(line.independence)} = ${formatPoints(line.weight)}`}
+                >
+                  <div className="balance-line-main">
+                    <span className="balance-line-side">{line.side === "pro" ? "Pro" : "Con"}</span>
+                    <b>{titleFor(debate, line.sourceId)}</b>
+                    <span className="balance-line-rating">{rating}</span>
+                    <span className="balance-line-weight">{formatPoints(line.weight)}</span>
+                  </div>
+                  <div className="balance-line-meta">
+                    <span>{line.confidenceLabel} confidence</span>
+                    <span>
+                      {line.side === "pro"
+                        ? line.pressure === 1
+                          ? "clean line"
+                          : "under attack"
+                        : line.survival === 1
+                          ? "attacker standing"
+                          : "attacker contested"}
+                    </span>
+                    {line.independence < 1 && <span>overlap ×{formatPoints(line.independence)}</span>}
+                  </div>
+                  {line.reasoning && <p className="balance-line-reasoning">{line.reasoning}</p>}
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="balance-empty">No direct case lines survive on this record.</p>
+        )}
+      </details>
+    </section>
+  );
 }
 
 export function JudgmentPanel({
@@ -220,6 +334,8 @@ export function JudgmentPanel({
               <span>{STANDARD_LABEL[run.standard]}</span>
               <i>{STANDARD_NOTE[run.standard]}</i>
             </div>
+
+            <BalanceCard debate={debate} balance={snapshot.balance} standard={run.standard} />
 
             {run.decisive.length > 0 && (
               <div className="finale-path">

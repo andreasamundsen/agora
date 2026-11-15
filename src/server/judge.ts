@@ -4,8 +4,15 @@ import { cleanText, uid } from "../core/model";
 import {
   buildJudgmentRun,
   clashEdges,
+  isClashEdge,
+  judgmentForEdge,
+  solveJudgment,
   STANDARD_LABEL,
   STANDARD_NOTE,
+  type ArgumentQuality,
+  type AttackImpact,
+  type CaseLineAssessment,
+  type CaseSide,
   type ClashEdge,
   type ClashJudgment,
   type JudgeStrictness,
@@ -75,6 +82,148 @@ Return JSON only:
   "target_component": "conclusion" | "inference" | "premise" | "scope" | "unknown",
   "reasoning": "2-4 sentences. Quote or point to the exact part of the target that fails or survives."
 }`;
+
+const ASSESSMENT_RULES = `You are the weighing clerk inside AGORA, a debate harness. The judge has already ruled on every clash. Your job is to rate the surviving direct case lines; you do not decide the motion.
+
+A case line is either:
+- a direct SUPPORT edge from a standing argument to the thesis, or
+- a direct ATTACK or UNDERCUT edge from a live argument to the thesis.
+
+Do not rate replies to other arguments as separate lines. A reply has already done its work by changing whether the line it answers survives or is under pressure.
+
+For a SUPPORT, rate its quality:
+- strong: relevant, adequately grounded, valid inference, and load-bearing for the motion.
+- moderate: relevant and plausible, but with a real weakness, gap, or unresolved pressure.
+- weak: relevant but poorly grounded, overbroad, circular, or easily answered.
+
+For an ATTACK, rate its impact:
+- decisive: it defeats a load-bearing premise, inference, or the thesis itself.
+- material: it seriously damages the target's case.
+- marginal: it is technically relevant but does not materially change the case.
+
+Confidence is your confidence in the rating: high, medium, or low.
+
+Give every line a short cluster key. Lines that are variations of the same premise or mechanism must share the same cluster key; genuinely distinct lines get different keys. Do not adjust a rating for the standard of proof. Rate the line on its own merits.
+
+Return JSON only:
+{
+  "lines": [
+    {
+      "edgeId": "the exact edge id supplied",
+      "side": "pro" | "con",
+      "quality": "strong" | "moderate" | "weak",
+      "impact": "decisive" | "material" | "marginal",
+      "confidence": "high" | "medium" | "low",
+      "cluster": "short_shared_key",
+      "reasoning": "1-2 sentences pointing to the decisive quality or weakness."
+    }
+  ]
+}
+For a pro line use quality; for a con line use impact. Do not invent lines or ids.`;
+
+const AssessmentLineSchema = z.object({
+  edgeId: z.string(),
+  side: z.enum(["pro", "con"]).catch("pro"),
+  quality: z.enum(["strong", "moderate", "weak"]).optional(),
+  impact: z.enum(["decisive", "material", "marginal"]).optional(),
+  confidence: z.enum(["high", "medium", "low"]).catch("medium"),
+  cluster: z.string().catch(""),
+  reasoning: z.string().catch("")
+});
+
+const AssessmentSchema = z.object({
+  lines: z.array(AssessmentLineSchema)
+});
+
+function normalizeCluster(value: string, fallback: string): string {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+  return normalized || fallback;
+}
+
+function normalizeAssessmentRaw(value: unknown): unknown {
+  if (!value || typeof value !== "object") return value;
+  const record = value as Record<string, unknown>;
+  if (!Array.isArray(record.lines)) return value;
+  return {
+    ...record,
+    lines: record.lines.map((line) => {
+      if (!line || typeof line !== "object") return line;
+      const copy = { ...(line as Record<string, unknown>) };
+      for (const key of ["side", "quality", "impact", "confidence"] as const) {
+        const field = copy[key];
+        if (typeof field === "string") copy[key] = field.trim().toLowerCase();
+      }
+      return copy;
+    })
+  };
+}
+
+function assessmentPrompt(
+  debate: Debate,
+  provisional: ReturnType<typeof solveJudgment>,
+  verdicts: ClashJudgment[]
+): string | null {
+  const supportEdges = debate.edges.filter(
+    (edge) =>
+      edge.type === "support" &&
+      edge.to === debate.thesisId &&
+      provisional.liveSupports.includes(edge.id)
+  );
+  const attackEdges = debate.edges.filter(
+    (edge) =>
+      (edge.type === "attack" || edge.type === "undercut") &&
+      edge.to === debate.thesisId &&
+      provisional.liveAttacks.includes(edge.id)
+  );
+
+  if (!supportEdges.length && !attackEdges.length) return null;
+
+  const supportBlocks = supportEdges.flatMap((edge) => {
+    const source = debate.nodes.find((node) => node.id === edge.from);
+    if (!source) return [];
+    const clean = provisional.cleanSupports.includes(edge.id);
+    return [
+      `LINE ${edge.id} — PRO SUPPORT`,
+      nodeBlock(source, "SUPPORTING ARGUMENT"),
+      `Pressure: ${clean ? "clean; no live attack against the source" : "under a live attack"}`,
+      ""
+    ].join("\n");
+  });
+
+  const attackBlocks = attackEdges.flatMap((edge) => {
+    const source = debate.nodes.find((node) => node.id === edge.from);
+    if (!source) return [];
+    const ruling = judgmentForEdge(verdicts, edge.id);
+    return [
+      `LINE ${edge.id} — CON ${edge.type.toUpperCase()}`,
+      nodeBlock(source, "ATTACKING ARGUMENT"),
+      `Ruling: ${ruling?.verdict ?? "undecided"}; confidence: ${ruling?.confidence ?? "medium"}`,
+      ruling?.reasoning ? `Ruling reason: ${ruling.reasoning}` : "",
+      ""
+    ].join("\n");
+  });
+
+  return `THE MOTION
+${debate.motion}
+
+THE THESIS
+${cleanText(debate.thesisText) || debate.motion}
+
+--- BEGIN UNTRUSTED ARGUMENT DATA ---
+
+${supportBlocks.join("\n")}
+
+${attackBlocks.join("\n")}
+
+--- END UNTRUSTED ARGUMENT DATA ---
+
+Rate only the lines above. Return one record per line.`;
+}
 
 function nodeBlock(node: DebateNode, role: string): string {
   const premises = node.premises.length
@@ -204,6 +353,62 @@ function providerError(error: unknown): string {
   return raw.replace(/\s+/g, " ").slice(0, 240);
 }
 
+async function assessCaseLines(
+  debate: Debate,
+  verdicts: ClashJudgment[],
+  standard: StandardOfProof,
+  settings: StoredSettings,
+  warnings: string[]
+): Promise<CaseLineAssessment[]> {
+  const provisional = solveJudgment(debate, verdicts, standard);
+  const prompt = assessmentPrompt(debate, provisional, verdicts);
+  if (!prompt) return [];
+
+  const sides = new Map<string, CaseSide>();
+  for (const edge of debate.edges) {
+    if (edge.to !== debate.thesisId) continue;
+    if (edge.type === "support" && provisional.liveSupports.includes(edge.id)) sides.set(edge.id, "pro");
+    if (isClashEdge(edge) && provisional.liveAttacks.includes(edge.id)) sides.set(edge.id, "con");
+  }
+
+  try {
+    const content = await callModel(
+      settings,
+      [
+        { role: "system", content: ASSESSMENT_RULES },
+        { role: "user", content: prompt }
+      ],
+      { temperature: 0, maxTokens: 1800 }
+    );
+    const parsed = AssessmentSchema.safeParse(normalizeAssessmentRaw(parseJsonObject(content)));
+    if (!parsed.success) throw new Error("The weighing pass returned an invalid shape.");
+    const assessed = new Map<string, CaseLineAssessment>();
+    for (const record of parsed.data.lines) {
+      const side = sides.get(record.edgeId);
+      if (!side) continue;
+      assessed.set(record.edgeId, {
+        edgeId: record.edgeId,
+        side,
+        quality: side === "pro" ? record.quality ?? "moderate" : undefined,
+        impact: side === "con" ? record.impact ?? "material" : undefined,
+        confidence: record.confidence,
+        cluster: normalizeCluster(record.cluster, record.edgeId),
+        reasoning: cleanReasoning(record.reasoning)
+      });
+    }
+    if (!assessed.size) throw new Error("The weighing pass did not rate any case line.");
+    if (assessed.size < sides.size) {
+      warnings.push(
+        `The weighing pass rated ${assessed.size} of ${sides.size} case lines. Unrated lines use the structural fallback.`
+      );
+    }
+    return [...assessed.values()];
+  } catch (error) {
+    warnings.push(`The weighing pass could not rate the case lines: ${providerError(error)}. Structural weights were used.`);
+    return [];
+  }
+}
+
 export async function judgeDebate(debate: Debate, options: JudgeOptions): Promise<ReturnType<typeof buildJudgmentRun>> {
   const settings = getSettings();
   const model = options.model?.trim() || settings.model;
@@ -286,6 +491,11 @@ export async function judgeDebate(debate: Debate, options: JudgeOptions): Promis
     warnings.push("There are no attack or undercut edges on this map, so there are no clashes to adjudicate.");
   }
 
+  const assessments =
+    engine === "llm"
+      ? await assessCaseLines(debate, verdicts, options.standard, judgeSettings, warnings)
+      : [];
+
   return buildJudgmentRun({
     id: uid("judgment"),
     debate,
@@ -297,6 +507,7 @@ export async function judgeDebate(debate: Debate, options: JudgeOptions): Promis
     standard: options.standard,
     strictness: options.strictness,
     verdicts,
+    assessments,
     warnings: [...new Set(warnings)].slice(0, 8)
   });
 }

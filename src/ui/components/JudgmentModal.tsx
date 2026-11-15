@@ -139,7 +139,8 @@ export function JudgmentModal({
 
           <p className="modal-lede judge-lede">
             The judge does not decide the whole debate in one breath. It rules on each clash, names the criterion that
-            decided it, and hands the consequence back to the map. Arguments can fall, survive, or return.
+            decided it, and hands the consequence back to the map. After the clashes, the bench weighs the surviving case
+            lines against the standard of proof.
           </p>
 
           {!ready && (

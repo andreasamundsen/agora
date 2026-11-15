@@ -19,6 +19,45 @@ export type JudgmentOutcome = "stands" | "falls" | "undecided" | "unestablished"
 export type StandardOfProof = "pro" | "con" | "preponderance";
 export type JudgeStrictness = "strict" | "balanced" | "generous";
 export type JudgeEngine = "llm" | "local";
+export type CaseSide = "pro" | "con";
+export type ArgumentQuality = "strong" | "moderate" | "weak";
+export type AttackImpact = "decisive" | "material" | "marginal";
+
+export interface CaseLineAssessment {
+  edgeId: string;
+  side: CaseSide;
+  quality?: ArgumentQuality;
+  impact?: AttackImpact;
+  confidence: JudgmentConfidence;
+  cluster: string;
+  reasoning?: string;
+}
+
+export interface CaseLineWeight {
+  edgeId: string;
+  side: CaseSide;
+  sourceId: string;
+  cluster: string;
+  base: number;
+  confidence: number;
+  confidenceLabel: JudgmentConfidence;
+  survival: number;
+  pressure: number;
+  independence: number;
+  weight: number;
+  quality?: ArgumentQuality;
+  impact?: AttackImpact;
+  reasoning?: string;
+}
+
+export interface CaseBalance {
+  pro: number;
+  con: number;
+  margin: number;
+  threshold: number;
+  lines: CaseLineWeight[];
+  assessed: boolean;
+}
 
 export interface ClashEdge extends DebateEdge {
   type: "attack" | "undercut";
@@ -56,6 +95,7 @@ export interface JudgmentSnapshot {
   cleanSupports: string[];
   unsupportedThesis: boolean;
   outcome: JudgmentOutcome;
+  balance: CaseBalance;
   counts: { standing: number; defeated: number; contested: number };
 }
 
@@ -77,6 +117,8 @@ export interface JudgmentRun {
   strictness: JudgeStrictness;
   verdicts: ClashJudgment[];
   waves: JudgmentWave[];
+  assessments: CaseLineAssessment[];
+  balance: CaseBalance;
   warnings: string[];
   summary: string;
   outcome: JudgmentOutcome;
@@ -132,9 +174,9 @@ export const STANDARD_LABEL: Record<StandardOfProof, string> = {
 };
 
 export const STANDARD_NOTE: Record<StandardOfProof, string> = {
-  pro: "An unresolved clash counts against the motion.",
-  con: "An unresolved clash counts for the motion.",
-  preponderance: "The motion follows the weight of the surviving record."
+  pro: "The motion must show a clear advantage over the surviving objections.",
+  con: "The con case must show a clear advantage over the motion's support.",
+  preponderance: "The heavier surviving case wins; a near-tie remains undecided."
 };
 
 export const STRICTNESS_LABEL: Record<JudgeStrictness, string> = {
@@ -147,6 +189,43 @@ export const STRICTNESS_NOTE: Record<JudgeStrictness, string> = {
   strict: "Only a high-confidence ruling can strike an argument.",
   balanced: "High or medium confidence can strike an argument.",
   generous: "The judge's ruling stands, even when it is unsure."
+};
+
+export const QUALITY_LABEL: Record<ArgumentQuality, string> = {
+  strong: "Strong",
+  moderate: "Moderate",
+  weak: "Weak"
+};
+
+export const IMPACT_LABEL: Record<AttackImpact, string> = {
+  decisive: "Decisive",
+  material: "Material",
+  marginal: "Marginal"
+};
+
+export const QUALITY_POINTS: Record<ArgumentQuality, number> = {
+  strong: 3,
+  moderate: 2,
+  weak: 1
+};
+
+export const IMPACT_POINTS: Record<AttackImpact, number> = {
+  decisive: 3,
+  material: 2,
+  marginal: 1
+};
+
+export const RATING_CONFIDENCE_FACTOR: Record<JudgmentConfidence, number> = {
+  high: 1,
+  medium: 0.75,
+  low: 0.5
+};
+
+/** Initial burden calibration. These are points, not probabilities. */
+export const BURDEN_THRESHOLDS: Record<StandardOfProof, number> = {
+  pro: 2,
+  con: 2,
+  preponderance: 0.5
 };
 
 /**
@@ -200,7 +279,8 @@ export function judgmentForEdge(
 export function solveJudgment(
   debate: Debate,
   verdicts: ClashJudgment[],
-  standard: StandardOfProof = "preponderance"
+  standard: StandardOfProof = "preponderance",
+  assessments: CaseLineAssessment[] = []
 ): JudgmentSnapshot {
   const nodeIds = new Set(debate.nodes.map((node) => node.id));
   const attackers = new Map<string, string[]>();
@@ -303,33 +383,41 @@ export function solveJudgment(
     .map((edge) => edge.id);
 
   const unsupportedThesis = Boolean(thesis) && thesisStatus === "standing" && liveSupports.length === 0;
-  const hasLiveAttack = liveAttacks.length > 0;
-  const hasLiveSupport = liveSupports.length > 0;
-  const hasCleanSupport = cleanSupports.length > 0;
+  const balance = buildCaseBalance({
+    debate,
+    verdicts,
+    assessments,
+    statuses,
+    liveSupports,
+    liveAttacks,
+    cleanSupports,
+    standard
+  });
 
-  // The standard of proof decides what live, unresolved pressure means for
-  // the motion. A defeat still falls outright; a weakened or open clash can
-  // stop "stands" without pretending the argument was struck from the map.
+  // The burden is a threshold, not a veto. The record can be so lopsided that
+  // it carries even the side with the burden; only a close record lets the
+  // standard decide. A direct defeat of the thesis is still a hard fall.
   let outcome: JudgmentOutcome;
   if (thesisStatus === "defeated") {
     outcome = "falls";
-  } else if (thesisStatus === "contested") {
-    outcome =
-      standard === "pro"
-        ? "unestablished"
-        : standard === "con" && hasLiveSupport
-          ? "stands"
-          : "undecided";
-  } else if (!hasLiveSupport) {
+  } else if (balance.pro <= 0) {
     outcome = "unestablished";
-  } else if (!hasLiveAttack && hasCleanSupport) {
-    outcome = "stands";
   } else if (standard === "pro") {
-    outcome = "unestablished";
+    outcome =
+      balance.margin >= BURDEN_THRESHOLDS.pro
+        ? "stands"
+        : balance.margin <= -BURDEN_THRESHOLDS.con
+          ? "falls"
+          : "unestablished";
   } else if (standard === "con") {
-    outcome = "stands";
+    outcome = balance.margin <= -BURDEN_THRESHOLDS.con ? "falls" : "stands";
   } else {
-    outcome = "undecided";
+    outcome =
+      balance.margin > BURDEN_THRESHOLDS.preponderance
+        ? "stands"
+        : balance.margin < -BURDEN_THRESHOLDS.preponderance
+          ? "falls"
+          : "undecided";
   }
 
   return {
@@ -343,11 +431,174 @@ export function solveJudgment(
     cleanSupports,
     unsupportedThesis,
     outcome,
+    balance,
     counts: {
       standing: standing.length,
       defeated: defeated.length,
       contested: contested.length
     }
+  };
+}
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function clusterKey(value: string | undefined, fallback: string): string {
+  const normalized = (value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+  return normalized || fallback;
+}
+
+function fallbackImpact(verdict: ClashVerdict | undefined): AttackImpact {
+  if (verdict === "defeats") return "decisive";
+  if (verdict === "undecided") return "material";
+  return "material";
+}
+
+/**
+ * Turn the surviving direct case lines into a weighted balance. Only direct
+ * supports and direct attacks on the thesis are case lines; replies earn
+ * their effect through the status and pressure of the line they answer.
+ *
+ * Without judge assessments, a neutral structural rating is used. That keeps
+ * replay and local review deterministic while making the lack of quality
+ * information visible in `assessed`.
+ */
+export function buildCaseBalance(input: {
+  debate: Debate;
+  verdicts: ClashJudgment[];
+  assessments: CaseLineAssessment[];
+  statuses: Record<string, ArgumentStatus>;
+  liveSupports: string[];
+  liveAttacks: string[];
+  cleanSupports: string[];
+  standard: StandardOfProof;
+}): CaseBalance {
+  const assessmentByEdge = new Map(input.assessments.map((item) => [item.edgeId, item]));
+  const rulingByEdge = new Map(input.verdicts.map((item) => [item.edgeId, item]));
+  const clean = new Set(input.cleanSupports);
+  const lines: CaseLineWeight[] = [];
+
+  for (const edgeId of input.liveSupports) {
+    const edge = input.debate.edges.find((candidate) => candidate.id === edgeId);
+    if (!edge || edge.type !== "support") continue;
+    const source = nodeById(input.debate, edge.from);
+    if (!source || input.statuses[source.id] !== "standing") continue;
+    const assessment = assessmentByEdge.get(edgeId);
+    const quality = assessment?.side === "pro" ? assessment.quality ?? "moderate" : "moderate";
+    const confidenceLabel = assessment?.side === "pro" ? assessment.confidence : "high";
+    const pressure = clean.has(edgeId) ? 1 : 0.6;
+    const base = QUALITY_POINTS[quality];
+    const confidence = RATING_CONFIDENCE_FACTOR[confidenceLabel];
+    lines.push({
+      edgeId,
+      side: "pro",
+      sourceId: source.id,
+      cluster: clusterKey(assessment?.side === "pro" ? assessment.cluster : undefined, edgeId),
+      base,
+      confidence,
+      confidenceLabel,
+      survival: 1,
+      pressure,
+      independence: 1,
+      weight: base * confidence * pressure,
+      quality,
+      reasoning: assessment?.side === "pro" ? assessment.reasoning : undefined
+    });
+  }
+
+  for (const edgeId of input.liveAttacks) {
+    const edge = input.debate.edges.find((candidate) => candidate.id === edgeId);
+    if (!edge || !isClashEdge(edge)) continue;
+    const source = nodeById(input.debate, edge.from);
+    if (!source) continue;
+    const sourceStatus = input.statuses[source.id];
+    if (!sourceStatus || sourceStatus === "defeated") continue;
+    const assessment = assessmentByEdge.get(edgeId);
+    const impact =
+      assessment?.side === "con"
+        ? assessment.impact ?? "material"
+        : fallbackImpact(rulingByEdge.get(edgeId)?.verdict);
+    const confidenceLabel =
+      assessment?.side === "con"
+        ? assessment.confidence
+        : rulingByEdge.get(edgeId)?.confidence ?? "medium";
+    const base = IMPACT_POINTS[impact];
+    const confidence = RATING_CONFIDENCE_FACTOR[confidenceLabel];
+    const survival = sourceStatus === "standing" ? 1 : 0.5;
+    lines.push({
+      edgeId,
+      side: "con",
+      sourceId: source.id,
+      cluster: clusterKey(assessment?.side === "con" ? assessment.cluster : undefined, edgeId),
+      base,
+      confidence,
+      confidenceLabel,
+      survival,
+      pressure: 1,
+      independence: 1,
+      weight: base * confidence * survival,
+      impact,
+      reasoning: assessment?.side === "con" ? assessment.reasoning : undefined
+    });
+  }
+
+  const groups = new Map<string, CaseLineWeight[]>();
+  for (const line of lines) {
+    const key = `${line.side}:${line.cluster}`;
+    const group = groups.get(key) ?? [];
+    group.push(line);
+    groups.set(key, group);
+  }
+
+  for (const group of groups.values()) {
+    group.sort((a, b) => b.weight - a.weight || a.edgeId.localeCompare(b.edgeId));
+    group.forEach((line, index) => {
+      line.independence = index === 0 ? 1 : index === 1 ? 0.5 : 0.25;
+      line.weight = line.weight * line.independence;
+    });
+    const best = group[0]?.weight ?? 0;
+    const total = group.reduce((sum, line) => sum + line.weight, 0);
+    const cap = best * 1.5;
+    if (total > cap && total > 0) {
+      const scale = cap / total;
+      for (const line of group) line.weight *= scale;
+    }
+  }
+
+  const proRaw = lines.filter((line) => line.side === "pro").reduce((sum, line) => sum + line.weight, 0);
+  const conRaw = lines.filter((line) => line.side === "con").reduce((sum, line) => sum + line.weight, 0);
+  for (const line of lines) line.weight = round2(line.weight);
+  for (const side of ["pro", "con"] as const) {
+    const sideLines = lines.filter((line) => line.side === side);
+    if (!sideLines.length) continue;
+    const raw = sideLines.reduce((sum, line) => sum + line.weight, 0);
+    const target = round2(side === "pro" ? proRaw : conRaw);
+    const diff = round2(target - raw);
+    if (diff) sideLines[0]!.weight = round2(sideLines[0]!.weight + diff);
+  }
+  const pro = round2(lines.filter((line) => line.side === "pro").reduce((sum, line) => sum + line.weight, 0));
+  const con = round2(lines.filter((line) => line.side === "con").reduce((sum, line) => sum + line.weight, 0));
+  const margin = round2(pro - con);
+  const threshold =
+    input.standard === "pro"
+      ? BURDEN_THRESHOLDS.pro
+      : input.standard === "con"
+        ? -BURDEN_THRESHOLDS.con
+        : BURDEN_THRESHOLDS.preponderance;
+
+  return {
+    pro,
+    con,
+    margin,
+    threshold,
+    lines,
+    assessed: lines.length > 0 && lines.every((line) => assessmentByEdge.has(line.edgeId))
   };
 }
 
@@ -425,6 +676,33 @@ function titleOf(debate: Debate, id: string): string {
   return nodeById(debate, id)?.title ?? "An argument";
 }
 
+function topCaseLines(balance: CaseBalance, side: CaseSide, count = 3): CaseLineWeight[] {
+  return balance.lines
+    .filter((line) => line.side === side)
+    .sort((a, b) => b.weight - a.weight || a.edgeId.localeCompare(b.edgeId))
+    .slice(0, count);
+}
+
+function caseSteps(
+  debate: Debate,
+  verdicts: ClashJudgment[],
+  caseLines: CaseLineWeight[]
+): DecisiveStep[] {
+  return caseLines.flatMap((line) => {
+    const edge = debate.edges.find((candidate) => candidate.id === line.edgeId);
+    if (!edge) return [];
+    return [
+      {
+        edgeId: edge.id,
+        from: edge.from,
+        to: edge.to,
+        kind: line.side === "pro" ? ("support" as const) : ("attack" as const),
+        verdict: judgmentForEdge(verdicts, edge.id)?.verdict
+      }
+    ];
+  });
+}
+
 /**
  * A short, human-readable account of why the outcome holds. This is not a
  * substitute for the ruling record; it is the sentence the judge would read
@@ -433,13 +711,15 @@ function titleOf(debate: Debate, id: string): string {
 export function judgmentSummary(
   debate: Debate,
   verdicts: ClashJudgment[],
-  standard: StandardOfProof = "preponderance"
+  standard: StandardOfProof = "preponderance",
+  assessments: CaseLineAssessment[] = []
 ): {
   summary: string;
   outcome: JudgmentOutcome;
   decisive: DecisiveStep[];
+  balance: CaseBalance;
 } {
-  const snapshot = solveJudgment(debate, verdicts, standard);
+  const snapshot = solveJudgment(debate, verdicts, standard, assessments);
   const burden = standard === "pro" ? "pro burden" : standard === "con" ? "con burden" : "preponderance";
   const standingById = new Set(snapshot.standing);
   const directAttacks = debate.edges.filter(
@@ -461,85 +741,61 @@ export function judgmentSummary(
     (edge) => edge.to === debate.thesisId && edge.type === "support"
   );
   const liveSupports = directSupports.filter((edge) => snapshot.liveSupports.includes(edge.id));
+  const proLines = topCaseLines(snapshot.balance, "pro");
+  const conLines = topCaseLines(snapshot.balance, "con");
+  const margin = `${snapshot.balance.margin >= 0 ? "+" : ""}${snapshot.balance.margin}`;
 
   if (snapshot.outcome === "falls") {
-    const chosen = strongest(
-      directStanding
-        .map((edge) => judgmentForEdge(verdicts, edge.id))
-        .filter((verdict): verdict is ClashJudgment => Boolean(verdict))
-    );
-    const source = chosen ? titleOf(debate, chosen.from) : "A standing objection";
-    return {
-      outcome: snapshot.outcome,
-      summary: `The motion falls. The objection “${source}” survives the record, and the supporting case does not answer it.`,
-      decisive: directStanding.slice(0, 3).map((edge) => ({
-        edgeId: edge.id,
-        from: edge.from,
-        to: edge.to,
-        kind: "attack" as const,
-        verdict: judgmentForEdge(verdicts, edge.id)?.verdict
-      }))
-    };
-  }
-
-  if (snapshot.outcome === "stands") {
-    if (snapshot.liveAttacks.length > 0) {
-      const live = snapshot.liveAttacks.slice(0, 3).map((id) => {
-        const edge = debate.edges.find((candidate) => candidate.id === id)!;
-        return {
+    if (snapshot.thesisStatus === "defeated") {
+      const chosen = strongest(
+        directStanding
+          .map((edge) => judgmentForEdge(verdicts, edge.id))
+          .filter((verdict): verdict is ClashJudgment => Boolean(verdict))
+      );
+      const source = chosen ? titleOf(debate, chosen.from) : "A standing objection";
+      return {
+        outcome: snapshot.outcome,
+        balance: snapshot.balance,
+        summary: `The motion falls. The objection “${source}” defeats the thesis, and the supporting case cannot restore it.`,
+        decisive: directStanding.slice(0, 3).map((edge) => ({
           edgeId: edge.id,
           from: edge.from,
           to: edge.to,
           kind: "attack" as const,
           verdict: judgmentForEdge(verdicts, edge.id)?.verdict
-        };
-      });
-      return {
-        outcome: snapshot.outcome,
-        summary: `The motion stands under the con burden. The con case has live objections, but it has not established that the motion falls.`,
-        decisive: live
-      };
-    }
-    if (snapshot.thesisStatus === "contested") {
-      return {
-        outcome: snapshot.outcome,
-        summary: `The motion stands under the ${burden} standard. No standing objection defeats it, although the record remains contested.`,
-        decisive: liveSupports.slice(0, 3).map((edge) => ({
-          edgeId: edge.id,
-          from: edge.from,
-          to: edge.to,
-          kind: "support" as const
         }))
       };
     }
-    const supportTitle = liveSupports[0] ? titleOf(debate, liveSupports[0].from) : "The supporting case";
     return {
       outcome: snapshot.outcome,
+      balance: snapshot.balance,
+      summary: `The motion falls. The con case outweighs the surviving support by ${Math.abs(snapshot.balance.margin)} points under the ${burden} standard.`,
+      decisive: caseSteps(debate, verdicts, conLines)
+    };
+  }
+
+  if (snapshot.outcome === "stands") {
+    return {
+      outcome: snapshot.outcome,
+      balance: snapshot.balance,
       summary:
-        liveSupports.length > 1
-          ? `The motion stands. ${liveSupports.length} supporting arguments survive every standing objection on the record.`
-          : `The motion stands. “${supportTitle}” survives every standing objection on the record.`,
-      decisive: liveSupports.slice(0, 3).map((edge) => ({
-        edgeId: edge.id,
-        from: edge.from,
-        to: edge.to,
-        kind: "support" as const
-      }))
+        standard === "con" && snapshot.balance.margin < 0
+          ? `The motion stands. The con case did not clear the con burden; the weighted margin is ${margin} points.`
+          : `The motion stands. The supporting case leads the weighted record by ${margin} points and meets the ${burden} threshold.`,
+      decisive: caseSteps(debate, verdicts, proLines)
     };
   }
 
   if (snapshot.outcome === "undecided") {
-    const direct = directLive[0] ? judgmentForEdge(verdicts, directLive[0].id) : undefined;
-    const open = direct ?? verdicts.find(
-      (verdict) => verdict.verdict === "weakens" || verdict.verdict === "undecided"
-    ) ?? verdicts.find((verdict) => verdict.verdict !== "defeats");
-    const source = open ? titleOf(debate, open.from) : "A live clash";
+    const firstLine = [...snapshot.balance.lines].sort(
+      (a, b) => b.weight - a.weight || a.edgeId.localeCompare(b.edgeId)
+    )[0];
+    const source = firstLine ? titleOf(debate, firstLine.sourceId) : "A live clash";
     return {
       outcome: snapshot.outcome,
-      summary: `The motion remains undecided. “${source}” is still contested, and the record does not give a sufficient cause for another strike.`,
-      decisive: open
-        ? [{ edgeId: open.edgeId, from: open.from, to: open.to, kind: "attack", verdict: open.verdict }]
-        : []
+      balance: snapshot.balance,
+      summary: `The motion remains undecided. The weighted record is within the preponderance band at ${margin} points; “${source}” is the strongest live line.`,
+      decisive: firstLine ? caseSteps(debate, verdicts, [firstLine]) : []
     };
   }
 
@@ -574,11 +830,12 @@ export function judgmentSummary(
 
   return {
     outcome: snapshot.outcome,
+    balance: snapshot.balance,
     summary:
       snapshot.liveAttacks.length > 0
-        ? `The motion is unestablished under the ${burden} standard. A live objection remains on the record, and the supporting case has not carried the motion.`
+        ? `The motion is unestablished under the ${burden} standard. A live objection remains on the record; the supporting case is at ${margin} points and has not carried the motion.`
         : liveSupports.length > 0
-          ? `The motion is unestablished under the ${burden} standard. The supporting case remains contested and has not carried the motion.`
+          ? `The motion is unestablished under the ${burden} standard. The supporting case remains contested at ${margin} points and has not carried the motion.`
           : "The motion is unestablished. No supporting argument survives the record, although no standing objection defeats the motion outright.",
     decisive: liveSteps.length ? liveSteps : pressuredSupports.length ? pressuredSupports : failedSupports
   };
@@ -591,12 +848,14 @@ export function buildJudgmentRun(input: {
   standard: StandardOfProof;
   strictness: JudgeStrictness;
   verdicts: ClashJudgment[];
+  assessments?: CaseLineAssessment[];
   warnings?: string[];
   id: string;
   createdAt?: number;
 }): JudgmentRun {
+  const assessments = input.assessments ?? [];
   const ordered = orderVerdicts(input.debate, input.verdicts);
-  const summary = judgmentSummary(input.debate, ordered.verdicts, input.standard);
+  const summary = judgmentSummary(input.debate, ordered.verdicts, input.standard, assessments);
   return {
     id: input.id,
     debateId: input.debate.id,
@@ -607,6 +866,8 @@ export function buildJudgmentRun(input: {
     strictness: input.strictness,
     verdicts: ordered.verdicts,
     waves: ordered.waves,
+    assessments,
+    balance: summary.balance,
     warnings: input.warnings ?? [],
     summary: summary.summary,
     outcome: summary.outcome,
@@ -626,6 +887,22 @@ export function judgmentMarkdown(debate: Debate, run: JudgmentRun): string {
   lines.push("");
   lines.push(run.summary);
   lines.push("");
+
+  if (run.balance.lines.length) {
+    lines.push("## Balance");
+    lines.push("");
+    lines.push(`- **Pro case:** ${run.balance.pro} points`);
+    lines.push(`- **Con case:** ${run.balance.con} points`);
+    lines.push(`- **Margin:** ${run.balance.margin >= 0 ? "+" : ""}${run.balance.margin} points`);
+    lines.push(`- **Threshold:** ${run.balance.threshold >= 0 ? "+" : ""}${run.balance.threshold} points`);
+    lines.push(`- **Basis:** ${run.balance.assessed ? "judge-rated case lines" : "structural weights"}`);
+    lines.push("");
+    for (const line of run.balance.lines) {
+      const rating = line.side === "pro" ? line.quality ? QUALITY_LABEL[line.quality] : "Moderate" : line.impact ? IMPACT_LABEL[line.impact] : "Material";
+      lines.push(`- **${titleOf(debate, line.sourceId)}** — ${line.side === "pro" ? "pro" : "con"}, ${rating}, ${line.weight} points`);
+    }
+    lines.push("");
+  }
 
   if (run.decisive.length) {
     lines.push("## Decisive path");

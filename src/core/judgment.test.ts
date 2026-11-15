@@ -8,7 +8,11 @@ import {
   motionOutcomeForDisplay,
   orderVerdicts,
   solveJudgment,
-  type ClashJudgment
+  type ArgumentQuality,
+  type AttackImpact,
+  type CaseLineAssessment,
+  type ClashJudgment,
+  type JudgmentConfidence
 } from "./judgment";
 
 function debateWith(edges: { from: string; to: string; type: "support" | "attack" | "undercut" }[]) {
@@ -39,6 +43,66 @@ function verdict(edgeId: string, from: string, to: string, value: ClashJudgment[
     confidence: "high",
     targetComponent: "conclusion",
     reasoning: "A test ruling."
+  };
+}
+
+function weightedDebate(proCount: number, conCount: number) {
+  const proNodes = Array.from({ length: proCount }, (_, index) => ({
+    id: `pro${index}`,
+    kind: "argument" as const,
+    title: `Pro argument ${index + 1}`,
+    text: `A supporting reason ${index + 1}.`,
+    stance: "pro" as const
+  }));
+  const conNodes = Array.from({ length: conCount }, (_, index) => ({
+    id: `con${index}`,
+    kind: "argument" as const,
+    title: `Con argument ${index + 1}`,
+    text: `An opposing reason ${index + 1}.`,
+    stance: "con" as const
+  }));
+  return reconcileDebate({
+    id: "weighted-debate",
+    motion: "Should the weighted test pass?",
+    thesisId: "thesis",
+    nodes: [
+      { id: "thesis", kind: "statement" as const, title: "The weighted test passes", text: "The weighted test passes." },
+      ...proNodes,
+      ...conNodes
+    ],
+    edges: [
+      ...proNodes.map((node) => ({
+        id: `e_${node.id}_thesis`,
+        from: node.id,
+        to: "thesis",
+        type: "support" as const
+      })),
+      ...conNodes.map((node) => ({
+        id: `e_${node.id}_thesis`,
+        from: node.id,
+        to: "thesis",
+        type: "attack" as const
+      }))
+    ]
+  });
+}
+
+function assess(
+  edgeId: string,
+  side: "pro" | "con",
+  rating: ArgumentQuality | AttackImpact,
+  cluster: string,
+  confidence: JudgmentConfidence = "high"
+): CaseLineAssessment {
+  return {
+    edgeId,
+    side,
+    ...(side === "pro"
+      ? { quality: rating as ArgumentQuality }
+      : { impact: rating as AttackImpact }),
+    confidence,
+    cluster,
+    reasoning: "A test assessment."
   };
 }
 
@@ -76,15 +140,19 @@ describe("judgment solver", () => {
       { from: "rebuttal", to: "objection", type: "attack" },
       { from: "objection", to: "rebuttal", type: "attack" }
     ]);
-    const snapshot = solveJudgment(debate, [
-      verdict("e_objection_thesis", "objection", "thesis"),
-      verdict("e_rebuttal_objection", "rebuttal", "objection"),
-      verdict("e_objection_rebuttal", "objection", "rebuttal")
-    ]);
+    const snapshot = solveJudgment(
+      debate,
+      [
+        verdict("e_objection_thesis", "objection", "thesis"),
+        verdict("e_rebuttal_objection", "rebuttal", "objection"),
+        verdict("e_objection_rebuttal", "objection", "rebuttal")
+      ],
+      "preponderance"
+    );
     expect(snapshot.statuses.objection).toBe("contested");
     expect(snapshot.statuses.rebuttal).toBe("contested");
     expect(snapshot.thesisStatus).toBe("contested");
-    expect(snapshot.outcome).toBe("undecided");
+    expect(snapshot.outcome).toBe("unestablished");
   });
 
   it("applies the standard of proof to an unresolved direct contest", () => {
@@ -151,15 +219,95 @@ describe("judgment solver", () => {
     expect(snapshot.outcome).toBe("stands");
   });
 
-  it("treats a damaged support as live pressure on the burden carrier", () => {
+  it("treats a damaged support as pressure on the pro burden", () => {
     const debate = debateWith([
       { from: "support", to: "thesis", type: "support" },
       { from: "objection", to: "support", type: "attack" }
     ]);
     const verdicts = [verdict("e_objection_support", "objection", "support", "weakens")];
-    expect(solveJudgment(debate, verdicts, "pro").outcome).toBe("unestablished");
-    expect(solveJudgment(debate, verdicts, "preponderance").outcome).toBe("undecided");
+    const pro = solveJudgment(debate, verdicts, "pro");
+    expect(pro.outcome).toBe("unestablished");
+    expect(pro.balance.pro).toBe(1.2);
+    expect(solveJudgment(debate, verdicts, "preponderance").outcome).toBe("stands");
     expect(solveJudgment(debate, verdicts, "con").outcome).toBe("stands");
+  });
+
+  it("lets a lopsided pro case carry a pro burden", () => {
+    const debate = weightedDebate(10, 1);
+    const verdicts = [verdict("e_con0_thesis", "con0", "thesis", "weakens")];
+    const assessments = [
+      ...Array.from({ length: 10 }, (_, index) =>
+        assess(`e_pro${index}_thesis`, "pro", "strong", `pro-line-${index}`)
+      ),
+      assess("e_con0_thesis", "con", "marginal", "con-line")
+    ];
+    const snapshot = solveJudgment(debate, verdicts, "pro", assessments);
+    expect(snapshot.balance.pro).toBe(30);
+    expect(snapshot.balance.con).toBe(1);
+    expect(snapshot.balance.margin).toBe(29);
+    expect(snapshot.outcome).toBe("stands");
+  });
+
+  it("discounts overlapping arguments instead of counting nodes", () => {
+    const debate = weightedDebate(10, 1);
+    const verdicts = [verdict("e_con0_thesis", "con0", "thesis", "weakens")];
+    const assessments = [
+      ...Array.from({ length: 10 }, (_, index) =>
+        assess(`e_pro${index}_thesis`, "pro", "strong", "shared-mechanism")
+      ),
+      assess("e_con0_thesis", "con", "decisive", "counter-mechanism")
+    ];
+    const pro = solveJudgment(debate, verdicts, "pro", assessments);
+    expect(pro.balance.pro).toBe(4.5);
+    expect(pro.balance.margin).toBe(1.5);
+    expect(pro.outcome).toBe("unestablished");
+    expect(solveJudgment(debate, verdicts, "con", assessments).outcome).toBe("stands");
+    expect(solveJudgment(debate, verdicts, "preponderance", assessments).outcome).toBe("stands");
+  });
+
+  it("lets the burden decide a genuinely close case", () => {
+    const debate = weightedDebate(1, 1);
+    const verdicts = [verdict("e_con0_thesis", "con0", "thesis", "weakens")];
+    const assessments = [
+      assess("e_pro0_thesis", "pro", "strong", "pro-line"),
+      assess("e_con0_thesis", "con", "decisive", "con-line")
+    ];
+    expect(solveJudgment(debate, verdicts, "pro", assessments).outcome).toBe("unestablished");
+    expect(solveJudgment(debate, verdicts, "con", assessments).outcome).toBe("stands");
+    expect(solveJudgment(debate, verdicts, "preponderance", assessments).outcome).toBe("undecided");
+  });
+
+  it("lets weighted con dominance reject the motion without a direct defeat", () => {
+    const debate = weightedDebate(1, 3);
+    const verdicts = [
+      verdict("e_con0_thesis", "con0", "thesis", "weakens"),
+      verdict("e_con1_thesis", "con1", "thesis", "weakens"),
+      verdict("e_con2_thesis", "con2", "thesis", "weakens")
+    ];
+    const assessments = [
+      assess("e_pro0_thesis", "pro", "moderate", "pro-line"),
+      ...Array.from({ length: 3 }, (_, index) =>
+        assess(`e_con${index}_thesis`, "con", "decisive", `con-line-${index}`)
+      )
+    ];
+    expect(solveJudgment(debate, verdicts, "pro", assessments).outcome).toBe("falls");
+    expect(solveJudgment(debate, verdicts, "con", assessments).outcome).toBe("falls");
+    expect(solveJudgment(debate, verdicts, "preponderance", assessments).outcome).toBe("falls");
+  });
+
+  it("keeps a direct defeat of the thesis as a hard fall", () => {
+    const debate = weightedDebate(10, 1);
+    const assessments = Array.from({ length: 10 }, (_, index) =>
+      assess(`e_pro${index}_thesis`, "pro", "strong", `pro-line-${index}`)
+    );
+    const snapshot = solveJudgment(
+      debate,
+      [verdict("e_con0_thesis", "con0", "thesis")],
+      "con",
+      assessments
+    );
+    expect(snapshot.thesisStatus).toBe("defeated");
+    expect(snapshot.outcome).toBe("falls");
   });
 
   it("lets an irrelevant direct attack leave the motion standing", () => {
@@ -242,12 +390,18 @@ describe("judgment solver", () => {
       judge: { provider: "test", model: "judge" },
       standard: "pro",
       strictness: "balanced",
-      verdicts: [verdict("e_objection_thesis", "objection", "thesis")]
+      verdicts: [verdict("e_objection_thesis", "objection", "thesis")],
+      assessments: [
+        assess("e_support_thesis", "pro", "strong", "support-line"),
+        assess("e_objection_thesis", "con", "decisive", "objection-line")
+      ]
     });
     expect(run.outcome).toBe("falls");
     expect(run.summary).toContain("falls");
     expect(run.decisive[0]?.from).toBe("objection");
     expect(run.waves[0]?.label).toBe("The motion");
+    expect(run.assessments).toHaveLength(2);
+    expect(run.balance).toMatchObject({ pro: 3, con: 3, assessed: true });
   });
 
   it("reports an unestablished outcome when support is removed", () => {
@@ -285,12 +439,17 @@ describe("judgment solver", () => {
       standard: "pro",
       strictness: "balanced",
       verdicts: [verdict("e_objection_thesis", "objection", "thesis")],
+      assessments: [
+        assess("e_support_thesis", "pro", "strong", "support-line"),
+        assess("e_objection_thesis", "con", "decisive", "objection-line")
+      ],
       warnings: ["One clash was left open."]
     });
     const markdown = judgmentMarkdown(debate, run);
     expect(markdown).toContain("# Judgment: Should the test pass?");
     expect(markdown).toContain("**Outcome:** The motion falls");
     expect(markdown).toContain("An objection");
+    expect(markdown).toContain("## Balance");
     expect(markdown).toContain("## Warnings");
     expect(markdown).toContain("One clash was left open.");
   });

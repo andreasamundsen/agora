@@ -172,7 +172,7 @@ export default function App() {
   );
 
   const judgmentSnapshot = useMemo(
-    () => (debate && judgment ? solveJudgment(debate, appliedVerdicts, judgment.run.standard) : null),
+    () => (debate && judgment ? solveJudgment(debate, appliedVerdicts, judgment.run.standard, judgment.run.assessments) : null),
     [debate, judgment, appliedVerdicts]
   );
 
@@ -182,7 +182,7 @@ export default function App() {
 
   const restoredNow = useMemo(() => {
     if (!judgment || !debate || judgment.step <= 0 || !judgmentSnapshot) return [] as string[];
-    const before = solveJudgment(debate, judgment.run.verdicts.slice(0, judgment.step - 1), judgment.run.standard).statuses;
+    const before = solveJudgment(debate, judgment.run.verdicts.slice(0, judgment.step - 1), judgment.run.standard, judgment.run.assessments).statuses;
     return Object.keys(judgmentSnapshot.statuses).filter(
       (id) => before[id] === "defeated" && judgmentSnapshot.statuses[id] !== "defeated"
     );
