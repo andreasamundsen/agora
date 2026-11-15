@@ -155,6 +155,27 @@ describe("judgment solver", () => {
     expect(snapshot.outcome).toBe("unestablished");
   });
 
+  it("can mark a contested argument as weakened", () => {
+    const debate = debateWith([
+      { from: "objection", to: "thesis", type: "attack" },
+      { from: "rebuttal", to: "objection", type: "attack" },
+      { from: "objection", to: "rebuttal", type: "attack" },
+      { from: "support", to: "objection", type: "attack" }
+    ]);
+    const snapshot = solveJudgment(
+      debate,
+      [
+        verdict("e_objection_thesis", "objection", "thesis"),
+        verdict("e_rebuttal_objection", "rebuttal", "objection"),
+        verdict("e_objection_rebuttal", "objection", "rebuttal"),
+        verdict("e_support_objection", "support", "objection", "weakens")
+      ],
+      "preponderance"
+    );
+    expect(snapshot.statuses.objection).toBe("contested");
+    expect(snapshot.weakened).toEqual(["objection"]);
+  });
+
   it("applies the standard of proof to an unresolved direct contest", () => {
     const debate = debateWith([
       { from: "support", to: "thesis", type: "support" },
@@ -197,6 +218,67 @@ describe("judgment solver", () => {
       expect(solveJudgment(debate, verdicts, "preponderance").outcome).toBe("undecided");
       expect(solveJudgment(debate, verdicts, "con").outcome).toBe("stands");
     }
+  });
+
+  it("marks a surviving weakens target as weakened without changing its status", () => {
+    const debate = debateWith([
+      { from: "support", to: "thesis", type: "support" },
+      { from: "objection", to: "support", type: "attack" }
+    ]);
+    const snapshot = solveJudgment(
+      debate,
+      [verdict("e_objection_support", "objection", "support", "weakens")],
+      "pro"
+    );
+    expect(snapshot.statuses.support).toBe("standing");
+    expect(snapshot.weakened).toEqual(["support"]);
+    expect(snapshot.outcome).toBe("unestablished");
+  });
+
+  it("does not mark the thesis, a defeated target, or a defeated attacker as weakened", () => {
+    const thesisTarget = debateWith([
+      { from: "support", to: "thesis", type: "support" },
+      { from: "objection", to: "thesis", type: "attack" }
+    ]);
+    expect(
+      solveJudgment(
+        thesisTarget,
+        [verdict("e_objection_thesis", "objection", "thesis", "weakens")],
+        "pro"
+      ).weakened
+    ).toEqual([]);
+
+    const defeatedTarget = debateWith([
+      { from: "support", to: "thesis", type: "support" },
+      { from: "objection", to: "support", type: "attack" },
+      { from: "rebuttal", to: "support", type: "attack" }
+    ]);
+    expect(
+      solveJudgment(
+        defeatedTarget,
+        [
+          verdict("e_rebuttal_support", "rebuttal", "support", "defeats"),
+          verdict("e_objection_support", "objection", "support", "weakens")
+        ],
+        "pro"
+      ).weakened
+    ).toEqual([]);
+
+    const defeatedAttacker = debateWith([
+      { from: "support", to: "thesis", type: "support" },
+      { from: "objection", to: "support", type: "attack" },
+      { from: "rebuttal", to: "objection", type: "attack" }
+    ]);
+    expect(
+      solveJudgment(
+        defeatedAttacker,
+        [
+          verdict("e_rebuttal_objection", "rebuttal", "objection", "defeats"),
+          verdict("e_objection_support", "objection", "support", "weakens")
+        ],
+        "pro"
+      ).weakened
+    ).toEqual([]);
   });
 
   it("does not let a defeated objection remain live pressure", () => {

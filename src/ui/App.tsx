@@ -207,6 +207,7 @@ export default function App() {
     return {
       active: true,
       statuses: judgment.step > 0 || settled ? judgmentSnapshot.statuses : {},
+      weakened: judgment.step > 0 || settled ? judgmentSnapshot.weakened : [],
       activeEdgeId: settled ? undefined : current?.edgeId,
       activeNodeIds: settled || !current ? [] : [current.from, current.to],
       reinstated: restored,

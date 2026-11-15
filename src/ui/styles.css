@@ -786,6 +786,7 @@ button:disabled { cursor: not-allowed; }
 .graph.is-staging .graph-node.is-current { opacity: 1; }
 
 .node-top { display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 6px; }
+.node-badges { display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; min-width: 0; }
 .node-kind {
   font-size: 7.5px;
   font-weight: 700;
@@ -1898,6 +1899,10 @@ button:disabled { cursor: not-allowed; }
 .status-swatch--standing { background: var(--pro); border-color: var(--pro); }
 .status-swatch--defeated { background: transparent; border-color: var(--con); }
 .status-swatch--contested { background: var(--gold); border-color: var(--gold); }
+.status-swatch--weakened {
+  background: repeating-linear-gradient(135deg, var(--gold-deep) 0 1.5px, transparent 1.5px 3px);
+  border-color: var(--gold-deep);
+}
 
 .judgment-seal {
   position: absolute;
@@ -2026,6 +2031,24 @@ button:disabled { cursor: not-allowed; }
 .node-judgment--defeated::before { content: "×"; width: auto; height: auto; background: none; font-size: 8px; line-height: 1; }
 .node-judgment--contested { color: var(--gold-deep); }
 .node-judgment--unsupported { color: var(--muted); }
+.node-condition {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 4px;
+  border: 1px dashed var(--gold-deep);
+  border-radius: 2px;
+  color: var(--gold-deep);
+  background: rgba(185, 138, 58, 0.06);
+  font-size: 6px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.5;
+  text-transform: uppercase;
+  white-space: nowrap;
+  flex: none;
+}
+.node-condition--weakened::before { content: "~"; font-size: 8px; line-height: 1; }
 .graph-node--thesis .node-judgment--standing { color: #a9d2b7; }
 .graph-node--thesis .node-judgment--defeated { color: #e3a096; }
 .graph-node--thesis .node-judgment--contested { color: #dec189; }

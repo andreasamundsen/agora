@@ -86,6 +86,8 @@ export interface JudgmentSnapshot {
   standing: string[];
   defeated: string[];
   contested: string[];
+  /** Non-thesis nodes that survive a live `weakens` ruling. A condition, not a structural status. */
+  weakened: string[];
   thesisStatus: ArgumentStatus;
   /** Support edges from a standing argument to the thesis. */
   liveSupports: string[];
@@ -382,6 +384,23 @@ export function solveJudgment(
     })
     .map((edge) => edge.id);
 
+  // Weakened is a condition, not another structural status. It records that a
+  // surviving node was explicitly damaged by a live weakens ruling. It is
+  // derived from the current fixed point, so reinstatement clears it
+  // automatically, and the thesis is excluded because the motion card speaks
+  // in outcomes rather than node conditions.
+  const weakened = new Set<string>();
+  for (const verdict of verdicts) {
+    if (verdict.verdict !== "weakens") continue;
+    if (verdict.to === debate.thesisId) continue;
+    if (!nodeIds.has(verdict.from) || !nodeIds.has(verdict.to)) continue;
+    if (!statuses[verdict.from] || statuses[verdict.from] === "defeated") continue;
+    if (statuses[verdict.to] === "defeated") continue;
+    const edge = debate.edges.find((candidate) => candidate.id === verdict.edgeId);
+    if (!edge || !isClashEdge(edge)) continue;
+    weakened.add(verdict.to);
+  }
+
   const unsupportedThesis = Boolean(thesis) && thesisStatus === "standing" && liveSupports.length === 0;
   const balance = buildCaseBalance({
     debate,
@@ -425,6 +444,7 @@ export function solveJudgment(
     standing,
     defeated,
     contested,
+    weakened: debate.nodes.filter((node) => weakened.has(node.id)).map((node) => node.id),
     thesisStatus,
     liveSupports,
     liveAttacks,

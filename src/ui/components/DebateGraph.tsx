@@ -19,6 +19,7 @@ export interface GraphStage {
 export interface GraphJudgment {
   active: boolean;
   statuses: Record<string, ArgumentStatus>;
+  weakened: string[];
   activeEdgeId?: string;
   activeNodeIds: string[];
   reinstated: string[];
@@ -310,6 +311,7 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
           <span className="legend-item"><i className="status-swatch status-swatch--standing" /> stands</span>
           <span className="legend-item"><i className="status-swatch status-swatch--defeated" /> defeated</span>
           <span className="legend-item"><i className="status-swatch status-swatch--contested" /> contested</span>
+          <span className="legend-item"><i className="status-swatch status-swatch--weakened" /> weakened</span>
         </div>
       ) : (
         <div className="graph-legend" aria-hidden="true">
@@ -457,6 +459,7 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
                   staged={Boolean(stage?.active)}
                   judging={Boolean(judgment?.active)}
                   judgmentStatus={judgmentStatus}
+                  weakened={Boolean(judgment?.weakened.includes(card.node.id))}
                   judgmentRole={judgmentRole}
                   motionDisposition={judgment?.motionDisposition}
                   motionProvisional={Boolean(judgment?.motionProvisional)}
@@ -486,6 +489,7 @@ interface NodeCardProps {
   staged: boolean;
   judging: boolean;
   judgmentStatus?: ArgumentStatus;
+  weakened: boolean;
   judgmentRole?: "source" | "target";
   motionDisposition?: JudgmentOutcome;
   motionProvisional: boolean;
@@ -506,6 +510,7 @@ function NodeCard({
   staged,
   judging,
   judgmentStatus,
+  weakened,
   judgmentRole,
   motionDisposition,
   motionProvisional,
@@ -517,8 +522,10 @@ function NodeCard({
   const node = card.node;
   const tags = node.tags.filter((tag) => !["motion", "thesis", "pro", "con", "neutral", "advocate", "challenger", "moderator", "you", "user"].includes(tag)).slice(0, 2);
   const motion = isThesis && judging ? motionDisposition : undefined;
+  const showWeakened = weakened && !isThesis && !motion;
   const displayStatus = !motion && unsupported && judgmentStatus === "standing" ? "unsupported" : judgmentStatus;
   const statusLabel = motion ? OUTCOME_SHORT[motion] : displayStatus ? STATUS_LABEL[displayStatus] : null;
+  const weakenedLabel = showWeakened ? " Condition: weakened." : "";
   return (
     <button
       type="button"
@@ -535,6 +542,7 @@ function NodeCard({
         staged ? "is-staged" : "",
         judging ? "is-judging" : "",
         motion ? `is-motion-${motion}` : displayStatus ? `is-${displayStatus}` : "",
+        showWeakened ? "is-weakened" : "",
         judgmentRole ? `is-clash-${judgmentRole}` : "",
         reinstated ? "is-reinstated" : ""
       ].join(" ")}
@@ -546,25 +554,35 @@ function NodeCard({
       }}
       onPointerEnter={() => onHover(node.id)}
       onPointerLeave={() => onHover(null)}
-      aria-label={`${node.kind === "argument" ? "Argument" : "Statement"}: ${node.title}. ${node.stance === "pro" ? "For the motion" : node.stance === "con" ? "Against the motion" : "Neutral"}.${statusLabel ? ` ${motion ? "Motion status" : "Status"}: ${statusLabel}${motion && motionProvisional ? " (in session)" : ""}.` : ""}`}
+      aria-label={`${node.kind === "argument" ? "Argument" : "Statement"}: ${node.title}. ${node.stance === "pro" ? "For the motion" : node.stance === "con" ? "Against the motion" : "Neutral"}.${statusLabel ? ` ${motion ? "Motion status" : "Status"}: ${statusLabel}${motion && motionProvisional ? " (in session)" : ""}.` : ""}${weakenedLabel}`}
     >
       <div className="node-top">
         <span className={`node-kind ${isThesis ? "node-kind--motion" : ""}`}>
           {isThesis ? "The motion" : node.kind === "argument" ? "Argument" : "Statement"}
         </span>
-        {statusLabel ? (
-          <span
-            className={`node-judgment ${motion ? `node-judgment--motion node-judgment--${motion}` : `node-judgment--${displayStatus}`}`}
-            title={motion && motionProvisional ? "Provisional while the bench is in session" : undefined}
-          >
-            {statusLabel}
-            {motion && motionProvisional && <i className="node-judgment-provisional">in session</i>}
-          </span>
-        ) : !isThesis ? (
-          <span className={`node-stance stance-dot-${node.stance}`}>
-            {node.stance === "pro" ? "For" : node.stance === "con" ? "Against" : "Context"}
-          </span>
-        ) : null}
+        <div className="node-badges">
+          {statusLabel ? (
+            <span
+              className={`node-judgment ${motion ? `node-judgment--motion node-judgment--${motion}` : `node-judgment--${displayStatus}`}`}
+              title={motion && motionProvisional ? "Provisional while the bench is in session" : undefined}
+            >
+              {statusLabel}
+              {motion && motionProvisional && <i className="node-judgment-provisional">in session</i>}
+            </span>
+          ) : !isThesis ? (
+            <span className={`node-stance stance-dot-${node.stance}`}>
+              {node.stance === "pro" ? "For" : node.stance === "con" ? "Against" : "Context"}
+            </span>
+          ) : null}
+          {showWeakened && (
+            <span
+              className="node-condition node-condition--weakened"
+              title="A live ruling says this argument survives with damage."
+            >
+              Weakened
+            </span>
+          )}
+        </div>
       </div>
       <div className="node-title">{node.title}</div>
       {!isThesis && <div className="node-text">{node.text}</div>}
