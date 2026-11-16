@@ -107,6 +107,32 @@ describe("computeLayout", () => {
     expect(upper.y + upper.height).toBeLessThanOrEqual(lower.y);
   });
 
+  it("grows argument cards to fit a third line of text", () => {
+    const debate = makeDebate();
+    const node = debate.nodes.find((candidate) => candidate.id === "pro1");
+    if (!node) throw new Error("missing pro1");
+    const shortHeight = card(computeLayout(debate, "case"), "pro1").height;
+    node.text = "A longer argument that needs three lines in the card to stay readable, with enough detail to make the point clearly and give the reader the full sense of the claim.";
+    const longHeight = card(computeLayout(debate, "case"), "pro1").height;
+
+    expect(longHeight).toBeGreaterThan(shortHeight);
+    expect(longHeight).toBeLessThanOrEqual(150);
+  });
+
+  it("sizes the motion card to its own title and text", () => {
+    const short = makeDebate();
+    const shortHeight = card(computeLayout(short, "case"), "thesis").height;
+    const long = makeDebate();
+    const thesis = long.nodes.find((candidate) => candidate.id === "thesis");
+    if (!thesis) throw new Error("missing thesis");
+    thesis.title = "A motion whose title needs several lines to state the question clearly";
+    thesis.text = "A longer thesis statement that needs more room in the card so the reader can see the full claim rather than a truncated version of it.";
+    const longHeight = card(computeLayout(long, "case"), "thesis").height;
+
+    expect(longHeight).toBeGreaterThan(shortHeight);
+    expect(longHeight).toBeLessThanOrEqual(210);
+  });
+
   it("keeps the thread map close to the case map's height", () => {
     const debate = makeDebate();
     const caseHeight = computeLayout(debate, "case").bounds.height;

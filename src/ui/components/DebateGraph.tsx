@@ -582,7 +582,6 @@ function NodeCard({
   onSelect
 }: NodeCardProps) {
   const node = card.node;
-  const tags = node.tags.filter((tag) => !["motion", "thesis", "pro", "con", "neutral", "advocate", "challenger", "moderator", "you", "user"].includes(tag)).slice(0, 2);
   const motion = isThesis && judging ? motionDisposition : undefined;
   const showWeakened = weakened && !isThesis && !motion;
   const displayStatus = !motion && unsupported && judgmentStatus === "standing" ? "unsupported" : judgmentStatus;
@@ -650,13 +649,6 @@ function NodeCard({
       {!isThesis && <div className="node-text">{node.text}</div>}
       {isThesis && <div className="node-text node-text--thesis">{node.text}</div>}
       {reinstated && <span className="node-restored">Restored</span>}
-      <div className="node-foot">
-        <span className="node-speaker">{node.speaker === "you" ? "You" : node.speaker === "advocate" ? "Advocate" : node.speaker === "challenger" ? "Challenger" : "Moderator"}</span>
-        {node.premises.length > 0 && <span className="node-meta">{node.premises.length} premises</span>}
-        {tags.map((tag) => (
-          <span className="node-tag" key={tag}>#{tag}</span>
-        ))}
-      </div>
     </button>
   );
 }

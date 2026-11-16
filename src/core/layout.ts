@@ -39,12 +39,16 @@ const THREAD_GAP = 52;
 const THREAD_SIBLING_GAP = 18;
 
 function cardSize(node: DebateNode, isThesis: boolean): { width: number; height: number } {
-  if (isThesis) return { width: THESIS_WIDTH, height: 190 };
+  if (isThesis) {
+    const titleLines = Math.min(3, Math.max(1, Math.ceil(node.title.length / 26)));
+    const textLines = Math.min(5, Math.max(1, Math.ceil((node.text || node.title).length / 46)));
+    const height = 44 + titleLines * 23 + textLines * 15;
+    return { width: THESIS_WIDTH, height: Math.max(130, Math.min(210, height)) };
+  }
   const titleLines = Math.min(2, Math.max(1, Math.ceil(node.title.length / 30)));
-  const textLines = Math.min(2, Math.max(1, Math.ceil((node.text || node.title).length / 39)));
-  const premiseRows = node.premises.length ? 1 : 0;
-  const height = 44 + titleLines * 18 + textLines * 16 + premiseRows * 11;
-  return { width: CARD_WIDTH, height: Math.max(96, Math.min(138, height)) };
+  const textLines = Math.min(3, Math.max(1, Math.ceil((node.text || node.title).length / 39)));
+  const height = 42 + titleLines * 18 + textLines * 17;
+  return { width: CARD_WIDTH, height: Math.max(96, Math.min(150, height)) };
 }
 
 function depths(debate: Debate): Map<string, number> {
