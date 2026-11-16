@@ -681,8 +681,37 @@ export default function App() {
 
         <main className={`canvas ${loadingDebate ? "is-loading" : ""}`}>
           <div className="canvas-head">
-            <div className="canvas-heading">
+            <div className="canvas-head-row">
               <div className="eyebrow">{judgment ? "Judgment · the bench" : "Argument map"}</div>
+              {debate && (
+                judgment && judgmentSnapshot ? (
+                  <div className="canvas-stats canvas-stats--judgment">
+                    {judgment.step > 0 || judgmentComplete ? (
+                      <>
+                        <span><b>{judgmentSnapshot.counts.standing}</b> standing</span>
+                        <span><b>{judgmentSnapshot.counts.defeated}</b> defeated</span>
+                        <span><b>{judgmentSnapshot.counts.contested}</b> contested</span>
+                      </>
+                    ) : (
+                      <span>The bench is reading</span>
+                    )}
+                    <span className={`judgment-state-tag ${judgmentComplete ? `judgment-state-tag--${judgmentSnapshot.outcome}` : ""}`}>
+                      {judgmentComplete ? OUTCOME_SHORT[judgmentSnapshot.outcome] : "In session"}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="canvas-stats">
+                    <span><b>{debate.nodes.length}</b> nodes</span>
+                    <span><b>{debate.edges.length}</b> relations</span>
+                    <span className="canvas-split"><i className="score-dot score-dot--pro" />{counts.pro} <i className="score-dot score-dot--con" />{counts.con}</span>
+                    <span className={`origin-tag origin-tag--${debate.origin}`}>
+                      {debate.origin === "imported" ? "Imported" : debate.origin === "seed" ? "Reference map" : "Authored"}
+                    </span>
+                  </div>
+                )
+              )}
+            </div>
+            <div className="canvas-heading">
               {debate ? (
                 <h1 className="canvas-motion">{debate.motion}</h1>
               ) : (
@@ -690,33 +719,6 @@ export default function App() {
               )}
               {debate && <p className="canvas-sub">{debate.thesisText}</p>}
             </div>
-            {debate && (
-              judgment && judgmentSnapshot ? (
-                <div className="canvas-stats canvas-stats--judgment">
-                  {judgment.step > 0 || judgmentComplete ? (
-                    <>
-                      <span><b>{judgmentSnapshot.counts.standing}</b> standing</span>
-                      <span><b>{judgmentSnapshot.counts.defeated}</b> defeated</span>
-                      <span><b>{judgmentSnapshot.counts.contested}</b> contested</span>
-                    </>
-                  ) : (
-                    <span>The bench is reading</span>
-                  )}
-                  <span className={`judgment-state-tag ${judgmentComplete ? `judgment-state-tag--${judgmentSnapshot.outcome}` : ""}`}>
-                    {judgmentComplete ? OUTCOME_SHORT[judgmentSnapshot.outcome] : "In session"}
-                  </span>
-                </div>
-              ) : (
-                <div className="canvas-stats">
-                  <span><b>{debate.nodes.length}</b> nodes</span>
-                  <span><b>{debate.edges.length}</b> relations</span>
-                  <span className="canvas-split"><i className="score-dot score-dot--pro" />{counts.pro} <i className="score-dot score-dot--con" />{counts.con}</span>
-                  <span className={`origin-tag origin-tag--${debate.origin}`}>
-                    {debate.origin === "imported" ? "Imported" : debate.origin === "seed" ? "Reference map" : "Authored"}
-                  </span>
-                </div>
-              )
-            )}
           </div>
 
           <div className="canvas-body">
