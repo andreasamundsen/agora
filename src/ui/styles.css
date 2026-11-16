@@ -954,27 +954,27 @@ button:disabled { cursor: not-allowed; }
 }
 .inspector-text {
   margin: 0 0 14px;
-  font-size: 13.5px;
+  font-size: 14px;
   line-height: 1.55;
   color: var(--ink-soft);
 }
 .inspector-section { border-top: 1px solid var(--line); padding-top: 11px; margin-top: 11px; }
 .inspector-label { font-size: 7.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); margin-bottom: 7px; }
 .premise-list { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 5px; }
-.premise-list li { font-size: 12.5px; line-height: 1.45; color: var(--ink-soft); }
+.premise-list li { font-size: 13px; line-height: 1.45; color: var(--ink-soft); }
 .inspector-conclusion {
   margin: 9px 0 0;
   padding: 7px 9px;
   border-left: 2px solid var(--gold);
   background: var(--gold-soft);
   font-family: var(--serif);
-  font-size: 13px;
+  font-size: 13.5px;
   line-height: 1.4;
   color: var(--ink);
 }
 .inspector-conclusion span { display: block; font-family: var(--sans); font-size: 7px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold-deep); margin-bottom: 2px; }
 .connection-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.connection-list li { display: flex; align-items: flex-start; gap: 7px; font-size: 11.5px; line-height: 1.4; color: var(--muted); }
+.connection-list li { display: flex; align-items: flex-start; gap: 7px; font-size: 12px; line-height: 1.4; color: var(--muted); }
 .connection-mark { width: 6px; height: 6px; border-radius: 50%; margin-top: 4px; flex: none; }
 .connection-mark--support { background: var(--pro); }
 .connection-mark--attack { background: var(--con); }
