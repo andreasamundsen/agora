@@ -76,6 +76,8 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
   const zoomRef = useRef(zoom);
   const panRef = useRef(pan);
   const sizeRef = useRef(size);
+  const previousSizeRef = useRef(size);
+  const autoViewRef = useRef(true);
   const dragRef = useRef<{ x: number; y: number; panX: number; panY: number; moved: boolean } | null>(null);
 
   zoomRef.current = zoom;
@@ -91,6 +93,7 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
     const width = el?.clientWidth || sizeRef.current.width;
     const height = el?.clientHeight || sizeRef.current.height;
     if (!width || !height) return;
+    autoViewRef.current = true;
     const b = layout.bounds;
     const pad = Math.min(84, Math.max(30, Math.min(width, height) * 0.1));
     const z = Math.max(0.24, Math.min(1.06, Math.min((width - pad * 2) / b.width, (height - pad * 2) / b.height)));
@@ -110,6 +113,7 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
     const width = el?.clientWidth || sizeRef.current.width;
     const height = el?.clientHeight || sizeRef.current.height;
     if (!width || !height) return;
+    autoViewRef.current = true;
     const b = layout.bounds;
     const pad = Math.min(84, Math.max(30, Math.min(width, height) * 0.1));
     const fitZoom = Math.min((width - pad * 2) / b.width, (height - pad * 2) / b.height);
@@ -130,6 +134,7 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
   const zoomAround = useCallback((clientX: number, clientY: number, nextZoom: number) => {
     const container = containerRef.current;
     if (!container) return;
+    autoViewRef.current = false;
     const rect = container.getBoundingClientRect();
     const x = clientX - rect.left;
     const y = clientY - rect.top;
@@ -177,6 +182,29 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
     initialisedFor.current = debate.id;
     smartView();
   }, [debate.id, size.width, size.height, smartView]);
+
+  // Static view follows the frame: refit while the camera is automatic, and
+  // preserve the world centre once the reader has panned or zoomed. The
+  // staging and judgment cameras keep their own behaviour.
+  useEffect(() => {
+    const previous = previousSizeRef.current;
+    previousSizeRef.current = size;
+    if (!size.width || !size.height || !previous.width || !previous.height) return;
+    if (size.width === previous.width && size.height === previous.height) return;
+    if (stage?.active || judgment?.active) return;
+    if (autoViewRef.current) {
+      smartView();
+      return;
+    }
+    const currentZoom = zoomRef.current;
+    const centerX = (previous.width / 2 - panRef.current.x) / currentZoom;
+    const centerY = (previous.height / 2 - panRef.current.y) / currentZoom;
+    setPan({
+      x: size.width / 2 - centerX * currentZoom,
+      y: size.height / 2 - centerY * currentZoom
+    });
+    setSmooth(true);
+  }, [size, stage?.active, judgment?.active, smartView]);
 
   const wasStaging = useRef(false);
   useEffect(() => {
@@ -262,7 +290,10 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
     if (!drag) return;
     const dx = event.clientX - drag.x;
     const dy = event.clientY - drag.y;
-    if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
+    if (Math.abs(dx) + Math.abs(dy) > 3) {
+      drag.moved = true;
+      autoViewRef.current = false;
+    }
     setPan({ x: drag.panX + dx, y: drag.panY + dy });
   };
 
@@ -502,20 +533,6 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
               );
             })}
           </div>
-          {(layout.rails ?? []).map((rail) => (
-            <div
-              key={rail.side}
-              className={`graph-branch-rail graph-branch-rail--${rail.side} ${smooth ? "smooth" : ""}`}
-              style={{
-                left: pan.x + rail.x * zoom,
-                top: pan.y + rail.y * zoom,
-                width: Math.max(1, rail.width * zoom)
-              }}
-              aria-hidden="true"
-            >
-              <span>{rail.label}</span>
-            </div>
-          ))}
         </>
       )}
     </div>

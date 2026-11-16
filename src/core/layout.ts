@@ -24,20 +24,11 @@ export interface LayoutEdge {
   secondary?: boolean;
 }
 
-export interface LayoutRail {
-  side: "pro" | "con";
-  label: string;
-  x: number;
-  y: number;
-  width: number;
-}
-
 export interface GraphLayout {
   cards: LayoutCard[];
   edges: LayoutEdge[];
   bounds: { minX: number; minY: number; maxX: number; maxY: number; width: number; height: number };
   mode?: LayoutMode;
-  rails?: LayoutRail[];
 }
 
 const COLUMN_GAP = 306;
@@ -46,7 +37,6 @@ const CARD_WIDTH = 248;
 const THESIS_WIDTH = 296;
 const THREAD_GAP = 52;
 const THREAD_SIBLING_GAP = 18;
-const BRANCH_GAP = 54;
 
 function cardSize(node: DebateNode, isThesis: boolean): { width: number; height: number } {
   if (isThesis) return { width: THESIS_WIDTH, height: 190 };
@@ -206,19 +196,15 @@ function computeCaseLayout(debate: Debate): GraphLayout {
   };
 }
 
-interface ThreadTree {
-  node: DebateNode;
-  children: ThreadTree[];
-  height: number;
-}
-
 /**
  * Parent-relative thread layout.
  *
  * Direct arguments stay in the two columns around the motion. Each response
  * hangs in the branch of the argument it answers and extends outward from the
- * centre; sibling responses stack vertically. A con response to a pro
- * argument therefore stays on the pro side of the map, where its parent is.
+ * centre. Replies at the same depth share an outward lane, packed beside the
+ * direct columns rather than reserving a full subtree block in the direct
+ * column. A con response to a pro argument stays on the pro side of the map,
+ * where its parent is.
  */
 function computeThreadLayout(debate: Debate): GraphLayout {
   const thesis = debate.nodes.find((node) => node.id === debate.thesisId);
@@ -244,7 +230,6 @@ function computeThreadLayout(debate: Debate): GraphLayout {
       cards,
       edges: [],
       mode: "thread",
-      rails: [],
       bounds: { minX: -200, minY: -160, maxX: 200, maxY: 160, width: 400, height: 320 }
     };
   }
@@ -306,75 +291,116 @@ function computeThreadLayout(debate: Debate): GraphLayout {
     });
   }
 
-  const placed = new Set<string>();
-  const buildTree = (id: string, path: Set<string>): ThreadTree => {
-    const node = byId.get(id)!;
+  // Direct arguments and replies use separate vertical lanes. A direct
+  // argument's replies therefore do not reserve vertical space in the direct
+  // column; the lanes are packed independently and can share the same rows.
+  const branchNodes = new Map<"pro" | "con", Map<number, DebateNode[]>>([
+    ["pro", new Map()],
+    ["con", new Map()]
+  ]);
+
+  const visitBranch = (id: string, branch: "pro" | "con", depth: number, path: Set<string>) => {
+    const node = byId.get(id);
+    if (!node || path.has(id)) return;
+    if (depth > 1) {
+      const lanes = branchNodes.get(branch)!;
+      const list = lanes.get(depth) ?? [];
+      list.push(node);
+      lanes.set(depth, list);
+    }
     const nextPath = new Set(path);
     nextPath.add(id);
-    const childIds = (childrenOf.get(id) ?? []).filter((child) => !nextPath.has(child));
-    const children = childIds.map((child) => buildTree(child, nextPath));
-    const ownHeight = cardSize(node, false).height;
-    const childrenHeight = children.reduce((sum, child) => sum + child.height, 0) + THREAD_SIBLING_GAP * Math.max(0, children.length - 1);
-    return { node, children, height: Math.max(ownHeight, childrenHeight) };
-  };
-
-  const placeTree = (
-    tree: ThreadTree,
-    centerX: number,
-    centerY: number,
-    direction: -1 | 1,
-    branch: LayoutBranch,
-    depth: number
-  ) => {
-    placed.add(tree.node.id);
-    const size = cardSize(tree.node, false);
-    cards.push({
-      node: tree.node,
-      x: centerX - size.width / 2,
-      y: centerY - size.height / 2,
-      width: size.width,
-      height: size.height,
-      column: direction,
-      depth,
-      branch,
-      parentId: parentOf.get(tree.node.id)
-    });
-
-    const childrenHeight = tree.children.reduce((sum, child) => sum + child.height, 0) + THREAD_SIBLING_GAP * Math.max(0, tree.children.length - 1);
-    let cursor = centerY - childrenHeight / 2;
-    for (const child of tree.children) {
-      placeTree(
-        child,
-        centerX + direction * (CARD_WIDTH + THREAD_GAP),
-        cursor + child.height / 2,
-        direction,
-        branch,
-        depth + 1
-      );
-      cursor += child.height + THREAD_SIBLING_GAP;
-    }
-  };
-
-  const placeRoots = (roots: ThreadTree[], direction: -1 | 1, branch: "pro" | "con") => {
-    const totalHeight = roots.reduce((sum, root) => sum + root.height, 0) + BRANCH_GAP * Math.max(0, roots.length - 1);
-    let cursor = -totalHeight / 2;
-    for (const root of roots) {
-      placeTree(root, direction * COLUMN_GAP, cursor + root.height / 2, direction, branch, 1);
-      cursor += root.height + BRANCH_GAP;
-    }
+    for (const child of childrenOf.get(id) ?? []) visitBranch(child, branch, depth + 1, nextPath);
   };
 
   const proRoots = debate.nodes
     .filter((node) => node.id !== thesis.id && node.stance === "pro" && parentOf.get(node.id) === thesis.id)
-    .sort((a, b) => a.title.localeCompare(b.title))
-    .map((node) => buildTree(node.id, new Set()));
+    .sort((a, b) => a.title.localeCompare(b.title));
   const conRoots = debate.nodes
     .filter((node) => node.id !== thesis.id && node.stance === "con" && parentOf.get(node.id) === thesis.id)
-    .sort((a, b) => a.title.localeCompare(b.title))
-    .map((node) => buildTree(node.id, new Set()));
+    .sort((a, b) => a.title.localeCompare(b.title));
 
-  placeRoots(proRoots, -1, "pro");
-  placeRoots(conRoots, 1, "con");
+  for (const root of proRoots) visitBranch(root.id, "pro", 1, new Set());
+  for (const root of conRoots) visitBranch(root.id, "con", 1, new Set());
+
+  const placed = new Set<string>();
+  const cardById = new Map<string, LayoutCard>();
+  const addCard = (
+    node: DebateNode,
+    centerX: number,
+    top: number,
+    depth: number,
+    branch: LayoutBranch,
+    parentId: string | undefined
+  ) => {
+    const size = cardSize(node, false);
+    const card: LayoutCard = {
+      node,
+      x: centerX - size.width / 2,
+      y: top,
+      width: size.width,
+      height: size.height,
+      column: branch === "pro" ? -Math.min(3, depth) : branch === "con" ? Math.min(3, depth) : 0,
+      depth,
+      branch,
+      parentId
+    };
+    cards.push(card);
+    cardById.set(node.id, card);
+    placed.add(node.id);
+    return card;
+  };
+
+  const placeDirectLane = (roots: DebateNode[], direction: -1 | 1, branch: "pro" | "con") => {
+    const sizes = roots.map((node) => cardSize(node, false));
+    const totalHeight = sizes.reduce((sum, size) => sum + size.height, 0) + ROW_GAP * Math.max(0, roots.length - 1);
+    let y = -totalHeight / 2;
+    roots.forEach((node, index) => {
+      const size = sizes[index]!;
+      addCard(node, direction * COLUMN_GAP, y, 1, branch, thesis.id);
+      y += size.height + ROW_GAP;
+    });
+  };
+
+  const placeReplyLanes = (branch: "pro" | "con", direction: -1 | 1) => {
+    const lanes = branchNodes.get(branch)!;
+    const laneDepths = [...lanes.keys()].sort((a, b) => a - b);
+    for (const depth of laneDepths) {
+      const nodes = lanes.get(depth)!;
+      const items = nodes
+        .map((node) => {
+          const size = cardSize(node, false);
+          const parent = parentOf.get(node.id);
+          const parentCard = parent ? cardById.get(parent) : undefined;
+          const preferred = parentCard ? parentCard.y + parentCard.height / 2 : 0;
+          return { node, size, preferred, center: 0 };
+        })
+        .sort((a, b) => a.preferred - b.preferred || a.node.title.localeCompare(b.node.title));
+
+      // Start every reply near its parent, then push overlapping replies
+      // down in parent order. Finally centre the lane around the motion.
+      let nextTop = Number.NEGATIVE_INFINITY;
+      let minTop = Number.POSITIVE_INFINITY;
+      let maxBottom = Number.NEGATIVE_INFINITY;
+      for (const item of items) {
+        const top = Math.max(item.preferred - item.size.height / 2, nextTop);
+        item.center = top + item.size.height / 2;
+        nextTop = top + item.size.height + THREAD_SIBLING_GAP;
+        minTop = Math.min(minTop, top);
+        maxBottom = Math.max(maxBottom, top + item.size.height);
+      }
+      const shift = -(minTop + maxBottom) / 2;
+      const centerX = direction * (COLUMN_GAP + (depth - 1) * (CARD_WIDTH + THREAD_GAP));
+      for (const item of items) {
+        addCard(item.node, centerX, item.center + shift - item.size.height / 2, depth, branch, parentOf.get(item.node.id));
+      }
+    }
+  };
+
+  placeDirectLane(proRoots, -1, "pro");
+  placeDirectLane(conRoots, 1, "con");
+  placeReplyLanes("pro", -1);
+  placeReplyLanes("con", 1);
 
   // Neutral context and anything not placed in a direct case tree get a
   // quiet column below the motion rather than being dropped from the map.
@@ -397,22 +423,6 @@ function computeThreadLayout(debate: Debate): GraphLayout {
       parentId: parentOf.get(node.id)
     });
     neutralY += size.height + ROW_GAP;
-  }
-
-  const rails: LayoutRail[] = [];
-  for (const side of ["pro", "con"] as const) {
-    const wing = cards.filter((card) => card.branch === side);
-    if (!wing.length) continue;
-    const minX = Math.min(...wing.map((card) => card.x));
-    const maxX = Math.max(...wing.map((card) => card.x + card.width));
-    const minY = Math.min(...wing.map((card) => card.y));
-    rails.push({
-      side,
-      label: side === "pro" ? "Pro case" : "Con case",
-      x: minX,
-      y: minY - 30,
-      width: maxX - minX
-    });
   }
 
   const byCardId = new Map(cards.map((card) => [card.node.id, card]));
@@ -447,16 +457,14 @@ function computeThreadLayout(debate: Debate): GraphLayout {
 
   const allX = cards.flatMap((card) => [card.x, card.x + card.width]);
   const allY = cards.flatMap((card) => [card.y, card.y + card.height]);
-  const railTop = rails.length ? Math.min(...rails.map((rail) => rail.y)) : Number.POSITIVE_INFINITY;
   const minX = Math.min(...allX, -200);
   const maxX = Math.max(...allX, 200);
-  const minY = Math.min(...allY, railTop, -160);
+  const minY = Math.min(...allY, -160);
   const maxY = Math.max(...allY, 160);
   return {
     cards,
     edges,
     mode: "thread",
-    rails,
     bounds: { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY }
   };
 }

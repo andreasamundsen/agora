@@ -62,7 +62,6 @@ describe("computeLayout", () => {
   it("keeps the original case layout as the default", () => {
     const layout = computeLayout(makeDebate());
     expect(layout.mode).toBe("case");
-    expect(layout.rails).toBeUndefined();
     expect(card(layout, "pro1").x).toBeLessThan(card(layout, "thesis").x);
     expect(card(layout, "con1").x).toBeGreaterThan(card(layout, "thesis").x);
   });
@@ -108,12 +107,31 @@ describe("computeLayout", () => {
     expect(upper.y + upper.height).toBeLessThanOrEqual(lower.y);
   });
 
-  it("emits quiet rails and marks secondary cross-links", () => {
+  it("keeps the thread map close to the case map's height", () => {
+    const debate = makeDebate();
+    const caseHeight = computeLayout(debate, "case").bounds.height;
+    const threadHeight = computeLayout(debate, "thread").bounds.height;
+    expect(threadHeight).toBeLessThanOrEqual(caseHeight * 1.15);
+  });
+
+  it("marks secondary cross-links and keeps thread cards from overlapping", () => {
     const layout = computeLayout(makeDebate(), "thread");
-    expect(layout.rails?.map((rail) => rail.label)).toEqual(["Pro case", "Con case"]);
     const cross = layout.edges.find(({ edge }) => edge.id === "e-cross");
     expect(cross?.secondary).toBe(true);
     expect(cross?.cross).toBe(true);
+
+    for (let index = 0; index < layout.cards.length; index += 1) {
+      const a = layout.cards[index]!;
+      for (let other = index + 1; other < layout.cards.length; other += 1) {
+        const b = layout.cards[other]!;
+        const overlap =
+          a.x < b.x + b.width &&
+          a.x + a.width > b.x &&
+          a.y < b.y + b.height &&
+          a.y + a.height > b.y;
+        expect(overlap, `${a.node.id} overlaps ${b.node.id}`).toBe(false);
+      }
+    }
   });
 
   it("places every node exactly once", () => {

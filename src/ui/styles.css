@@ -768,32 +768,6 @@ button:disabled { cursor: not-allowed; }
 }
 .graph-node-layer:not(.smooth) { transition: none; }
 
-.graph-branch-rail {
-  position: absolute;
-  z-index: 2;
-  height: 1px;
-  border-top: 1px solid var(--line-strong);
-  opacity: 0.62;
-  pointer-events: none;
-  transition: left 0.55s cubic-bezier(0.2, 0.8, 0.2, 1), top 0.55s cubic-bezier(0.2, 0.8, 0.2, 1), width 0.55s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-.graph-branch-rail:not(.smooth) { transition: none; }
-.graph-branch-rail span {
-  position: absolute;
-  top: -8px;
-  padding: 0 6px;
-  background: var(--paper-deep);
-  color: var(--muted);
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  line-height: 1;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-.graph-branch-rail--pro span { left: 0; }
-.graph-branch-rail--con span { right: 0; }
-
 .graph-node {
   position: absolute;
   display: flex;
