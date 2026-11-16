@@ -954,32 +954,32 @@ button:disabled { cursor: not-allowed; }
 }
 .inspector-text {
   margin: 0 0 14px;
-  font-size: 12px;
+  font-size: 13.5px;
   line-height: 1.55;
   color: var(--ink-soft);
 }
 .inspector-section { border-top: 1px solid var(--line); padding-top: 11px; margin-top: 11px; }
 .inspector-label { font-size: 7.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); margin-bottom: 7px; }
 .premise-list { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 5px; }
-.premise-list li { font-size: 11px; line-height: 1.45; color: var(--ink-soft); }
+.premise-list li { font-size: 12.5px; line-height: 1.45; color: var(--ink-soft); }
 .inspector-conclusion {
   margin: 9px 0 0;
   padding: 7px 9px;
   border-left: 2px solid var(--gold);
   background: var(--gold-soft);
   font-family: var(--serif);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.4;
   color: var(--ink);
 }
 .inspector-conclusion span { display: block; font-family: var(--sans); font-size: 7px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold-deep); margin-bottom: 2px; }
 .connection-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.connection-list li { display: flex; align-items: flex-start; gap: 7px; font-size: 10.5px; line-height: 1.4; color: var(--muted); }
+.connection-list li { display: flex; align-items: flex-start; gap: 7px; font-size: 11.5px; line-height: 1.4; color: var(--muted); }
 .connection-mark { width: 6px; height: 6px; border-radius: 50%; margin-top: 4px; flex: none; }
 .connection-mark--support { background: var(--pro); }
 .connection-mark--attack { background: var(--con); }
 .connection-mark--undercut { background: var(--under); }
-.connection-text em { font-style: normal; font-family: var(--serif); font-size: 11.5px; color: var(--ink); }
+.connection-text em { font-style: normal; font-family: var(--serif); font-size: 12.5px; color: var(--ink); }
 .connection-empty { color: var(--faint); font-style: italic; }
 .inspector-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .inspector-meta > span { font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
@@ -1086,7 +1086,7 @@ button:disabled { cursor: not-allowed; }
   color: var(--gold-deep);
 }
 .chat-intro-lead { margin: 0 0 9px; font-family: var(--serif); font-size: 16px; line-height: 1.45; color: var(--ink); }
-.chat-intro p { margin: 0 0 12px; font-size: 11.5px; line-height: 1.6; color: var(--muted); }
+.chat-intro p { margin: 0 0 12px; font-size: 12.5px; line-height: 1.6; color: var(--muted); }
 .chat-intro ol {
   margin: 16px 0 0;
   padding: 12px 0 0;
@@ -1138,7 +1138,7 @@ button:disabled { cursor: not-allowed; }
   border: 1px solid var(--line);
   border-radius: 10px 10px 2px 10px;
   background: #e9e0cf;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--ink);
   box-shadow: 0 1px 0 rgba(255,255,255,0.4) inset;
@@ -1149,7 +1149,7 @@ button:disabled { cursor: not-allowed; }
   background: rgba(242, 230, 204, 0.4);
 }
 .chat-system > span { font-size: 7px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold-deep); }
-.chat-system p { margin: 3px 0 0; font-size: 10.5px; line-height: 1.45; color: var(--muted); }
+.chat-system p { margin: 3px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--muted); }
 .chat-thinking { padding-top: 3px; }
 .thinking-dots { display: flex; gap: 4px; padding: 4px 0 2px; }
 .thinking-dots span { width: 5px; height: 5px; border-radius: 50%; background: var(--gold); animation: thinking 1.2s ease-in-out infinite; }
@@ -1382,7 +1382,7 @@ button:disabled { cursor: not-allowed; }
 .stage-heading {
   margin-top: 9px;
   font-family: var(--serif);
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-style: italic;
   line-height: 1.45;
   color: rgba(241, 232, 214, 0.62);
@@ -1429,7 +1429,7 @@ button:disabled { cursor: not-allowed; }
 .stage-score span { display: inline-flex; align-items: center; gap: 5px; font-size: 8px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: rgba(241,232,214,0.5); }
 .stage-score b { font-family: var(--serif); font-size: 17px; font-weight: 400; color: #f3ead8; }
 .stage-next-label { margin-top: 22px; font-size: 7.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: rgba(241,232,214,0.35); }
-.stage-next { margin: 6px 0 0; font-family: var(--serif); font-size: 12.5px; font-style: italic; line-height: 1.45; color: rgba(241,232,214,0.6); }
+.stage-next { margin: 6px 0 0; font-family: var(--serif); font-size: 13.5px; font-style: italic; line-height: 1.45; color: rgba(241,232,214,0.6); }
 .stage-shuffle {
   margin-top: auto;
   align-self: flex-start;
@@ -2187,7 +2187,7 @@ button:disabled { cursor: not-allowed; }
   background: rgba(242, 230, 204, 0.6);
 }
 .judge-mode-note b { display: block; font-size: 8px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold-deep); }
-.judge-mode-note p { margin: 4px 0 5px; font-size: 10px; line-height: 1.45; color: var(--ink-soft); }
+.judge-mode-note p { margin: 4px 0 5px; font-size: 11px; line-height: 1.45; color: var(--ink-soft); }
 .judge-mode-note .text-link { font-size: 8px; }
 .judgment-session-line {
   display: flex;
@@ -2246,7 +2246,7 @@ button:disabled { cursor: not-allowed; }
   font-weight: 500;
   letter-spacing: -0.01em;
 }
-.bench-intro-card p { margin: 0 0 14px; font-size: 11.5px; line-height: 1.55; color: var(--ink-soft); }
+.bench-intro-card p { margin: 0 0 14px; font-size: 12.5px; line-height: 1.55; color: var(--ink-soft); }
 .bench-intro-meta { display: flex; flex-wrap: wrap; gap: 5px; }
 .bench-intro-meta span {
   padding: 2px 6px;
@@ -2330,7 +2330,7 @@ button:disabled { cursor: not-allowed; }
 .ruling-party b {
   display: block;
   font-family: var(--serif);
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.3;
   font-weight: 500;
 }
@@ -2370,7 +2370,7 @@ button:disabled { cursor: not-allowed; }
   padding: 1px 0 1px 11px;
   border-left: 2px solid var(--line-strong);
   font-family: var(--serif);
-  font-size: 12.5px;
+  font-size: 13.5px;
   line-height: 1.55;
   color: var(--ink-soft);
 }
@@ -2380,7 +2380,7 @@ button:disabled { cursor: not-allowed; }
   gap: 6px;
   padding-top: 9px;
   border-top: 1px dashed var(--line);
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1.4;
   color: var(--muted);
 }
@@ -2530,11 +2530,11 @@ button:disabled { cursor: not-allowed; }
 .balance-line--con { border-left-color: var(--con); }
 .balance-line-main { display: flex; align-items: baseline; gap: 6px; }
 .balance-line-side { flex: none; font-size: 6px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(245,237,220,0.4); }
-.balance-line-main b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; font-weight: 600; color: #f5eddc; }
+.balance-line-main b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; font-weight: 600; color: #f5eddc; }
 .balance-line-rating { flex: none; margin-left: auto; font-size: 6.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--gold); }
 .balance-line-weight { flex: none; font-family: var(--mono); font-size: 8px; color: rgba(245,237,220,0.6); }
 .balance-line-meta { display: flex; gap: 8px; margin-top: 3px; font-size: 6.5px; color: rgba(245,237,220,0.4); }
-.balance-line-reasoning { margin: 4px 0 0; font-size: 8px; line-height: 1.45; color: rgba(245,237,220,0.55); }
+.balance-line-reasoning { margin: 4px 0 0; font-size: 9.5px; line-height: 1.45; color: rgba(245,237,220,0.55); }
 .balance-empty { margin: 8px 0 0; font-size: 8px; color: rgba(245,237,220,0.45); }
 .finale-path { margin-top: 12px; }
 .finale-label { font-size: 7px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(245,237,220,0.48); }
@@ -2619,7 +2619,7 @@ button:disabled { cursor: not-allowed; }
 .record-verdict--defeats { color: var(--con); }
 .record-verdict--weakens { color: var(--gold-deep); }
 .record-verdict--undecided { color: var(--under); }
-.judgment-unsupported-note { margin-top: 14px; padding: 8px 10px; border-left: 2px solid var(--line-strong); background: var(--paper); font-size: 9.5px; line-height: 1.45; color: var(--muted); }
+.judgment-unsupported-note { margin-top: 14px; padding: 8px 10px; border-left: 2px solid var(--line-strong); background: var(--paper); font-size: 10.5px; line-height: 1.45; color: var(--muted); }
 
 .judgment-controls {
   flex: none;
