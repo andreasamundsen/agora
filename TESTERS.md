@@ -4,16 +4,16 @@ Agora is a local debate harness. You install it like a normal Windows app; no No
 
 ## Install
 
-1. Run `Agora-Setup-0.1.9.exe`.
+1. Run `Agora-Setup-0.1.10.exe`.
 2. Windows will warn that the publisher is unknown. This build is intentionally unsigned: choose **More info → Run anyway**.
 3. The installer is per-user and does not need administrator rights. Agora opens when it finishes.
 
-## What's new in 0.1.9
+## What's new in 0.1.10
 
-- Reading text is larger across the inspector, chamber, stage, and judgment panels.
-- The library and functional labels are easier to read.
-- The motion title uses the full width of the map header.
-- Argument cards no longer carry speaker, premise-count, or tag footers; they use the space for more argument text, and the motion card sizes to its own content.
+- **Night Reading Room** dark mode is available across the whole app: library, map, inspector, chamber, stage, judgment panel, settings, and dialogs.
+- Open **Settings → Appearance** and choose **System**, **Light**, or **Dark**. System follows the Windows appearance setting. Your choice is remembered between launches.
+- Dark mode keeps the warm paper-and-ink character of Agora rather than using a flat black theme; pro/con cards, graph edges, and judgment states remain distinct.
+- The map now uses theme-aware support, attack, and undercut colours.
 
 ## Connect a model
 
