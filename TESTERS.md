@@ -4,16 +4,17 @@ Agora is a local debate harness. You install it like a normal Windows app; no No
 
 ## Install
 
-1. Run `Agora-Setup-0.1.10.exe`.
+1. Run `Agora-Setup-0.1.11.exe`.
 2. Windows will warn that the publisher is unknown. This build is intentionally unsigned: choose **More info → Run anyway**.
 3. The installer is per-user and does not need administrator rights. Agora opens when it finishes.
 
-## What's new in 0.1.10
+## What's new in 0.1.11
 
-- **Night Reading Room** dark mode is available across the whole app: library, map, inspector, chamber, stage, judgment panel, settings, and dialogs.
-- Open **Settings → Appearance** and choose **System**, **Light**, or **Dark**. System follows the Windows appearance setting. Your choice is remembered between launches.
-- Dark mode keeps the warm paper-and-ink character of Agora rather than using a flat black theme; pro/con cards, graph edges, and judgment states remain distinct.
-- The map now uses theme-aware support, attack, and undercut colours.
+- Initial maps now build the argument case as a structure of claims and replies, rather than mostly two lists of direct arguments.
+- Each major direct argument should normally carry at least one serious reply; a contested reply can carry a further response.
+- The authoring guideline is now roughly 14–20 nodes, with room for replies while still refusing filler. Genuinely unanswered objections remain unanswered.
+- Chamber extension patches are unchanged at 2–5 nodes per request.
+- Night Reading Room dark mode from 0.1.10 is unchanged.
 
 ## Connect a model
 
