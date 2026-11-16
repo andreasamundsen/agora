@@ -44,7 +44,7 @@ The app works **before you connect a model**. Two reference debates are seeded o
 
 **The library** — every debate is stored as plain JSON under `data/debates/`. Click a card to open it, `×` to remove it.
 
-**The map** — a pan/zoom argument graph. Thesis in the centre, pro arguments on the left, con arguments on the right, rebuttals in an outer ring. Dense maps open as a complete overview; small maps open at a readable scale. Drag to pan, scroll to zoom, use `Fit` to recover the whole shape. Select any card for the inspector: full text, premises, conclusion, relations, and two actions that send a targeted request to the chamber.
+**The map** — a pan/zoom argument graph. The thesis sits in the centre. The default **Case view** groups direct pro arguments on the left and direct con arguments on the right; **Thread view** keeps those two direct cases in place but attaches each response to the argument it answers, extending the response chain outward on that argument's side. Thread view labels the two wings with quiet `Pro case` / `Con case` rails and keeps stance on the card's For/Against badge and colour, so a con reply can sit on the pro side where its target lives. Dense maps open as a complete overview; small maps open at a readable scale. Drag to pan, scroll to zoom, use `Fit` to recover the whole shape. Select any card for the inspector: full text, premises, conclusion, relations, and two actions that send a targeted request to the chamber.
 
 **The chamber** — a conversation with the cartographer. Ask for the strongest counterargument, attack a weak premise, steel-man the other side, or request a specific missing branch. With a model connected, the reply extends the graph and updates the map. Without one, the local scaffolder adds a structural node and says so.
 
@@ -104,7 +104,7 @@ src/
   core/                 pure domain layer — no DOM, no network, no filesystem
     model.ts            Debate/Node/Edge types, reconciliation, prompt cleanup
     argdown.ts          Debate → Argdown serializer
-    layout.ts           deterministic two-wing graph layout
+    layout.ts           deterministic case/thread graph layouts
     stage.ts            seeded random-walk staging + speaker narration
     judgment.ts         pure clash adjudication, grounded propagation, verdict summary, Markdown report
     demo.ts             two hand-authored reference debates

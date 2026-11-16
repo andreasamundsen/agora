@@ -1,6 +1,6 @@
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { Debate, DebateEdge, DebateNode } from "../../core/model";
-import { computeLayout, LayoutCard } from "../../core/layout";
+import { computeLayout, LayoutCard, LayoutMode } from "../../core/layout";
 import {
   OUTCOME_SHORT,
   type ArgumentStatus,
@@ -64,7 +64,8 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
   { debate, selectedId, onSelect, stage, judgment },
   ref
 ) {
-  const layout = useMemo(() => computeLayout(debate), [debate]);
+  const [view, setView] = useState<LayoutMode>("case");
+  const layout = useMemo(() => computeLayout(debate, view), [debate, view]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [zoom, setZoom] = useState(0.9);
@@ -80,6 +81,10 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
   zoomRef.current = zoom;
   panRef.current = pan;
   sizeRef.current = size;
+
+  useEffect(() => {
+    setView("case");
+  }, [debate.id]);
 
   const fit = useCallback(() => {
     const el = containerRef.current;
@@ -293,11 +298,12 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
     if (!revealed) return true;
     return revealed.has(edge.from) && revealed.has(edge.to);
   });
+  const viewLocked = Boolean(stage?.active || judgment?.active);
 
   return (
     <div
       ref={containerRef}
-      className={`graph ${dragging ? "is-dragging" : ""} ${stage?.active ? "is-staging" : ""} ${judgment?.active ? "is-judging" : ""}`}
+      className={`graph ${view === "thread" ? "is-thread" : ""} ${dragging ? "is-dragging" : ""} ${stage?.active ? "is-staging" : ""} ${judgment?.active ? "is-judging" : ""}`}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -343,6 +349,29 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
         )} aria-label="Zoom in">+</button>
         <span className="control-sep" />
         <button type="button" className="icon-btn icon-btn--wide" onClick={fit} aria-label="Fit map to view">Fit</button>
+        <span className="control-sep" />
+        <div className="graph-view-toggle" role="group" aria-label="Map layout">
+          <button
+            type="button"
+            className={view === "case" ? "is-active" : ""}
+            aria-pressed={view === "case"}
+            onClick={() => setView("case")}
+            disabled={viewLocked}
+            title="Case view: arguments grouped by side"
+          >
+            Case
+          </button>
+          <button
+            type="button"
+            className={view === "thread" ? "is-active" : ""}
+            aria-pressed={view === "thread"}
+            onClick={() => setView("thread")}
+            disabled={viewLocked}
+            title="Thread view: responses attached to the argument they answer"
+          >
+            Thread
+          </button>
+        </div>
       </div>
 
       {!stage?.active && !judgment?.active && hiddenCount > 0 && (
@@ -357,7 +386,9 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
         <div className="graph-hint" aria-hidden="true">
           {judgment?.active
             ? "the bench is following the record · select a node to inspect"
-            : <>drag to pan <span>·</span> scroll to zoom <span>·</span> select a node to inspect</>}
+            : view === "thread"
+              ? <>responses follow the argument they answer <span>·</span> drag to pan <span>·</span> scroll to zoom</>
+              : <>drag to pan <span>·</span> scroll to zoom <span>·</span> select a node to inspect</>}
         </div>
       )}
 
@@ -392,7 +423,7 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
               </marker>
             </defs>
             <g transform={`translate(${pan.x} ${pan.y}) scale(${zoom})`} className={smooth ? "edge-layer smooth" : "edge-layer"}>
-              {edgesVisible.map(({ edge, path, labelX, labelY, cross }) => {
+              {edgesVisible.map(({ edge, path, labelX, labelY, secondary }) => {
                 const active = stage?.active && stage.litEdges.has(edge.id);
                 const clash = Boolean(judgment?.active && judgment.activeEdgeId === edge.id);
                 const judged = judgment?.active ? judgment.verdictByEdge[edge.id] : undefined;
@@ -403,7 +434,7 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
                 return (
                   <g
                     key={edge.id}
-                    className={`graph-edge ${active ? "is-active" : ""} ${clash ? "is-clash" : ""} ${judged ? `is-judged is-judged--${judged}` : ""} ${dim ? "is-dim" : ""} ${connected ? "is-connected" : ""}`}
+                    className={`graph-edge ${active ? "is-active" : ""} ${clash ? "is-clash" : ""} ${judged ? `is-judged is-judged--${judged}` : ""} ${dim ? "is-dim" : ""} ${connected ? "is-connected" : ""} ${secondary ? "is-secondary" : ""}`}
                     style={{ ["--edge-color" as string]: color }}
                   >
                     <path
@@ -471,6 +502,20 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
               );
             })}
           </div>
+          {(layout.rails ?? []).map((rail) => (
+            <div
+              key={rail.side}
+              className={`graph-branch-rail graph-branch-rail--${rail.side} ${smooth ? "smooth" : ""}`}
+              style={{
+                left: pan.x + rail.x * zoom,
+                top: pan.y + rail.y * zoom,
+                width: Math.max(1, rail.width * zoom)
+              }}
+              aria-hidden="true"
+            >
+              <span>{rail.label}</span>
+            </div>
+          ))}
         </>
       )}
     </div>
