@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { Debate, DebateNode } from "../core/model";
 import { cleanText, uid } from "../core/model";
+import { buildClashContext, MAX_DIRECT_CONTEXT_RELATIONS, type ClashContext } from "../core/clash-context";
 import {
   buildJudgmentRun,
   clashEdges,
@@ -239,6 +240,80 @@ ${premises}
 Conclusion: ${node.conclusion ? cleanText(node.conclusion) : "(not stated separately)"}`;
 }
 
+function pathChain(context: ClashContext): string {
+  const parts = [`“${context.target.title}”`];
+  for (const step of context.path) {
+    parts.push(`—${step.edge.type.toUpperCase()}→ “${step.to.title}”`);
+  }
+  return parts.join(" ");
+}
+
+function targetContextBlock(debate: Debate, context: ClashContext): string {
+  const lines: string[] = [];
+  const role =
+    context.path.length && context.target.id !== debate.thesisId
+      ? `${context.role} (${context.path.length} step${context.path.length === 1 ? "" : "s"} from the thesis)`
+      : context.role;
+
+  lines.push("TARGET'S ROLE IN THE MAP");
+  lines.push(`Role: ${role}.`);
+  lines.push("What the target itself attacks or supports:");
+
+  if (!context.directRelations.length) {
+    lines.push("(No outgoing support, attack, or undercut edges.)");
+  } else {
+    context.directRelations.forEach((relation, index) => {
+      lines.push(`${index + 1}. ${relation.edge.type.toUpperCase()}: “${relation.destination.title}”`);
+      if (relation.destination.id === debate.thesisId) {
+        lines.push("Destination: THE THESIS (already stated above).");
+      } else {
+        lines.push(nodeBlock(relation.destination, "DIRECT DESTINATION"));
+      }
+    });
+    if (context.omittedDirectRelations > 0) {
+      lines.push(
+        `(${context.omittedDirectRelations} further outgoing relation${context.omittedDirectRelations === 1 ? "" : "s"} omitted by the ${MAX_DIRECT_CONTEXT_RELATIONS}-relation cap.)`
+      );
+    }
+  }
+
+  if (context.path.length) {
+    lines.push("");
+    lines.push("SHORTEST PATH TO THE THESIS");
+    lines.push(pathChain(context));
+
+    const directDestinationIds = new Set(context.directRelations.map((relation) => relation.destination.id));
+    const deeper = context.path
+      .map((step) => step.to)
+      .filter(
+        (node) =>
+          node.id !== context.target.id &&
+          node.id !== debate.thesisId &&
+          !directDestinationIds.has(node.id)
+      );
+    const seen = new Set<string>();
+    const uniqueDeeper = deeper.filter((node) => {
+      if (seen.has(node.id)) return false;
+      seen.add(node.id);
+      return true;
+    });
+
+    if (uniqueDeeper.length) {
+      lines.push("DEEPER PATH NODES");
+      for (const node of uniqueDeeper) {
+        lines.push(
+          `- “${node.title}” — ${node.conclusion ? cleanText(node.conclusion) : "(no separate conclusion stated)"}`
+        );
+      }
+    }
+  } else if (context.target.id !== debate.thesisId) {
+    lines.push("");
+    lines.push("No directed path from the target to the thesis was found on this map.");
+  }
+
+  return lines.join("\n");
+}
+
 function contextBlock(debate: Debate, edge: ClashEdge): string {
   const around = new Set([edge.from, edge.to]);
   const lines: string[] = [];
@@ -254,10 +329,12 @@ function contextBlock(debate: Debate, edge: ClashEdge): string {
   return lines.length ? lines.join("\n") : "(no other relations touch this pair)";
 }
 
-function clashPrompt(debate: Debate, edge: ClashEdge, standard: StandardOfProof): string {
+export function clashPrompt(debate: Debate, edge: ClashEdge, standard: StandardOfProof): string {
   const attacker = debate.nodes.find((node) => node.id === edge.from);
   const target = debate.nodes.find((node) => node.id === edge.to);
   if (!attacker || !target) throw new Error("The clash points at a missing argument.");
+  const context = buildClashContext(debate, edge);
+  if (!context) throw new Error("The clash target has no context in the map.");
   return `THE MOTION
 ${debate.motion}
 
@@ -270,12 +347,15 @@ ${STANDARD_LABEL[standard]}. ${STANDARD_NOTE[standard]}
 THE CLASH
 Relation: ${edge.type.toUpperCase()}
 ${edge.note ? `Relation note: ${edge.note}` : ""}
+Use the target's role and path below to interpret the target. Judge only this clash, not the whole motion.
 
 --- BEGIN UNTRUSTED ARGUMENT DATA ---
 
 ${nodeBlock(attacker, "ATTACKER")}
 
 ${nodeBlock(target, "TARGET")}
+
+${targetContextBlock(debate, context)}
 
 OTHER RELATIONS AROUND THIS PAIR
 ${contextBlock(debate, edge)}
