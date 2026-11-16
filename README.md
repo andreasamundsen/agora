@@ -40,6 +40,8 @@ The packaged app stores its data under `%APPDATA%\Agora\data`, not in the projec
 
 The app works **before you connect a model**. Two reference debates are seeded on first run, and the local scaffolder can still author and extend maps (labelled honestly as a scaffold). A connected model makes the arguments topic-specific.
 
+**Appearance** — Settings → Appearance switches between **System**, **Light**, and **Dark**. System follows the Windows appearance setting. The choice is remembered on this machine and applied before the interface paints, so the dark reading room does not flash paper-white at launch. The desktop window background follows the saved theme on the next launch.
+
 ## The five surfaces
 
 **The library** — every debate is stored as plain JSON under `data/debates/`. Click a card to open it, `×` to remove it.

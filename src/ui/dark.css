@@ -1,0 +1,235 @@
+/* ------------------------------------------------------------------ */
+/* Dark theme — Night Reading Room                                     */
+/* ------------------------------------------------------------------ */
+
+html[data-theme="light"] { color-scheme: light; background: #f4efe4; }
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  background: #15120e;
+  --paper: #15120e;
+  --paper-deep: #0e0c09;
+  --surface: #1d1914;
+  --surface-strong: #252019;
+  --ink: #f0e6d3;
+  --ink-soft: #d4c6b0;
+  --muted: #a69681;
+  --faint: #7f7260;
+  --line: #3a3227;
+  --line-strong: #514538;
+
+  --pro: #83c4a2;
+  --pro-deep: #63a382;
+  --pro-soft: #1d3328;
+  --con: #df9383;
+  --con-deep: #bd7162;
+  --con-soft: #38231f;
+  --under: #bea0d5;
+  --under-soft: #2b2336;
+  --gold: #d8b36a;
+  --gold-deep: #c0964b;
+  --gold-soft: #382b1a;
+
+  --shadow-soft: 0 1px 0 rgba(0, 0, 0, 0.32), 0 18px 38px -30px rgba(0, 0, 0, 0.9);
+  --shadow-card: 0 1px 0 rgba(255, 240, 210, 0.045) inset, 0 12px 28px -22px rgba(0, 0, 0, 0.9);
+}
+
+html[data-theme="dark"] body {
+  background-color: var(--paper);
+  color: var(--ink);
+}
+
+html[data-theme="dark"] body::before {
+  opacity: 0.32;
+  background-image:
+    radial-gradient(ellipse at 15% 0%, rgba(216, 179, 106, 0.07), transparent 55%),
+    radial-gradient(ellipse at 90% 100%, rgba(0, 0, 0, 0.38), transparent 58%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.055'/%3E%3C/svg%3E");
+}
+
+html[data-theme="dark"] ::selection { background: rgba(216, 179, 106, 0.3); }
+html[data-theme="dark"] ::-webkit-scrollbar-thumb { background: rgba(212, 198, 176, 0.2); }
+html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: rgba(212, 198, 176, 0.34); }
+
+html[data-theme="dark"] .topbar {
+  background: rgba(21, 18, 14, 0.86);
+  border-bottom-color: var(--line);
+}
+html[data-theme="dark"] .brand-mark {
+  background: #0b0907;
+  color: var(--gold);
+  box-shadow: inset 0 0 0 1px rgba(216, 179, 106, 0.22), 0 3px 10px -4px rgba(0, 0, 0, 0.8);
+}
+
+html[data-theme="dark"] .library { background: rgba(16, 13, 10, 0.44); }
+html[data-theme="dark"] .library-card:hover {
+  background: rgba(255, 240, 215, 0.045);
+  border-color: var(--line);
+}
+html[data-theme="dark"] .library-card.is-active {
+  background: var(--surface);
+  border-color: var(--line-strong);
+}
+html[data-theme="dark"] .library-card-meta em { background: var(--paper-deep); }
+html[data-theme="dark"] .library-new { color: var(--paper); }
+html[data-theme="dark"] .library-delete:hover { background: var(--con-soft); color: var(--con); }
+
+html[data-theme="dark"] .chamber { background: rgba(19, 16, 12, 0.54); }
+html[data-theme="dark"] .engine-pill { background: rgba(255, 240, 215, 0.04); }
+html[data-theme="dark"] .engine-pill:hover { background: var(--surface); }
+html[data-theme="dark"] .chat-user-bubble {
+  background: #29231b;
+  border-color: var(--line-strong);
+  box-shadow: inset 0 1px 0 rgba(255, 240, 210, 0.035);
+}
+html[data-theme="dark"] .chat-system { background: rgba(94, 70, 33, 0.24); }
+html[data-theme="dark"] .chamber-composer { background: rgba(15, 13, 10, 0.62); }
+html[data-theme="dark"] .composer-box { background: var(--surface-strong); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3); }
+html[data-theme="dark"] .composer-box:focus-within { box-shadow: 0 0 0 3px rgba(216, 179, 106, 0.14); }
+html[data-theme="dark"] .suggestion:hover:not(:disabled) { background: var(--surface); }
+html[data-theme="dark"] .chat-intro-mark { border-color: var(--line-strong); color: var(--gold); }
+html[data-theme="dark"] .chat-intro li::before { color: var(--gold); }
+
+html[data-theme="dark"] .canvas-body {
+  background: var(--paper-deep);
+  border-color: var(--line);
+}
+html[data-theme="dark"] .canvas-loading { background: rgba(14, 12, 9, 0.72); }
+html[data-theme="dark"] .origin-tag { background: rgba(255, 240, 215, 0.035); }
+html[data-theme="dark"] .origin-tag--seed { color: var(--gold); }
+
+html[data-theme="dark"] .graph,
+html[data-theme="dark"] .graph.is-judging {
+  background-color: var(--paper-deep);
+  background-image:
+    radial-gradient(circle at 50% 45%, rgba(216, 179, 106, 0.07), transparent 62%),
+    radial-gradient(circle, rgba(240, 230, 211, 0.105) 1px, transparent 1.3px);
+  background-size: auto, 26px 26px;
+}
+html[data-theme="dark"] .graph::after { box-shadow: inset 0 0 100px rgba(0, 0, 0, 0.32); }
+
+html[data-theme="dark"] .graph-legend,
+html[data-theme="dark"] .graph-controls,
+html[data-theme="dark"] .graph-hidden {
+  background: rgba(27, 23, 18, 0.92);
+  border-color: var(--line);
+  box-shadow: 0 4px 18px -12px rgba(0, 0, 0, 0.9);
+}
+html[data-theme="dark"] .graph-controls .icon-btn:hover { background: rgba(255, 240, 215, 0.08); }
+html[data-theme="dark"] .graph-view-toggle { background: rgba(255, 240, 215, 0.045); }
+html[data-theme="dark"] .graph-view-toggle button.is-active { color: var(--paper-deep); }
+html[data-theme="dark"] .graph-hidden:hover { color: var(--ink); }
+
+html[data-theme="dark"] .graph-node {
+  background: var(--surface-strong);
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-card);
+}
+html[data-theme="dark"] .graph-node--argument.stance-pro {
+  background: linear-gradient(180deg, #1b2a22 0%, #16211b 100%);
+  border-color: rgba(131, 196, 162, 0.3);
+}
+html[data-theme="dark"] .graph-node--argument.stance-con {
+  background: linear-gradient(180deg, #2e1f1b 0%, #251916 100%);
+  border-color: rgba(223, 147, 131, 0.3);
+}
+html[data-theme="dark"] .graph-node--thesis {
+  background: #080705;
+  border-color: #3b3021;
+  color: var(--ink);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.5), 0 24px 48px -30px rgba(0, 0, 0, 0.95);
+}
+html[data-theme="dark"] .graph-node--thesis .node-title { color: #f2e5ca; }
+html[data-theme="dark"] .graph-node--thesis .node-text { color: rgba(212, 198, 176, 0.72); }
+html[data-theme="dark"] .node-text { color: var(--muted); }
+html[data-theme="dark"] .node-judgment--defeated { color: var(--con); }
+html[data-theme="dark"] .node-judgment--standing { color: var(--pro); }
+html[data-theme="dark"] .node-condition--weakened { color: var(--gold); border-color: rgba(216, 179, 106, 0.5); }
+
+html[data-theme="dark"] .graph-node:hover {
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.25), 0 22px 42px -28px rgba(0, 0, 0, 0.95);
+}
+html[data-theme="dark"] .graph-node.is-current {
+  box-shadow: 0 0 0 4px rgba(216, 179, 106, 0.16), 0 0 34px rgba(216, 179, 106, 0.18), 0 20px 40px -26px rgba(0, 0, 0, 0.9);
+}
+
+html[data-theme="dark"] .graph-inspector {
+  background: var(--surface-strong);
+  border-color: var(--line-strong);
+  box-shadow: 0 24px 60px -30px rgba(0, 0, 0, 0.95);
+}
+html[data-theme="dark"] .inspector-scroll { background: var(--surface-strong); }
+html[data-theme="dark"] .inspector-conclusion { background: rgba(255, 240, 215, 0.04); }
+html[data-theme="dark"] .inspector-action { background: var(--ink); color: var(--paper); }
+html[data-theme="dark"] .inspector-action--ghost { background: transparent; }
+html[data-theme="dark"] .inspector-action--ghost:hover { background: var(--paper-deep); }
+
+html[data-theme="dark"] .btn:hover:not(:disabled) { background: rgba(255, 240, 215, 0.07); }
+html[data-theme="dark"] .btn--quiet:hover { background: rgba(255, 240, 215, 0.045); }
+html[data-theme="dark"] .btn--primary,
+html[data-theme="dark"] .btn--stage,
+html[data-theme="dark"] .library-new {
+  background: #ece0c7;
+  color: #17130f;
+}
+html[data-theme="dark"] .btn--primary:hover:not(:disabled),
+html[data-theme="dark"] .btn--stage:hover {
+  background: var(--gold);
+  color: #17130f;
+}
+html[data-theme="dark"] .btn--judge { background: rgba(255, 240, 215, 0.045); }
+html[data-theme="dark"] .btn--judge:hover:not(:disabled) { background: var(--gold); color: #17130f; }
+html[data-theme="dark"] .btn--judge:hover:not(:disabled) svg { color: #17130f; }
+html[data-theme="dark"] .btn--judge.is-active { background: var(--gold-soft); color: var(--gold); }
+html[data-theme="dark"] .btn--ghost { background: rgba(255, 240, 215, 0.035); }
+html[data-theme="dark"] .btn--ghost:hover:not(:disabled) { background: var(--surface); }
+
+html[data-theme="dark"] .dropzone { background: rgba(255, 240, 215, 0.035); }
+html[data-theme="dark"] .dropzone.is-dragging { background: var(--gold-soft); }
+html[data-theme="dark"] .preset { background: rgba(255, 240, 215, 0.035); }
+html[data-theme="dark"] .form-error { background: rgba(223, 147, 131, 0.12); }
+html[data-theme="dark"] .field-hint code { background: rgba(255, 240, 215, 0.07); }
+html[data-theme="dark"] .settings-status { background: var(--surface); }
+html[data-theme="dark"] .settings-status.is-ok { background: var(--pro-soft); }
+html[data-theme="dark"] .settings-status.is-bad { background: var(--con-soft); }
+
+html[data-theme="dark"] .modal-backdrop { background: rgba(6, 5, 4, 0.72); }
+html[data-theme="dark"] .modal { background: var(--surface-strong); border-color: var(--line-strong); }
+
+html[data-theme="dark"] .judgment-panel {
+  background:
+    linear-gradient(90deg, rgba(255, 240, 215, 0.04), transparent 24px),
+    rgba(18, 15, 11, 0.84);
+  border-left-color: var(--line-strong);
+}
+html[data-theme="dark"] .judge-question {
+  background: rgba(216, 179, 106, 0.08);
+  border-left-color: var(--gold);
+}
+html[data-theme="dark"] .judge-rubric {
+  background: rgba(255, 240, 215, 0.035);
+}
+html[data-theme="dark"] .judge-provider.is-ready {
+  border-color: rgba(131, 196, 162, 0.38);
+}
+html[data-theme="dark"] .judge-provider.is-ready span,
+html[data-theme="dark"] .judge-provider.is-ready b {
+  color: var(--pro);
+}
+html[data-theme="dark"] .judgment-head {
+  background: rgba(255, 240, 215, 0.035);
+  border-bottom-color: var(--ink);
+}
+html[data-theme="dark"] .judge-mode-note {
+  background: rgba(216, 179, 106, 0.11);
+  border-color: rgba(216, 179, 106, 0.34);
+}
+html[data-theme="dark"] .judgment-seal {
+  background: rgba(27, 23, 18, 0.94);
+  box-shadow: inset 0 0 0 3px rgba(27, 23, 18, 0.94), inset 0 0 0 4px rgba(192, 150, 75, 0.52), 0 10px 24px -20px rgba(0, 0, 0, 0.9);
+}
+html[data-theme="dark"] .judgment-seal b { color: var(--ink); }
+html[data-theme="dark"] .record-row:hover { background: rgba(255, 240, 215, 0.055); }
+html[data-theme="dark"] .record-row.is-current { background: var(--gold-soft); }
+
+html[data-theme="dark"] .toast { background: #242019; border-color: var(--line-strong); color: var(--ink); }

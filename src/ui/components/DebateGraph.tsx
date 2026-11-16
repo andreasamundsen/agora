@@ -48,9 +48,9 @@ interface Props {
 }
 
 const EDGE_COLORS: Record<DebateEdge["type"], string> = {
-  support: "#2f7154",
-  attack: "#a63b2f",
-  undercut: "#74528f"
+  support: "var(--pro)",
+  attack: "var(--con)",
+  undercut: "var(--under)"
 };
 
 const STATUS_LABEL: Record<ArgumentStatus | "unsupported", string> = {
@@ -438,7 +438,7 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
                   markerHeight="7"
                   orient="auto-start-reverse"
                 >
-                  <path d="M 1 1 L 10 6 L 1 11 z" fill={EDGE_COLORS[type]} />
+                  <path d="M 1 1 L 10 6 L 1 11 z" style={{ fill: EDGE_COLORS[type] }} />
                 </marker>
               ))}
               <marker
@@ -450,7 +450,7 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
                 markerHeight="7"
                 orient="auto-start-reverse"
               >
-                <path d="M 1 1 L 10 6 L 1 11 z" fill="#b98a3a" />
+                <path d="M 1 1 L 10 6 L 1 11 z" style={{ fill: "var(--gold)" }} />
               </marker>
             </defs>
             <g transform={`translate(${pan.x} ${pan.y}) scale(${zoom})`} className={smooth ? "edge-layer smooth" : "edge-layer"}>

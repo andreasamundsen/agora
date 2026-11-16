@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import type { Debate } from "../../core/model";
 import type { UiSettings, ReasoningEffort } from "../api";
 import { downloadArgdown, fetchArgdown, saveSettings, testSettings } from "../api";
+import { applyThemePreference, readThemePreference, type ThemePreference } from "../theme";
 
 /* ------------------------------------------------------------------ */
 /* Shell                                                               */
@@ -481,6 +482,7 @@ export function SettingsModal({
   const [apiKey, setApiKey] = useState("");
   const [temperature, setTemperature] = useState(settings.temperature);
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>(settings.reasoningEffort ?? "high");
+  const [theme, setTheme] = useState<ThemePreference>(() => readThemePreference());
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [status, setStatus] = useState<{ ok: boolean; message: string } | null>(null);
@@ -558,6 +560,31 @@ export function SettingsModal({
         Agora speaks to any OpenAI-compatible chat-completions endpoint. The local scaffolder is always available;
         a model makes the arguments topic-specific.
       </p>
+
+      <div className="field field--appearance">
+        <span className="field-label">
+          Appearance <em>saved on this machine</em>
+        </span>
+        <div className="judge-segmented appearance-segmented">
+          {(["system", "light", "dark"] as const).map((option) => (
+            <button
+              type="button"
+              key={option}
+              className={`judge-segment ${theme === option ? "is-selected" : ""}`}
+              aria-pressed={theme === option}
+              onClick={() => {
+                setTheme(option);
+                applyThemePreference(option);
+              }}
+            >
+              {option === "system" ? "System" : option === "light" ? "Light" : "Dark"}
+            </button>
+          ))}
+        </div>
+        <span className="field-hint">
+          System follows the Windows appearance setting. The choice applies immediately and is remembered.
+        </span>
+      </div>
 
       <div className="preset-grid">
         {PRESETS.map((preset) => (

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, Menu } = require("electron");
+const { app, BrowserWindow, dialog, Menu, nativeTheme, session } = require("electron");
 const fs = require("node:fs");
 const http = require("node:http");
 const net = require("node:net");
@@ -124,8 +124,20 @@ function waitForServer(port, timeoutMs = 25000) {
   });
 }
 
+async function preferredWindowTheme() {
+  try {
+    const cookies = await session.defaultSession.cookies.get({ name: "agora_theme" });
+    const preference = cookies.find((cookie) => ["light", "dark"].includes(cookie.value))?.value;
+    if (preference) return preference;
+  } catch {
+    // Fall back to the Windows appearance setting.
+  }
+  return nativeTheme.shouldUseDarkColors ? "dark" : "light";
+}
+
 async function createWindow() {
   const port = await freePort();
+  const windowTheme = await preferredWindowTheme();
   log(`Starting Agora ${app.getVersion()} on 127.0.0.1:${port}`);
   log(`Data: ${dataPath()}`);
   serverProcess = startServer(port);
@@ -136,7 +148,7 @@ async function createWindow() {
     height: 900,
     minWidth: 1100,
     minHeight: 700,
-    backgroundColor: "#f4efe4",
+    backgroundColor: windowTheme === "dark" ? "#15120e" : "#f4efe4",
     show: false,
     autoHideMenuBar: true,
     title: "Agora",

@@ -4,6 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f4efe4" />
+    <script>
+      (() => {
+        const match = document.cookie.match(/(?:^|; )agora_theme=(system|light|dark)/);
+        const preference = match?.[1] || "system";
+        const resolved = preference === "system"
+          ? (window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+          : preference;
+        document.documentElement.dataset.theme = resolved;
+        document.documentElement.dataset.themePreference = preference;
+        const meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute("content", resolved === "dark" ? "#15120e" : "#f4efe4");
+      })();
+    </script>
     <title>Agora — a debate harness</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231c1a17'/%3E%3Ctext x='32' y='44' font-family='Georgia,serif' font-size='34' fill='%23f4efe4' text-anchor='middle'%3EA%3C/text%3E%3C/svg%3E" />
   </head>
