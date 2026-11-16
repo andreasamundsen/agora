@@ -4,7 +4,7 @@ Agora is a local debate harness. You install it like a normal Windows app; no No
 
 ## Install
 
-1. Run `Agora-Setup-0.1.7.exe`.
+1. Run `Agora-Setup-0.1.8.exe`.
 2. Windows will warn that the publisher is unknown. This build is intentionally unsigned: choose **More info → Run anyway**.
 3. The installer is per-user and does not need administrator rights. Agora opens when it finishes.
 
@@ -22,7 +22,7 @@ Provider calls go directly from your machine to the provider you choose. Agora d
 
 ## What to try
 
-- Open a demo debate and explore the argument map.
+- Open a demo debate and explore the argument map. Use **Case** and **Thread** at the bottom right: Thread attaches each reply to the argument it answers, and both views stay at a similar height. The map refits when you resize the window; after you pan or zoom manually, it keeps your view until you press **Fit**.
 - Press **Judge**, choose a standard, and run a judgment. After the clashes, the bench weighs the surviving direct case lines. The judge now receives each target's own relation and a short path to the motion, so rulings on replies are grounded in what the target was answering. The standard sets the threshold, not a veto: a lopsided record decides, and the burden decides the close ones. A **falls** outcome can come from a direct strike on the motion or from a weighted con case that dominates. A surviving argument can also show a **weakened** condition beside its status when a ruling says the attack had real force but did not strike it. `Save judgment report` downloads the balance and the rulings.
 - Press **Stage Debate** to watch the exchange.
 - Use **Import** / **Export** to move a debate as Argdown.
