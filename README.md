@@ -32,11 +32,11 @@ npm start
 npm run dist
 ```
 
-This produces `release/Agora-Setup-0.1.8.exe`, a per-user Windows NSIS installer. The installer is intentionally **unsigned** and does not auto-update. It bundles Electron and the compiled server, so testers do not need Node.
+This produces `release/Agora-Setup-0.1.9.exe`, a per-user Windows NSIS installer. The installer is intentionally **unsigned** and does not auto-update. It bundles Electron and the compiled server, so testers do not need Node.
 
 `npm run electron` runs the desktop shell directly; `npm run pack` produces an unpacked build for inspection.
 
-The packaged app stores its data under `%APPDATA%\Agora\data`, not in the project's `data/` directory. This first tester build keeps the existing settings format, so the API key is plain JSON inside `settings.json`; use a test key you can rotate. `TESTERS.md` contains the tester instructions.
+The packaged app stores its data under `%APPDATA%\Agora\data`, not in the project's `data/` directory. This tester build keeps the existing settings format, so the API key is plain JSON inside `settings.json`; use a test key you can rotate. `TESTERS.md` contains the tester instructions.
 
 The app works **before you connect a model**. Two reference debates are seeded on first run, and the local scaffolder can still author and extend maps (labelled honestly as a scaffold). A connected model makes the arguments topic-specific.
 
