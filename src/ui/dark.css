@@ -144,6 +144,8 @@ html[data-theme="dark"] .graph-node--thesis .node-text { color: rgba(212, 198, 1
 html[data-theme="dark"] .node-text { color: var(--muted); }
 html[data-theme="dark"] .node-judgment--defeated { color: var(--con); }
 html[data-theme="dark"] .node-judgment--standing { color: var(--pro); }
+html[data-theme="dark"] .node-judgment--weakened { color: var(--gold); background: rgba(216, 179, 106, 0.09); }
+html[data-theme="dark"] .graph-node.is-weakened { border-color: rgba(216, 179, 106, 0.5); }
 html[data-theme="dark"] .node-condition--weakened { color: var(--gold); border-color: rgba(216, 179, 106, 0.5); }
 
 html[data-theme="dark"] .graph-node:hover {
@@ -195,6 +197,10 @@ html[data-theme="dark"] .settings-status.is-bad { background: var(--con-soft); }
 
 html[data-theme="dark"] .modal-backdrop { background: rgba(6, 5, 4, 0.72); }
 html[data-theme="dark"] .modal { background: var(--surface-strong); border-color: var(--line-strong); }
+html[data-theme="dark"] .modal-head {
+  background: rgba(255, 240, 215, 0.035);
+  border-bottom-color: var(--line);
+}
 
 html[data-theme="dark"] .judgment-panel {
   background:
@@ -220,6 +226,15 @@ html[data-theme="dark"] .judgment-head {
   background: rgba(255, 240, 215, 0.035);
   border-bottom-color: var(--ink);
 }
+html[data-theme="dark"] .judgment-controls {
+  background: rgba(255, 240, 215, 0.035);
+  border-top-color: var(--line);
+}
+html[data-theme="dark"] .speed-btn { color: var(--muted); }
+html[data-theme="dark"] .speed-btn:hover,
+html[data-theme="dark"] .speed-btn.is-active { color: var(--ink); }
+html[data-theme="dark"] .judgment-exit { color: var(--ink-soft); }
+html[data-theme="dark"] .judgment-exit:hover { color: var(--con); }
 html[data-theme="dark"] .judge-mode-note {
   background: rgba(216, 179, 106, 0.11);
   border-color: rgba(216, 179, 106, 0.34);
