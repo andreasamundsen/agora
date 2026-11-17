@@ -108,10 +108,11 @@ export default function App() {
     try {
       const response = await fetchDebates();
       setSummaries(response.debates);
+      if (response.warnings?.length) showToast(response.warnings[0]!, "warn");
     } catch {
       /* summaries are cosmetic; the active debate still works */
     }
-  }, []);
+  }, [showToast]);
 
   const loadDebate = useCallback(async (id: string) => {
     setLoadingDebate(true);
@@ -140,6 +141,7 @@ export default function App() {
         if (cancelled) return;
         setSummaries(debateResponse.debates);
         setSettings(settingsResponse.settings);
+        if (debateResponse.warnings?.length) showToast(debateResponse.warnings[0]!, "warn");
         const stored = localStorage.getItem(ACTIVE_KEY);
         const first = debateResponse.debates.find((item) => item.id === stored) ?? debateResponse.debates[0];
         if (first) {

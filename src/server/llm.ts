@@ -17,6 +17,7 @@ import {
   uniqueId
 } from "../core/model";
 import { debateContext } from "../core/argdown";
+import { chatEndpoint, providerUrlProblem } from "../shared/provider-url";
 import { getSettings, isReady, StoredSettings, ReasoningEffort } from "./settings";
 
 /**
@@ -159,12 +160,6 @@ ${input.slice(0, 3000)}
 """`;
 }
 
-function endpoint(baseUrl: string): string {
-  const trimmed = baseUrl.trim().replace(/\/+$/, "");
-  if (trimmed.endsWith("/chat/completions")) return trimmed;
-  return `${trimmed}/chat/completions`;
-}
-
 const DEEPSEEK_THINKING_MODELS = new Set(["deepseek-flash", "deepseek-v4-flash", "deepseek-v4-pro"]);
 
 export function supportsDeepSeekThinking(settings: Pick<StoredSettings, "provider" | "model">): boolean {
@@ -183,6 +178,8 @@ export async function callModel(
   messages: { role: "system" | "user"; content: string }[],
   options: { temperature?: number; maxTokens?: number } = {}
 ): Promise<string> {
+  const urlProblem = providerUrlProblem(settings.baseUrl, Boolean(settings.apiKey.trim()));
+  if (urlProblem) throw new Error(urlProblem);
   if (!isReady(settings)) throw new Error("No model is configured.");
   const thinkingModel = supportsDeepSeekThinking(settings);
   const thinking = thinkingModel && settings.reasoningEffort !== "off";
@@ -207,7 +204,7 @@ export async function callModel(
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), thinking ? 240_000 : 150_000);
     try {
-      return await fetch(endpoint(settings.baseUrl), {
+      return await fetch(chatEndpoint(settings.baseUrl), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -338,7 +335,11 @@ export async function authorDebate(input: string): Promise<AuthorResult> {
     const thesisTitle = cleanTitle(parsed.thesis?.title || topicFromPrompt(input));
     const thesisText = cleanText(parsed.thesis?.text || thesisTitle);
     const rawNodes = parsed.nodes.filter((node) => node.id !== "thesis");
+    if (!rawNodes.length) {
+      throw new Error("The model returned no argument nodes.");
+    }
     const merged = mergeGraph([], rawNodes, parsed.edges, "thesis", thesisTitle);
+    const warnings = new Set<string>();
 
     const debate = reconcileDebate({
       id: uid("debate"),
@@ -364,9 +365,14 @@ export async function authorDebate(input: string): Promise<AuthorResult> {
       position: input,
       authorNote: parsed.reply,
       chat: [message("user", input), message("assistant", parsed.reply, "intake")]
-    });
+    }, (warning) => warnings.add(warning));
 
-    return { debate, reply: parsed.reply, engine: "llm" };
+    return {
+      debate,
+      reply: parsed.reply,
+      engine: "llm",
+      warning: warnings.size ? [...warnings].join(" ") : undefined
+    };
   } catch (error) {
     const fallback = localAuthorDebate(input);
     fallback.warning = `Model unavailable (${error instanceof Error ? error.message : String(error)}). Using the local scaffolder.`;
@@ -389,6 +395,7 @@ export async function extendDebate(debate: Debate, input: string): Promise<Autho
     if (!merged.nodes.length && !parsed.reply.trim()) {
       throw new Error("The model returned an empty patch.");
     }
+    const warnings = new Set<string>();
     const next = reconcileDebate({
       ...debate,
       motion: parsed.motion ? cleanTitle(parsed.motion) : debate.motion,
@@ -397,11 +404,17 @@ export async function extendDebate(debate: Debate, input: string): Promise<Autho
       authorNote: parsed.reply || debate.authorNote,
       chat: debate.chat,
       updatedAt: Date.now()
-    });
-    return { debate: next, reply: parsed.reply || "I extended the map without adding new nodes.", engine: "llm" };
+    }, (warning) => warnings.add(warning));
+    return {
+      debate: next,
+      reply: parsed.reply || "I extended the map without adding new nodes.",
+      engine: "llm",
+      warning: warnings.size ? [...warnings].join(" ") : undefined
+    };
   } catch (error) {
     const fallback = localExtendDebate(debate, input);
-    fallback.warning = `Model unavailable (${error instanceof Error ? error.message : String(error)}). Added a local scaffold instead.`;
+    const reason = `Model unavailable (${error instanceof Error ? error.message : String(error)}). Added a local scaffold instead.`;
+    fallback.warning = [fallback.warning, reason].filter(Boolean).join(" ");
     return fallback;
   }
 }
@@ -646,6 +659,7 @@ function localExtendDebate(debate: Debate, input: string): AuthorResult {
     debate.nodes.find((node) => node.id === debate.thesisId) ??
     debate.nodes[0]!;
   const newNodeId = `local-${Date.now().toString(36)}`;
+  const warnings = new Set<string>();
   const next = reconcileDebate({
     ...debate,
     nodes: [
@@ -688,10 +702,10 @@ function localExtendDebate(debate: Debate, input: string): AuthorResult {
       }
     ],
     updatedAt: Date.now()
-  });
+  }, (warning) => warnings.add(warning));
 
   const landed = next.nodes.find((node) => node.id === newNodeId);
   const landedStance = landed?.stance ?? stance;
   const reply = `Added “${title}” as a ${landedStance === "pro" ? "supporting" : "challenging"} move against “${target.id === debate.thesisId ? "the motion" : shorten(target.title, 48)}”. Local mode is a scaffold; connect a model to develop the reasoning.`;
-  return { debate: next, reply, engine: "local" };
+  return { debate: next, reply, engine: "local", warning: warnings.size ? [...warnings].join(" ") : undefined };
 }

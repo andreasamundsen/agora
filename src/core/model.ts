@@ -232,13 +232,30 @@ export function reconcileDebate(raw: {
   chat?: ChatMessage[];
   createdAt?: number;
   updatedAt?: number;
-}): Debate {
+}, onWarning?: (message: string) => void): Debate {
   const now = Date.now();
   const nodes: DebateNode[] = [];
   const takenIds = new Set<string>();
   const usedTitles = new Set<string>();
 
+  if (raw.nodes.length > MAX_NODES) {
+    onWarning?.(`The map was capped at ${MAX_NODES} nodes; ${raw.nodes.length - MAX_NODES} additional node(s) were dropped.`);
+  }
+
+  let textCapped = false;
+  if (cleanInline(String(raw.thesisText ?? "")).length > MAX_TEXT) {
+    onWarning?.(`The thesis text was capped at ${MAX_TEXT} characters.`);
+    textCapped = true;
+  }
+  if (Array.isArray(raw.chat) && raw.chat.length > 80) {
+    onWarning?.("Chat history was capped at 80 messages; older messages were dropped.");
+  }
+
   for (const [index, candidate] of raw.nodes.slice(0, MAX_NODES).entries()) {
+    if (!textCapped && cleanInline(String(candidate.text ?? "")).length > MAX_TEXT) {
+      onWarning?.(`Argument text was capped at ${MAX_TEXT} characters.`);
+      textCapped = true;
+    }
     const node = normaliseNode(candidate, index);
     const baseId = node.id ? slugId(node.id, `node-${index + 1}`) : slugId(node.title, `node-${index + 1}`);
     node.id = uniqueId(baseId, takenIds);

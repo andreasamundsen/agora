@@ -24,7 +24,7 @@ npm run build
 npm start
 ```
 
-`npm start` serves the built app and the API from the same Node process. The server binds to `127.0.0.1` by default. Set `HOST=0.0.0.0` only if you deliberately want to expose it on your network — there is no authentication.
+`npm start` serves the built app and the API from the same Node process. The server binds to `127.0.0.1` by default. Set `HOST=0.0.0.0` only if you deliberately want to expose it on your network. There is no authentication, and the loopback Host check blocks ordinary LAN clients; do not treat this as a secure multi-user server.
 
 ### Desktop tester build
 
@@ -72,7 +72,7 @@ Open **Settings** (the gear). Agora speaks to any OpenAI-compatible `/chat/compl
 
 DeepSeek Flash supports thinking. Its **Reasoning effort** control offers **Off / Low / High / Max**; High is the default. Higher effort can improve difficult judgments, but it costs more and takes longer. Temperature is disabled for DeepSeek because the model ignores it; use reasoning effort instead. The app raises the output budget automatically when thinking is active so the JSON graph is not cut off.
 
-`Save & test` sends a tiny completion and reports the result. A key is stored only in `data/settings.json` on this machine (gitignored) and is never returned to the browser; the UI only learns whether a key exists. Environment fallbacks are supported (`AGORA_LLM_BASE_URL`, `AGORA_LLM_MODEL`, `AGORA_LLM_REASONING_EFFORT`, `AGORA_LLM_API_KEY`, `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY`). Copy `.env.example` to `.env` if you prefer that route; a saved settings file wins over the environment.
+`Save & test` first requests the provider's model list and, if necessary, sends a tiny completion; it gives up after 15 seconds with a visible error. A key is stored locally in Agora's data folder as plain JSON (gitignored in a source checkout) and is never returned to the browser; the UI only learns whether a key exists. Development runs can use environment fallbacks (`AGORA_LLM_BASE_URL`, `AGORA_LLM_MODEL`, `AGORA_LLM_REASONING_EFFORT`, `AGORA_LLM_API_KEY`, `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`, `DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY`). The packaged desktop build ignores ambient provider keys and `.env` files; enter the key in Settings. Copy `.env.example` to `.env` only for development; a saved settings file wins over the environment.
 
 The bench uses the same provider and key. Its **Judge model** field defaults to your configured model but can be overridden for the run — useful if you want a different model to judge the cartographer's map. The judge is intentional about its view of the arguments; if you want a different bias, point it at a different model. Each clash prompt includes the target's own outgoing relations and a shortest path to the thesis — full text for direct destinations, conclusions for deeper path nodes — without sending the whole map. Judgment makes **one model call per attack/undercut**, four at a time, plus **one weighing call** for the surviving direct case lines. Maps are capped at 40 clashes per sitting. Without a key, the bench runs a **local structural review** that demonstrates the procedure but is not a substantive judgment; it has no weighing pass, so it keeps the structural hard fall as a placeholder. The UI says so in the record.
 
@@ -95,6 +95,8 @@ Argdown is the interchange format, not a side export. `Export` gives you the sou
 
 The exporter writes each argument's reasoning as `//` comments beneath its relations, so the map survives a round trip through the official parser without inventing edges. Premise–conclusion structures (`(1) … ---- (3) …`) are imported and shown in the inspector.
 
+The map is capped at **42 nodes**, each argument at **520 characters**, and the chamber history at **80 messages**. When a model response or import reaches a cap, the UI reports what was shortened instead of dropping content silently. A debate file that cannot be parsed is skipped and named in a library warning; it is never overwritten by the store.
+
 `Import` accepts a paste or a file (`.argdown`, `.ad`, `.md`, `.txt`). It uses `@argdown/core`'s parser and model builder, reports syntax errors with line numbers, and refuses prose that contains no argument structure. A blank motion title falls back to the document's first heading/claim.
 
 Round-trip verified: **16-node reference map → Argdown → import → same 16 nodes and 16 relations** (`src/server/argdown-import.test.ts`).
@@ -114,10 +116,15 @@ src/
     index.ts            Express entry, Vite middleware in dev, static dist in prod
     routes.ts           REST API (below)
     store.ts            JSON debate store + first-run seeding
-    settings.ts         provider settings, env fallbacks, secret redaction
+    atomic-write.ts     non-destructive file replacement with retry/backup
+    settings.ts         provider settings, environment fallbacks, public key status
+    local-access.ts     loopback Host/Origin guard for the local API
+    provider-test.ts    timeout-bounded provider connection test
     llm.ts              intake/extension prompts, zod validation, local fallback
     judge.ts            per-clash model adjudication and strictness enforcement
     argdown-import.ts   Argdown → Debate using @argdown/core
+  shared/
+    provider-url.ts     base URL normalization and provider URL validation
   ui/
     App.tsx             workspace, library, chamber, stage controller, judgment controller
     components/         DebateGraph, ChatPanel, StagePanel, NodeInspector, JudgmentModal, JudgmentPanel, Modals
@@ -126,12 +133,14 @@ src/
 
 The domain layer is shared by server and browser. The graph layout and staging algorithm are deterministic given a seed, so the same map stages identically in a test and in the browser.
 
+The theme is applied before paint by `public/theme-init.js`. Production builds serve it from the app itself so the Content-Security-Policy can forbid inline scripts.
+
 ### API
 
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/api/health` | liveness and provider readiness |
-| `GET` | `/api/debates` | library summaries |
+| `GET` | `/api/debates` | library summaries; includes warnings for unreadable files |
 | `POST` | `/api/debates` | author from `{ text }` |
 | `GET` | `/api/debates/:id` | full debate |
 | `DELETE` | `/api/debates/:id` | remove |
@@ -140,7 +149,7 @@ The domain layer is shared by server and browser. The graph layout and staging a
 | `POST` | `/api/debates/:id/judge` | `{ standard, strictness, model? }` → judgment run |
 | `POST` | `/api/import` | `{ source, motion? }` |
 | `GET`/`PUT` | `/api/settings` | provider settings (key never returned) |
-| `POST` | `/api/settings/test` | one-token completion test |
+| `POST` | `/api/settings/test` | model-list check, then a tiny completion; 15-second limit |
 
 ## Tests and checks
 
@@ -150,13 +159,17 @@ npm run typecheck # tsc --noEmit
 npm run build     # vite production build
 ```
 
-## Privacy
+## Privacy and data flow
 
-- Debates and settings live in `data/`, which is gitignored.
-- API keys are stored server-side only. The browser receives `hasKey: true/false`.
-- Keys are never logged or included in API responses.
-- The server binds to loopback by default.
-- Speech synthesis is the browser's own; no audio leaves the machine.
+- Debates and settings live in `data/`, which is gitignored in a source checkout. In the packaged app the same files live under `%APPDATA%\Agora\data`.
+- API keys are stored server-side only. The browser receives `hasKey: true/false`; the key is never included in an API response or written to `agora.log`.
+- The desktop build stores settings as plain JSON and keeps them after uninstall. Use a key you can rotate; use **Forget saved key** in Settings before handing the machine on.
+- **When you connect a model, the motion, argument map, chat messages, and judgment context you submit are sent directly to the provider you configure.** There is no remote Agora service, account, proxy, or cloud sync. The provider's terms, retention policy, and jurisdiction govern that data; do not paste confidential material unless you accept that.
+- The local scaffolder and a local provider such as LM Studio/Ollama keep model work on this machine. The packaged app forces the local API to `127.0.0.1`.
+- There is **no telemetry, analytics, crash reporting, or auto-update**. The app does not phone home.
+- The desktop renderer is sandboxed with context isolation and a production Content-Security-Policy. It denies permission requests and keeps navigation inside the local app; the only external link (Argdown's site) opens in the default browser.
+- There is no authentication on the local API. It is intended for a single-user machine; do not expose it to a network you do not trust.
+- Speech synthesis uses the operating system's installed voices; Agora does not upload audio.
 
 ## Limits, honestly
 
@@ -166,7 +179,7 @@ npm run build     # vite production build
 - A judgment run lives in the browser session as a sidecar. Export the report if you want the record to survive a reload.
 - The model path is non-streaming: creating or extending a map can take up to a minute and the UI shows progress.
 - Staging is a textual performance with optional browser speech, not audio mixing or avatars.
-- Single-user, local-first. There is no authentication, collaboration, or cloud sync.
+- Single-user, stored locally. Model calls go to the provider you configure; there is no authentication, collaboration, or cloud sync.
 - Argdown import is graph-first. Formatting details that have no graph meaning are not preserved.
 
 ## Why the name

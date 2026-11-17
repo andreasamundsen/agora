@@ -3,20 +3,40 @@ import path from "node:path";
 import { DebateStore } from "./store";
 import { createApi } from "./routes";
 import { dataDir } from "./settings";
+import { isLocalApiRequest } from "./local-access";
 
 const PORT = Number(process.env.PORT || 5173);
 const HOST = process.env.HOST?.trim() || "127.0.0.1";
 const isProduction = process.env.NODE_ENV === "production" || process.argv.includes("--production");
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data:",
+  "font-src 'self'",
+  "connect-src 'self'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "frame-ancestors 'none'",
+  "frame-src 'none'"
+].join("; ");
 
 async function main(): Promise<void> {
   try {
-    // Node 20.12+; absent .env is fine.
-    process.loadEnvFile?.();
+    // Node 20.12+; absent .env is fine. Packaged builds must not adopt a
+    // provider configuration dropped next to the executable.
+    if (process.env.AGORA_PACKAGED !== "1") process.loadEnvFile?.();
   } catch {
     // No .env file — settings and defaults still apply.
   }
   const app = express();
   app.disable("x-powered-by");
+  app.use("/api", (req, res, next) => {
+    if (!isLocalApiRequest({ host: req.headers.host, origin: req.headers.origin })) {
+      return res.status(403).json({ error: "The local API is only available on this machine." });
+    }
+    next();
+  });
   app.use(express.json({ limit: "3mb" }));
 
   const store = new DebateStore();
@@ -24,6 +44,10 @@ async function main(): Promise<void> {
   app.use("/api", createApi(store));
 
   if (isProduction) {
+    app.use((_req, res, next) => {
+      res.setHeader("Content-Security-Policy", CONTENT_SECURITY_POLICY);
+      next();
+    });
     const dist = path.resolve(process.cwd(), "dist");
     app.use(express.static(dist));
     app.use((req, res, next) => {

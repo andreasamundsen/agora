@@ -1525,6 +1525,8 @@ button:disabled { cursor: not-allowed; }
 .modal-action-group { display: flex; align-items: center; gap: 8px; flex: none; }
 .modal-note { font-size: 10.5px; line-height: 1.5; color: var(--muted); max-width: 380px; }
 .modal-note b { color: var(--ink-soft); }
+.settings-version { display: block; margin-top: 4px; font-family: var(--mono); font-size: 10px; color: var(--muted); }
+.modal-note--privacy { max-width: 620px; margin: -8px 0 16px; }
 
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; position: relative; }
 .field-label {
@@ -1561,6 +1563,7 @@ button:disabled { cursor: not-allowed; }
 .field--inline { margin-top: 16px; }
 .field-hint { font-size: 9.5px; line-height: 1.5; color: var(--faint); }
 .field-hint code { font-family: var(--mono); font-size: 9px; background: rgba(33,29,24,0.05); padding: 1px 4px; border-radius: 2px; }
+.field-hint--error { color: var(--con); }
 
 .sample-row { margin-top: 25px; }
 .sample-label { display: block; margin-bottom: 8px; font-size: 8px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); }

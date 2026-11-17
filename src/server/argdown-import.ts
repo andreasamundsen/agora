@@ -304,7 +304,7 @@ export async function importArgdown(source: string, options: ImportOptions = {})
     origin: "imported",
     chat: [],
     authorNote: "Imported from Argdown. Inspect a node, ask for a missing argument, or stage the debate."
-  });
+  }, (warning) => warnings.push(warning));
 
   return { debate, warnings };
 }

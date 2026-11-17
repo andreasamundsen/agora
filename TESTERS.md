@@ -7,6 +7,8 @@ Agora is a local debate harness. You install it like a normal Windows app; no No
 1. Run `Agora-Setup-0.1.17.exe`.
 2. Windows will warn that the publisher is unknown. This build is intentionally unsigned: choose **More info → Run anyway**.
 3. The installer is per-user and does not need administrator rights. Agora opens when it finishes.
+4. To upgrade, close Agora first, then run the newer installer over it. Your debates stay in `%APPDATA%\Agora\data`.
+5. The SHA-256 checksum should match the file supplied with the build. A matching hash is not a code signature; it only confirms the file has not changed.
 
 ## What's new in 0.1.17
 
@@ -56,7 +58,7 @@ Agora opens with two demo debates and a local scaffold, but real argument genera
 4. Paste your own API key and press **Save & Test**.
 5. Close Settings and try **New debate**, the chat, or **Judge**.
 
-Provider calls go directly from your machine to the provider you choose. Agora does not provide or proxy a key.
+Provider calls go directly from your machine to the provider you choose. When you connect a model, the motion, argument map, chat messages, and judgment context you submit are sent to that provider; Agora does not proxy them through a server of its own. Your key is stored locally as plain JSON, so use a key you can rotate. Agora has no telemetry, crash reporting, analytics, or auto-update.
 
 ## What to try
 
@@ -72,6 +74,7 @@ Provider calls go directly from your machine to the provider you choose. Agora d
 - App log: `%APPDATA%\Agora\agora.log`
 - The app installs under `%LOCALAPPDATA%\Programs\Agora`
 - Uninstalling removes the app but keeps your debates.
+- If a debate file cannot be read, Agora leaves it in place and names it in a warning instead of deleting or overwriting it.
 - To reset completely, uninstall and delete `%APPDATA%\Agora`.
 
 This tester build stores settings locally as plain JSON. Use a key you can rotate, and do not use a shared production key.
@@ -80,9 +83,9 @@ This tester build stores settings locally as plain JSON. Use a key you can rotat
 
 There is no automatic feedback or auto-update. If something breaks, send:
 
-- the version shown in the app,
+- the version shown in Settings (bottom of the panel),
 - a short description of what you did,
-- `%APPDATA%\Agora\agora.log`,
+- `%APPDATA%\Agora\agora.log` (it contains local paths and the Windows username; review before sending),
 - an exported debate or judgment report if relevant.
 
 To replace this build, run a newer installer over it. Your debates stay in `%APPDATA%\Agora\data`.

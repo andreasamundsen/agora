@@ -52,7 +52,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
-export function fetchDebates(): Promise<{ debates: DebateSummary[] }> {
+export function fetchDebates(): Promise<{ debates: DebateSummary[]; warnings?: string[] }> {
   return request("/debates");
 }
 

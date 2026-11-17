@@ -1,11 +1,20 @@
 import { Router, Request, Response } from "express";
-import { DebateStore } from "./store";
+import { DebateStore, DebateReadError } from "./store";
 import { authorDebate, extendDebate } from "./llm";
 import { judgeDebate, MAX_CLASHES } from "./judge";
 import { ArgdownImportError, importArgdown } from "./argdown-import";
 import { toArgdown } from "../core/argdown";
 import { message } from "../core/model";
-import { getSettings, isReady, isReasoningEffort, publicSettings, saveSettings } from "./settings";
+import { getSettings, isReady, isReasoningEffort, publicSettings, saveSettings, SettingsError } from "./settings";
+import { providerUrlProblem } from "../shared/provider-url";
+import { testProviderConnection } from "./provider-test";
+
+function unreadableDebate(res: Response): Response {
+  return res.status(422).json({
+    error: "This debate file could not be read. It was left untouched in the data folder.",
+    code: "unreadable-debate"
+  });
+}
 
 export function createApi(store: DebateStore): Router {
   const api = Router();
@@ -17,7 +26,7 @@ export function createApi(store: DebateStore): Router {
 
   api.get("/debates", async (_req, res, next) => {
     try {
-      res.json({ debates: await store.list() });
+      res.json(await store.list());
     } catch (error) {
       next(error);
     }
@@ -29,6 +38,9 @@ export function createApi(store: DebateStore): Router {
       if (!debate) return res.status(404).json({ error: "Debate not found" });
       res.json({ debate });
     } catch (error) {
+      if (error instanceof DebateReadError) {
+        return unreadableDebate(res);
+      }
       next(error);
     }
   });
@@ -58,18 +70,28 @@ export function createApi(store: DebateStore): Router {
       const debate = await store.get(req.params.id);
       if (!debate) return res.status(404).json({ error: "Debate not found" });
 
+      const userChat = [...debate.chat, message("user", text)];
+      const warnings = new Set<string>();
+      if (userChat.length > 80) {
+        warnings.add("Chat history was capped at 80 messages; older messages were dropped.");
+      }
       const withUser = await store.save({
         ...debate,
-        chat: [...debate.chat, message("user", text)],
+        chat: userChat,
         updatedAt: Date.now()
       });
 
       const result = await extendDebate(withUser, text);
       const chat = [...result.debate.chat, message("assistant", result.reply, "expand")];
       if (result.warning) chat.push(message("system", result.warning, "error"));
+      if (chat.length > 80) {
+        warnings.add("Chat history was capped at 80 messages; older messages were dropped.");
+      }
       const saved = await store.save({ ...result.debate, chat, updatedAt: Date.now() });
-      res.json({ debate: saved, engine: result.engine, warning: result.warning });
+      if (result.warning) warnings.add(result.warning);
+      res.json({ debate: saved, engine: result.engine, warning: warnings.size ? [...warnings].join(" ") : undefined });
     } catch (error) {
+      if (error instanceof DebateReadError) return unreadableDebate(res);
       next(error);
     }
   });
@@ -96,6 +118,7 @@ export function createApi(store: DebateStore): Router {
       const run = await judgeDebate(debate, { model, standard, strictness });
       res.json({ run });
     } catch (error) {
+      if (error instanceof DebateReadError) return unreadableDebate(res);
       next(error);
     }
   });
@@ -121,6 +144,9 @@ export function createApi(store: DebateStore): Router {
       res.setHeader("Content-Disposition", `attachment; filename="${slug}.argdown"`);
       res.type("text/plain; charset=utf-8").send(toArgdown(debate));
     } catch (error) {
+      if (error instanceof DebateReadError) {
+        return res.status(422).type("text/plain").send("This debate file could not be read. It was left untouched in the data folder.");
+      }
       next(error);
     }
   });
@@ -145,47 +171,33 @@ export function createApi(store: DebateStore): Router {
     res.json({ settings: publicSettings() });
   });
 
-  api.put("/settings", (req, res) => {
-    const body = req.body ?? {};
-    const settings = saveSettings({
-      provider: typeof body.provider === "string" ? body.provider : undefined,
-      baseUrl: typeof body.baseUrl === "string" ? body.baseUrl : undefined,
-      model: typeof body.model === "string" ? body.model : undefined,
-      apiKey: typeof body.apiKey === "string" ? body.apiKey : undefined,
-      temperature: typeof body.temperature === "number" ? body.temperature : undefined,
-      reasoningEffort: isReasoningEffort(body.reasoningEffort) ? body.reasoningEffort : undefined
-    });
-    res.json({ settings });
+  api.put("/settings", (req, res, next) => {
+    try {
+      const body = req.body ?? {};
+      const settings = saveSettings({
+        provider: typeof body.provider === "string" ? body.provider : undefined,
+        baseUrl: typeof body.baseUrl === "string" ? body.baseUrl : undefined,
+        model: typeof body.model === "string" ? body.model : undefined,
+        apiKey: typeof body.apiKey === "string" ? body.apiKey : undefined,
+        temperature: typeof body.temperature === "number" ? body.temperature : undefined,
+        reasoningEffort: isReasoningEffort(body.reasoningEffort) ? body.reasoningEffort : undefined
+      });
+      res.json({ settings });
+    } catch (error) {
+      if (error instanceof SettingsError) return res.status(400).json({ error: error.message });
+      next(error);
+    }
   });
 
   api.post("/settings/test", async (_req, res, next) => {
     try {
       const settings = getSettings();
+      const problem = providerUrlProblem(settings.baseUrl, Boolean(settings.apiKey.trim()));
+      if (problem) return res.status(400).json({ error: problem });
       if (!isReady(settings)) {
         return res.json({ ok: false, message: "Add a base URL and model first. Local servers such as LM Studio or Ollama do not need a key." });
       }
-      const base = settings.baseUrl.replace(/\/+$/, "");
-      const started = Date.now();
-      const auth: Record<string, string> = settings.apiKey ? { Authorization: `Bearer ${settings.apiKey}` } : {};
-      const models = await fetch(`${base}/models`, { headers: auth }).catch(() => null);
-      if (models?.ok) {
-        return res.json({ ok: true, message: `Connected to ${settings.model}.`, latencyMs: Date.now() - started });
-      }
-      const chat = await fetch(`${base}/chat/completions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...auth },
-        body: JSON.stringify({
-          model: settings.model,
-          messages: [{ role: "user", content: "Reply with the single word: ready" }],
-          max_tokens: 8,
-          temperature: 0
-        })
-      });
-      if (!chat.ok) {
-        const detail = (await chat.text().catch(() => "")).slice(0, 300);
-        return res.json({ ok: false, message: `Provider rejected the request (${chat.status}). ${detail}` });
-      }
-      res.json({ ok: true, message: `Connected to ${settings.model}.`, latencyMs: Date.now() - started });
+      res.json(await testProviderConnection(settings));
     } catch (error) {
       next(error);
     }

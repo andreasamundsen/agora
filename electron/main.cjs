@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, Menu, nativeTheme, session } = require("electron");
+const { app, BrowserWindow, dialog, Menu, nativeTheme, session, shell } = require("electron");
 const fs = require("node:fs");
 const http = require("node:http");
 const net = require("node:net");
@@ -6,6 +6,46 @@ const path = require("node:path");
 const { spawn } = require("node:child_process");
 
 const APP_ID = "com.agora.debate";
+const AMBIENT_PROVIDER_ENV = [
+  "AGORA_LLM_API_KEY",
+  "AGORA_LLM_BASE_URL",
+  "AGORA_LLM_MODEL",
+  "AGORA_LLM_REASONING_EFFORT",
+  "OPENAI_API_KEY",
+  "OPENAI_BASE_URL",
+  "OPENAI_MODEL",
+  "DEEPSEEK_API_KEY",
+  "OPENROUTER_API_KEY"
+];
+
+const EXTERNAL_HOSTS = new Set(["argdown.org", "www.argdown.org"]);
+
+function isSameAppOrigin(url, appOrigin) {
+  try {
+    return new URL(url).origin === appOrigin;
+  } catch {
+    return false;
+  }
+}
+
+function isAllowedExternal(url) {
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.protocol === "https:" &&
+      !parsed.username &&
+      !parsed.password &&
+      EXTERNAL_HOSTS.has(parsed.hostname.toLowerCase())
+    );
+  } catch {
+    return false;
+  }
+}
+
+function openAllowedExternal(url) {
+  if (!isAllowedExternal(url)) return;
+  void shell.openExternal(url).catch(() => undefined);
+}
 
 app.setName("Agora");
 app.setAppUserModelId(APP_ID);
@@ -67,8 +107,12 @@ function startServer(port) {
     NODE_ENV: "production",
     HOST: "127.0.0.1",
     PORT: String(port),
-    AGORA_DATA_DIR: dataPath()
+    AGORA_DATA_DIR: dataPath(),
+    AGORA_PACKAGED: isDev ? "0" : "1"
   };
+  if (!isDev) {
+    for (const name of AMBIENT_PROVIDER_ENV) delete env[name];
+  }
   const child = spawn(process.execPath, [serverEntry()], {
     cwd: appRoot(),
     env,
@@ -164,7 +208,20 @@ async function createWindow() {
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
-  await mainWindow.loadURL(`http://127.0.0.1:${port}/`);
+
+  const appOrigin = `http://127.0.0.1:${port}`;
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    openAllowedExternal(url);
+    return { action: "deny" };
+  });
+  const guardNavigation = (event, url) => {
+    if (isSameAppOrigin(url, appOrigin)) return;
+    event.preventDefault();
+    openAllowedExternal(url);
+  };
+  mainWindow.webContents.on("will-navigate", guardNavigation);
+  mainWindow.webContents.on("will-redirect", guardNavigation);
+  await mainWindow.loadURL(`${appOrigin}/`);
   log("Window loaded.");
 }
 
@@ -190,6 +247,8 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(async () => {
     Menu.setApplicationMenu(null);
+    session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
+    session.defaultSession.setPermissionCheckHandler(() => false);
     fs.mkdirSync(userDataPath(), { recursive: true });
     logStream = fs.createWriteStream(logFile(), { flags: "a" });
     try {

@@ -1,7 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
+import { isLoopbackHostname, providerUrlProblem } from "../shared/provider-url";
 
 export type ReasoningEffort = "off" | "low" | "high" | "max";
+
+export class SettingsError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SettingsError";
+  }
+}
 
 export const REASONING_EFFORTS: ReasoningEffort[] = ["off", "low", "high", "max"];
 
@@ -52,7 +60,7 @@ export function settingsFile(): string {
 function isLocalUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
-    return ["localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]"].includes(parsed.hostname);
+    return isLoopbackHostname(parsed.hostname);
   } catch {
     return false;
   }
@@ -76,6 +84,9 @@ function readJson(file: string): Partial<StoredSettings> {
 }
 
 function envSettings(): Partial<StoredSettings> {
+  // The desktop build must not silently adopt an unrelated provider key from
+  // the user's environment. Development runs keep the fallback for convenience.
+  if (process.env.AGORA_PACKAGED === "1") return {};
   const apiKey =
     process.env.AGORA_LLM_API_KEY ??
     process.env.OPENAI_API_KEY ??
@@ -123,6 +134,7 @@ export function settingsSource(): "settings" | "env" | "none" {
 
 export function isReady(settings: StoredSettings): boolean {
   if (!settings.baseUrl.trim() || !settings.model.trim()) return false;
+  if (providerUrlProblem(settings.baseUrl, Boolean(settings.apiKey.trim()))) return false;
   return Boolean(settings.apiKey.trim()) || isLocalUrl(settings.baseUrl);
 }
 
@@ -160,6 +172,8 @@ export function saveSettings(input: Partial<StoredSettings>): PublicSettings {
       : current.reasoningEffort
   };
   if (input.apiKey === "") next.apiKey = "";
+  const problem = providerUrlProblem(next.baseUrl, Boolean(next.apiKey.trim()));
+  if (problem) throw new SettingsError(problem);
   fs.mkdirSync(dataDir(), { recursive: true });
   const tmp = `${settingsFile()}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(next, null, 2), "utf8");

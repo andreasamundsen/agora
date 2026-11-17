@@ -1,7 +1,7 @@
 {
   "name": "agora",
   "private": true,
-  "version": "0.1.17",
+  "version": "0.1.18",
   "type": "module",
   "main": "electron/main.cjs",
   "author": "Agora",
@@ -15,7 +15,7 @@
     "test": "vitest run",
     "electron": "electron .",
     "pack": "npm run build && npm run build:server && electron-builder --dir",
-    "dist": "npm run build && npm run build:server && electron-builder --win nsis"
+    "dist": "npm run build && npm run build:server && electron-builder --win nsis --publish never"
   },
   "dependencies": {
     "@argdown/core": "^2.0.1",
@@ -42,6 +42,7 @@
     "productName": "Agora",
     "copyright": "Agora",
     "asar": true,
+    "publish": null,
     "npmRebuild": false,
     "compression": "normal",
     "directories": {

@@ -4,6 +4,7 @@ import type { Debate } from "../../core/model";
 import type { UiSettings, ReasoningEffort } from "../api";
 import { downloadArgdown, fetchArgdown, saveSettings, testSettings } from "../api";
 import { applyThemePreference, readThemePreference, type ThemePreference } from "../theme";
+import { isLocalProvider, providerHost, providerUrlProblem } from "../../shared/provider-url";
 
 /* ------------------------------------------------------------------ */
 /* Shell                                                               */
@@ -451,7 +452,7 @@ export function ExportModal({ debate, onClose }: { debate: Debate; onClose: () =
 /* ------------------------------------------------------------------ */
 
 const PRESETS: { id: string; label: string; baseUrl: string; model: string; hint: string }[] = [
-  { id: "local", label: "Local only", baseUrl: "", model: "", hint: "No model. Structural scaffolding; every feature still works." },
+  { id: "local", label: "Local only", baseUrl: "", model: "", hint: "No model calls. Structural scaffolding only." },
   { id: "openai", label: "OpenAI", baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini", hint: "An API key is required." },
   { id: "deepseek", label: "DeepSeek", baseUrl: "https://api.deepseek.com", model: "deepseek-flash", hint: "DeepSeek V4.1 Flash. Thinking effort is configurable below." },
   { id: "lmstudio", label: "LM Studio", baseUrl: "http://localhost:1234/v1", model: "local-model", hint: "Run the local server on port 1234. No key needed." },
@@ -488,6 +489,10 @@ export function SettingsModal({
   const [status, setStatus] = useState<{ ok: boolean; message: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [forgetKey, setForgetKey] = useState(false);
+  const hasEffectiveKey = Boolean(apiKey.trim()) || (!forgetKey && settings.hasKey);
+  const urlProblem = providerUrlProblem(baseUrl, hasEffectiveKey);
+  const providerIsLocal = isLocalProvider(baseUrl);
+  const providerDestination = providerHost(baseUrl);
 
   const choosePreset = (id: string) => {
     setProvider(id);
@@ -503,6 +508,10 @@ export function SettingsModal({
   const persist = async (alsoTest: boolean) => {
     setError(null);
     setStatus(null);
+    if (urlProblem) {
+      setError(urlProblem);
+      return;
+    }
     if (alsoTest) setTesting(true);
     else setSaving(true);
     try {
@@ -544,12 +553,13 @@ export function SettingsModal({
         <>
           <div className="modal-note">
             {initialPreset.id !== "custom" && settings.ready ? `Currently using ${settings.model}.` : "Local reasoner active until a model is connected."}
+            <span className="settings-version">Agora {__APP_VERSION__}</span>
           </div>
           <div className="modal-action-group">
-            <button type="button" className="btn btn--ghost" onClick={() => void persist(true)} disabled={saving || testing}>
+            <button type="button" className="btn btn--ghost" onClick={() => void persist(true)} disabled={saving || testing || Boolean(urlProblem)}>
               {testing ? "Testing…" : "Save & test"}
             </button>
-            <button type="button" className="btn btn--primary" onClick={() => void persist(false)} disabled={saving || testing}>
+            <button type="button" className="btn btn--primary" onClick={() => void persist(false)} disabled={saving || testing || Boolean(urlProblem)}>
               {saving ? "Saving…" : "Save settings"}
             </button>
           </div>
@@ -560,6 +570,15 @@ export function SettingsModal({
         Agora speaks to any OpenAI-compatible chat-completions endpoint. The local scaffolder is always available;
         a model makes the arguments topic-specific.
       </p>
+      <p className="modal-note modal-note--privacy">
+        When a model is connected, the motion, argument text, chat messages, and judgment context you submit are
+        sent to the provider above. There is no remote Agora service, telemetry, crash reporting, or auto-update.
+      </p>
+      {settings.source === "env" && (
+        <p className="modal-note modal-note--privacy">
+          Provider settings are coming from environment variables. Entering a provider here overrides them.
+        </p>
+      )}
 
       <div className="field field--appearance">
         <span className="field-label">
@@ -611,6 +630,15 @@ export function SettingsModal({
             onChange={(event) => { setBaseUrl(event.target.value); setStatus(null); }}
             disabled={provider === "local"}
           />
+          {urlProblem && <span className="field-hint field-hint--error">{urlProblem}</span>}
+          {!urlProblem && baseUrl.trim() && !providerIsLocal && (
+            <span className="field-hint">
+              Requests and argument text go to <b>{providerDestination}</b>. {hasEffectiveKey ? "Your API key is sent there." : "Add a key below if this provider requires one."}
+            </span>
+          )}
+          {!urlProblem && providerIsLocal && (
+            <span className="field-hint">Local provider. Requests stay on this machine.</span>
+          )}
         </label>
         <label className="field">
           <span className="field-label">Model</span>
@@ -639,7 +667,8 @@ export function SettingsModal({
         />
         <div className="key-row">
           <span className="field-hint">
-            Stored only in <code>data/settings.json</code> on this machine. The key is never sent to the browser.
+            Stored locally in Agora's data folder as plain JSON. The server never returns it to the browser;
+            it is sent only to the provider above.
           </span>
           {settings.hasKey && (
             <button

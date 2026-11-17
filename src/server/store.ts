@@ -4,6 +4,7 @@ import path from "node:path";
 import { Debate, DebateSummary, debateSummary, reconcileDebate } from "../core/model";
 import { seedDebates } from "../core/demo";
 import { dataDir } from "./settings";
+import { replaceFile } from "./atomic-write";
 
 /**
  * One writer per store: every debate file is written through this class,
@@ -11,6 +12,26 @@ import { dataDir } from "./settings";
  */
 
 const ID_RE = /^[a-zA-Z0-9_-]{1,80}$/;
+
+export class DebateReadError extends Error {
+  readonly id: string;
+
+  constructor(id: string, message: string) {
+    super(message);
+    this.name = "DebateReadError";
+    this.id = id;
+  }
+}
+
+export interface DebateListResult {
+  debates: DebateSummary[];
+  warnings: string[];
+}
+
+function errorCode(error: unknown): string | undefined {
+  if (!error || typeof error !== "object" || !("code" in error)) return undefined;
+  return String((error as NodeJS.ErrnoException).code);
+}
 
 export class DebateStore {
   private dir: string;
@@ -48,30 +69,68 @@ export class DebateStore {
     return path.join(this.dir, `${id}.json`);
   }
 
-  private async read(id: string): Promise<Debate | null> {
+  private async read(id: string, onWarning?: (message: string) => void): Promise<Debate | null> {
+    let file: string;
     try {
-      const raw = await fsp.readFile(this.file(id), "utf8");
-      const parsed = JSON.parse(raw) as Debate;
-      if (!parsed || !Array.isArray(parsed.nodes) || !parsed.thesisId) return null;
+      file = this.file(id);
+    } catch (error) {
+      throw new DebateReadError(id, "The debate id is invalid.");
+    }
+
+    let raw: string;
+    try {
+      raw = await fsp.readFile(file, "utf8");
+    } catch (error) {
+      if (errorCode(error) === "ENOENT") return null;
+      throw new DebateReadError(id, "The debate file could not be read.");
+    }
+
+    let parsed: Debate;
+    try {
+      parsed = JSON.parse(raw) as Debate;
+    } catch {
+      throw new DebateReadError(id, "The debate file is not valid JSON.");
+    }
+    if (!parsed || !Array.isArray(parsed.nodes) || !Array.isArray(parsed.edges) || !parsed.thesisId) {
+      throw new DebateReadError(id, "The debate file is missing its graph.");
+    }
+
+    try {
       // Reconcile on read so files edited by hand or produced by an older
       // version still satisfy the current invariants.
-      return reconcileDebate(parsed);
+      return reconcileDebate(parsed, onWarning);
     } catch {
-      return null;
+      throw new DebateReadError(id, "The debate file has an invalid graph.");
     }
   }
 
-  async list(): Promise<DebateSummary[]> {
+  async list(): Promise<DebateListResult> {
+    return this.enqueue(() => this.listNow());
+  }
+
+  private async listNow(): Promise<DebateListResult> {
     const files = await fsp.readdir(this.dir).catch(() => [] as string[]);
     const debates: Debate[] = [];
+    const warnings: string[] = [];
     for (const file of files) {
       if (!file.endsWith(".json")) continue;
-      const debate = await this.read(file.slice(0, -5));
-      if (debate) debates.push(debate);
+      const id = file.slice(0, -5);
+      try {
+        const fileWarnings: string[] = [];
+        const debate = await this.read(id, (warning) => fileWarnings.push(warning));
+        if (debate) {
+          debates.push(debate);
+          if (fileWarnings.length) warnings.push(`“${id}” was loaded with changes: ${fileWarnings.join(" ")}`);
+        }
+      } catch (error) {
+        const reason = error instanceof DebateReadError ? error.message : "The debate file could not be read.";
+        warnings.push(`“${id}” was skipped: ${reason} It was left untouched.`);
+      }
     }
-    return debates
-      .sort((a, b) => b.updatedAt - a.updatedAt)
-      .map(debateSummary);
+    return {
+      debates: debates.sort((a, b) => b.updatedAt - a.updatedAt).map(debateSummary),
+      warnings
+    };
   }
 
   async get(id: string): Promise<Debate | null> {
@@ -91,13 +150,7 @@ export class DebateStore {
     const body = JSON.stringify(debate, null, 2);
     await this.enqueue(async () => {
       await fsp.writeFile(tmp, body, "utf8");
-      try {
-        await fsp.rename(tmp, file);
-      } catch (error) {
-        // Windows can refuse to replace an existing file. Remove and retry.
-        await fsp.rm(file, { force: true });
-        await fsp.rename(tmp, file);
-      }
+      await replaceFile(tmp, file);
     });
   }
 
