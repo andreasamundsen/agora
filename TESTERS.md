@@ -4,9 +4,16 @@ Agora is a local debate harness. You install it like a normal Windows app; no No
 
 ## Install
 
-1. Run `Agora-Setup-0.1.15.exe`.
+1. Run `Agora-Setup-0.1.16.exe`.
 2. Windows will warn that the publisher is unknown. This build is intentionally unsigned: choose **More info → Run anyway**.
 3. The installer is per-user and does not need administrator rights. Agora opens when it finishes.
+
+## What's new in 0.1.16
+
+- Judgment playback now follows **case branches**: one direct argument is selected at random, its own clash is heard first, then the replies attacking it and the replies attacking those, before the next direct argument.
+- Each branch is labelled `Case 1`, `Case 2`, and so on. The branch order is seeded per run, so replaying the same judgment shows the same sequence.
+- Direct-support cues remain one at a time and still appear before the first clash that attacks their source.
+- The clash verdicts, engine, and final outcome are unchanged. There is still no final support pulse.
 
 ## What's new in 0.1.15
 
