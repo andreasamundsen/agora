@@ -640,7 +640,7 @@ describe("judgment solver", () => {
     expect(summary.decisive[0]?.kind).toBe("support");
   });
 
-  it("orders direct clashes before replies and labels the waves", () => {
+  it("plays direct clashes and reply chains as seeded case branches", () => {
     const debate = debateWith([
       { from: "support", to: "thesis", type: "support" },
       { from: "objection", to: "thesis", type: "attack" },
@@ -657,11 +657,48 @@ describe("judgment solver", () => {
       "e_rebuttal_objection",
       "e_support_rebuttal"
     ]);
-    expect(ordered.waves.map((wave) => wave.label)).toEqual([
-      "The motion",
-      "The first case",
-      "The replies"
+    expect(ordered.waves.map((wave) => wave.label)).toEqual(["Case 1"]);
+  });
+
+  it("keeps each primary's reply chain together and seeds the branch order", () => {
+    const debate = reconcileDebate({
+      id: "branch-debate",
+      motion: "Should the branches pass?",
+      thesisId: "thesis",
+      nodes: [
+        { id: "thesis", kind: "statement", title: "The branches pass", text: "The branches pass." },
+        { id: "support", kind: "argument", title: "A support", text: "A reason.", stance: "pro" },
+        { id: "objection", kind: "argument", title: "An objection", text: "An objection.", stance: "con" },
+        { id: "rebuttal", kind: "argument", title: "A reply", text: "A reply.", stance: "pro" },
+        { id: "second", kind: "argument", title: "A second objection", text: "Another objection.", stance: "con" },
+        { id: "reply2", kind: "argument", title: "A second reply", text: "Another reply.", stance: "pro" }
+      ],
+      edges: [
+        { id: "e_support_thesis", from: "support", to: "thesis", type: "support" },
+        { id: "e_objection_thesis", from: "objection", to: "thesis", type: "attack" },
+        { id: "e_rebuttal_objection", from: "rebuttal", to: "objection", type: "attack" },
+        { id: "e_second_thesis", from: "second", to: "thesis", type: "attack" },
+        { id: "e_reply2_second", from: "reply2", to: "second", type: "attack" }
+      ]
+    });
+    const verdicts = [
+      verdict("e_reply2_second", "reply2", "second"),
+      verdict("e_objection_thesis", "objection", "thesis"),
+      verdict("e_second_thesis", "second", "thesis"),
+      verdict("e_rebuttal_objection", "rebuttal", "objection")
+    ];
+    const ordered = orderVerdicts(debate, verdicts, "branch-seed");
+    expect(ordered.verdicts).toHaveLength(4);
+    expect(ordered.waves).toHaveLength(2);
+    expect(ordered.waves.map((wave) => wave.label)).toEqual(["Case 1", "Case 2"]);
+    const branchPairs = ordered.waves
+      .map((wave) => [...wave.verdictIds].sort())
+      .sort((a, b) => a[0]!.localeCompare(b[0]!));
+    expect(branchPairs).toEqual([
+      ["e_objection_thesis", "e_rebuttal_objection"],
+      ["e_reply2_second", "e_second_thesis"]
     ]);
+    expect(orderVerdicts(debate, verdicts, "branch-seed")).toEqual(ordered);
   });
 
   it("writes a run with a decisive path and a readable summary", () => {
@@ -685,7 +722,7 @@ describe("judgment solver", () => {
     expect(run.outcome).toBe("falls");
     expect(run.summary).toContain("falls");
     expect(run.decisive[0]?.from).toBe("objection");
-    expect(run.waves[0]?.label).toBe("The motion");
+    expect(run.waves[0]?.label).toBe("Case 1");
     expect(run.assessments).toHaveLength(2);
     expect(run.balance).toMatchObject({ pro: 3, con: 3, assessed: true });
   });

@@ -724,66 +724,93 @@ export function buildCaseBalance(input: {
   };
 }
 
-function depthByNode(debate: Debate): Map<string, number> {
-  const adjacency = new Map<string, string[]>();
-  for (const node of debate.nodes) adjacency.set(node.id, []);
-  for (const edge of debate.edges) {
-    adjacency.get(edge.from)?.push(edge.to);
-    adjacency.get(edge.to)?.push(edge.from);
+function rankBySeed(value: string, seed: string): number {
+  let hash = 2166136261;
+  const input = `${seed}|${value}`;
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
   }
-  const depth = new Map<string, number>([[debate.thesisId, 0]]);
-  const queue = [debate.thesisId];
-  while (queue.length) {
-    const current = queue.shift()!;
-    for (const next of adjacency.get(current) ?? []) {
-      if (depth.has(next)) continue;
-      depth.set(next, (depth.get(current) ?? 0) + 1);
-      queue.push(next);
-    }
-  }
-  for (const node of debate.nodes) if (!depth.has(node.id)) depth.set(node.id, 1);
-  return depth;
+  return hash >>> 0;
 }
 
 /**
- * Put direct clashes on the motion first, then replies, then replies to
- * replies. The final fixed point is order-independent; this order exists so
- * the audience sees the case fall and then possibly recover.
+ * Play the record as small case narratives instead of global depth waves.
+ *
+ * A primary argument is any argument with a direct support, attack, or
+ * undercut edge to the motion. The primary order is seeded-random. For each
+ * primary, its own direct clash is heard first, then the outward reply chain:
+ * the arguments attacking it, then the arguments attacking those replies.
+ * Shared replies are heard once, in the first branch that reaches them.
  */
 export function orderVerdicts(
   debate: Debate,
-  verdicts: ClashJudgment[]
+  verdicts: ClashJudgment[],
+  seed: string = debate.id
 ): { verdicts: ClashJudgment[]; waves: JudgmentWave[] } {
-  const depth = depthByNode(debate);
-  const sorted = [...verdicts].sort((a, b) => {
-    const da = depth.get(a.to) ?? 1;
-    const db = depth.get(b.to) ?? 1;
-    if (da !== db) return da - db;
-    const sa = depth.get(a.from) ?? 1;
-    const sb = depth.get(b.from) ?? 1;
-    if (sa !== sb) return sa - sb;
-    return a.edgeId.localeCompare(b.edgeId);
-  });
-
-  const labels = ["The motion", "The first case", "The replies", "The deeper record"];
-  const groups = new Map<number, ClashJudgment[]>();
-  for (const verdict of sorted) {
-    const raw = depth.get(verdict.to) ?? 1;
-    const wave = Math.min(raw, labels.length - 1);
-    const list = groups.get(wave) ?? [];
+  const byEdge = new Map(verdicts.map((verdict) => [verdict.edgeId, verdict]));
+  const incoming = new Map<string, ClashJudgment[]>();
+  for (const verdict of verdicts) {
+    const edge = debate.edges.find((candidate) => candidate.id === verdict.edgeId);
+    if (!edge || !isClashEdge(edge)) continue;
+    const list = incoming.get(verdict.to) ?? [];
     list.push(verdict);
-    groups.set(wave, list);
+    incoming.set(verdict.to, list);
+  }
+  for (const list of incoming.values()) {
+    list.sort((a, b) => rankBySeed(a.edgeId, seed) - rankBySeed(b.edgeId, seed) || a.edgeId.localeCompare(b.edgeId));
   }
 
-  const waves: JudgmentWave[] = [...groups.entries()]
-    .sort(([a], [b]) => a - b)
-    .map(([index, list]) => ({
-      id: `wave-${index}`,
-      label: labels[index] ?? "The record",
-      verdictIds: list.map((verdict) => verdict.edgeId)
-    }));
+  const primaryIds = [...new Set(
+    debate.edges
+      .filter((edge) => edge.to === debate.thesisId && (edge.type === "support" || isClashEdge(edge)))
+      .map((edge) => edge.from)
+  )].sort((a, b) => rankBySeed(a, seed) - rankBySeed(b, seed) || a.localeCompare(b));
 
-  return { verdicts: sorted, waves };
+  const visited = new Set<string>();
+  const ordered: ClashJudgment[] = [];
+  const waves: JudgmentWave[] = [];
+
+  const push = (verdict: ClashJudgment, branch: string[]) => {
+    if (visited.has(verdict.edgeId)) return;
+    visited.add(verdict.edgeId);
+    ordered.push(verdict);
+    branch.push(verdict.edgeId);
+  };
+
+  const walk = (targetId: string, branch: string[]) => {
+    for (const reply of incoming.get(targetId) ?? []) {
+      if (visited.has(reply.edgeId)) continue;
+      push(reply, branch);
+      walk(reply.from, branch);
+    }
+  };
+
+  let caseNumber = 0;
+  for (const primaryId of primaryIds) {
+    const branch: string[] = [];
+    const direct = debate.edges
+      .filter((edge) => edge.from === primaryId && edge.to === debate.thesisId && isClashEdge(edge))
+      .map((edge) => byEdge.get(edge.id))
+      .filter((verdict): verdict is ClashJudgment => Boolean(verdict))
+      .sort((a, b) => rankBySeed(a.edgeId, seed) - rankBySeed(b.edgeId, seed) || a.edgeId.localeCompare(b.edgeId));
+    for (const verdict of direct) push(verdict, branch);
+    walk(primaryId, branch);
+    if (!branch.length) continue;
+    caseNumber += 1;
+    waves.push({ id: `case-${caseNumber}`, label: `Case ${caseNumber}`, verdictIds: branch });
+  }
+
+  const remaining = verdicts
+    .filter((verdict) => !visited.has(verdict.edgeId))
+    .sort((a, b) => rankBySeed(a.edgeId, seed) - rankBySeed(b.edgeId, seed) || a.edgeId.localeCompare(b.edgeId));
+  if (remaining.length) {
+    const branch: string[] = [];
+    for (const verdict of remaining) push(verdict, branch);
+    waves.push({ id: "the-record", label: "The record", verdictIds: branch });
+  }
+
+  return { verdicts: ordered, waves };
 }
 
 function confidenceRank(confidence: JudgmentConfidence): number {
@@ -1026,7 +1053,7 @@ export function buildJudgmentRun(input: {
   createdAt?: number;
 }): JudgmentRun {
   const assessments = input.assessments ?? [];
-  const ordered = orderVerdicts(input.debate, input.verdicts);
+  const ordered = orderVerdicts(input.debate, input.verdicts, input.id);
   const summary = judgmentSummary(input.debate, ordered.verdicts, input.standard, assessments);
   return {
     id: input.id,
