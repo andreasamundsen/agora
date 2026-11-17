@@ -4,11 +4,16 @@ Agora is a local debate harness. You install it like a normal Windows app; no No
 
 ## Install
 
-1. Run `Agora-Setup-0.1.19.exe`.
+1. Run `Agora-Setup-0.1.20.exe`.
 2. Windows will warn that the publisher is unknown. This build is intentionally unsigned: choose **More info → Run anyway**.
 3. The installer is per-user and does not need administrator rights. Agora opens when it finishes.
 4. To upgrade, close Agora first, then run the newer installer over it. Your debates stay in `%APPDATA%\Agora\data`.
 5. The SHA-256 checksum should match the file supplied with the build. A matching hash is not a code signature; it only confirms the file has not changed.
+
+## What's new in 0.1.20
+
+- Local-model judgment now accepts the `null` values that models such as `qwen/qwen3-14b` emit for the optional `quality` or `impact` field they are not using. Previously the weighing pass rejected that response and fell back to structural weights.
+- A one-clash local judgment test now completes with model-assessed balance and no warning.
 
 ## What's new in 0.1.19
 

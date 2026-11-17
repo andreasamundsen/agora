@@ -166,6 +166,10 @@ function normalizeAssessmentRaw(value: unknown): unknown {
       const copy = { ...(line as Record<string, unknown>) };
       for (const key of ["side", "quality", "impact", "confidence"] as const) {
         const field = copy[key];
+        if (field === null || field === undefined || (typeof field === "string" && field.trim() === "")) {
+          if (key === "quality" || key === "impact") delete copy[key];
+          continue;
+        }
         if (typeof field === "string") copy[key] = field.trim().toLowerCase();
       }
       return copy;
