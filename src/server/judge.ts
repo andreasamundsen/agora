@@ -97,6 +97,12 @@ For a SUPPORT, rate its quality:
 - moderate: relevant and plausible, but with a real weakness, gap, or unresolved pressure.
 - weak: relevant but poorly grounded, overbroad, circular, or easily answered.
 
+For a SUPPORT, also certify "proves":
+- proves: true only if this one line, on its own, is sufficient to establish the thesis under the standard of proof. It must be complete, load-bearing, and free of a real gap or unresolved pressure. A strong line is not automatically a proof.
+- A certified proof must have quality "strong" and confidence "high"; otherwise it will not count.
+- If there is any material weakness, unstated premise, or live pressure on the line, set proves to false.
+- For a direct ATTACK, proves is always false.
+
 For an ATTACK, rate its impact:
 - decisive: it defeats a load-bearing premise, inference, or the thesis itself.
 - material: it seriously damages the target's case.
@@ -104,7 +110,7 @@ For an ATTACK, rate its impact:
 
 Confidence is your confidence in the rating: high, medium, or low.
 
-Give every line a short cluster key. Lines that are variations of the same premise or mechanism must share the same cluster key; genuinely distinct lines get different keys. Do not adjust a rating for the standard of proof. Rate the line on its own merits.
+Give every line a short cluster key. Lines that are variations of the same premise or mechanism must share the same cluster key; genuinely distinct lines get different keys. Quality and impact are intrinsic ratings; proof certification is the only judgment that is relative to the standard of proof below.
 
 Return JSON only:
 {
@@ -114,19 +120,21 @@ Return JSON only:
       "side": "pro" | "con",
       "quality": "strong" | "moderate" | "weak",
       "impact": "decisive" | "material" | "marginal",
+      "proves": true | false,
       "confidence": "high" | "medium" | "low",
       "cluster": "short_shared_key",
       "reasoning": "1-2 sentences pointing to the decisive quality or weakness."
     }
   ]
 }
-For a pro line use quality; for a con line use impact. Do not invent lines or ids.`;
+For a pro line use quality and proves; for a con line use impact and proves false. Do not invent lines or ids.`;
 
 const AssessmentLineSchema = z.object({
   edgeId: z.string(),
   side: z.enum(["pro", "con"]).catch("pro"),
   quality: z.enum(["strong", "moderate", "weak"]).optional(),
   impact: z.enum(["decisive", "material", "marginal"]).optional(),
+  proves: z.boolean().catch(false),
   confidence: z.enum(["high", "medium", "low"]).catch("medium"),
   cluster: z.string().catch(""),
   reasoning: z.string().catch("")
@@ -167,7 +175,8 @@ function normalizeAssessmentRaw(value: unknown): unknown {
 function assessmentPrompt(
   debate: Debate,
   provisional: ReturnType<typeof solveJudgment>,
-  verdicts: ClashJudgment[]
+  verdicts: ClashJudgment[],
+  standard: StandardOfProof
 ): string | null {
   const supportEdges = debate.edges.filter(
     (edge) =>
@@ -214,6 +223,9 @@ ${debate.motion}
 
 THE THESIS
 ${cleanText(debate.thesisText) || debate.motion}
+
+STANDARD OF PROOF
+${STANDARD_LABEL[standard]}. ${STANDARD_NOTE[standard]}
 
 --- BEGIN UNTRUSTED ARGUMENT DATA ---
 
@@ -441,7 +453,7 @@ async function assessCaseLines(
   warnings: string[]
 ): Promise<CaseLineAssessment[]> {
   const provisional = solveJudgment(debate, verdicts, standard);
-  const prompt = assessmentPrompt(debate, provisional, verdicts);
+  const prompt = assessmentPrompt(debate, provisional, verdicts, standard);
   if (!prompt) return [];
 
   const sides = new Map<string, CaseSide>();
@@ -471,6 +483,7 @@ async function assessCaseLines(
         side,
         quality: side === "pro" ? record.quality ?? "moderate" : undefined,
         impact: side === "con" ? record.impact ?? "material" : undefined,
+        proves: side === "pro" ? record.proves === true : undefined,
         confidence: record.confidence,
         cluster: normalizeCluster(record.cluster, record.edgeId),
         reasoning: cleanReasoning(record.reasoning)

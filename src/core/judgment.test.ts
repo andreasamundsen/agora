@@ -92,13 +92,14 @@ function assess(
   side: "pro" | "con",
   rating: ArgumentQuality | AttackImpact,
   cluster: string,
-  confidence: JudgmentConfidence = "high"
+  confidence: JudgmentConfidence = "high",
+  proves = false
 ): CaseLineAssessment {
   return {
     edgeId,
     side,
     ...(side === "pro"
-      ? { quality: rating as ArgumentQuality }
+      ? { quality: rating as ArgumentQuality, proves }
       : { impact: rating as AttackImpact }),
     confidence,
     cluster,
@@ -442,6 +443,109 @@ describe("judgment solver", () => {
     expect(snapshot.outcome).toBe("undecided");
     expect(snapshot.hardDefeats).toEqual([]);
     expect(snapshot.withheldHardDefeats).toEqual(["e_objection_thesis"]);
+  });
+
+  it("treats a certified proof and a corroborated defeat as a contested record", () => {
+    const debate = weightedDebate(1, 1);
+    const snapshot = solveJudgment(
+      debate,
+      [verdict("e_con0_thesis", "con0", "thesis")],
+      "pro",
+      [
+        assess("e_pro0_thesis", "pro", "strong", "pro-line", "high", true),
+        assess("e_con0_thesis", "con", "decisive", "con-line")
+      ]
+    );
+    expect(snapshot.proofs).toEqual(["e_pro0_thesis"]);
+    expect(snapshot.hardDefeats).toEqual(["e_con0_thesis"]);
+    expect(snapshot.proofConflict).toBe(true);
+    expect(snapshot.thesisStatus).toBe("contested");
+    expect(snapshot.outcome).toBe("undecided");
+    expect(snapshot.balance.lines.find((line) => line.edgeId === "e_pro0_thesis")?.proves).toBe(true);
+  });
+
+  it("explains a certified proof and corroborated defeat as a contested tie", () => {
+    const debate = weightedDebate(1, 1);
+    const verdicts = [verdict("e_con0_thesis", "con0", "thesis")];
+    const assessments = [
+      assess("e_pro0_thesis", "pro", "strong", "pro-line", "high", true),
+      assess("e_con0_thesis", "con", "decisive", "con-line")
+    ];
+    const summary = judgmentSummary(debate, verdicts, "pro", assessments);
+    expect(summary.outcome).toBe("undecided");
+    expect(summary.summary).toContain("neither can displace the other");
+    expect(summary.decisive.map((step) => step.edgeId)).toEqual(["e_pro0_thesis", "e_con0_thesis"]);
+  });
+
+  it("lets a certified proof carry the motion without a direct defeat", () => {
+    const debate = weightedDebate(1, 1);
+    const snapshot = solveJudgment(
+      debate,
+      [verdict("e_con0_thesis", "con0", "thesis", "weakens")],
+      "pro",
+      [
+        assess("e_pro0_thesis", "pro", "strong", "pro-line", "high", true),
+        assess("e_con0_thesis", "con", "material", "con-line")
+      ]
+    );
+    expect(snapshot.proofs).toEqual(["e_pro0_thesis"]);
+    expect(snapshot.proofConflict).toBe(false);
+    expect(snapshot.thesisStatus).toBe("standing");
+    expect(snapshot.outcome).toBe("stands");
+  });
+
+  it("lets a certified proof stand when the direct defeat is not corroborated", () => {
+    const debate = weightedDebate(1, 1);
+    const snapshot = solveJudgment(
+      debate,
+      [verdict("e_con0_thesis", "con0", "thesis")],
+      "pro",
+      [
+        assess("e_pro0_thesis", "pro", "strong", "pro-line", "high", true),
+        assess("e_con0_thesis", "con", "material", "con-line")
+      ]
+    );
+    expect(snapshot.proofs).toEqual(["e_pro0_thesis"]);
+    expect(snapshot.hardDefeats).toEqual([]);
+    expect(snapshot.withheldHardDefeats).toEqual(["e_con0_thesis"]);
+    expect(snapshot.proofConflict).toBe(false);
+    expect(snapshot.thesisStatus).toBe("standing");
+    expect(snapshot.outcome).toBe("stands");
+  });
+
+  it("does not certify a proof when a live attack keeps the support under pressure", () => {
+    const debate = debateWith([
+      { from: "support", to: "thesis", type: "support" },
+      { from: "objection", to: "support", type: "attack" }
+    ]);
+    const snapshot = solveJudgment(
+      debate,
+      [verdict("e_objection_support", "objection", "support", "weakens")],
+      "pro",
+      [
+        assess("e_support_thesis", "pro", "strong", "pro-line", "high", true),
+        assess("e_objection_support", "con", "material", "attack-line")
+      ]
+    );
+    expect(snapshot.proofs).toEqual([]);
+    expect(snapshot.proofConflict).toBe(false);
+  });
+
+  it("does not certify a proof without the high-confidence bar", () => {
+    const debate = weightedDebate(1, 1);
+    const snapshot = solveJudgment(
+      debate,
+      [verdict("e_con0_thesis", "con0", "thesis")],
+      "pro",
+      [
+        assess("e_pro0_thesis", "pro", "strong", "pro-line", "medium", true),
+        assess("e_con0_thesis", "con", "decisive", "con-line")
+      ]
+    );
+    expect(snapshot.proofs).toEqual([]);
+    expect(snapshot.proofConflict).toBe(false);
+    expect(snapshot.thesisStatus).toBe("defeated");
+    expect(snapshot.outcome).toBe("falls");
   });
 
   it("lets an irrelevant direct attack leave the motion standing", () => {

@@ -30,6 +30,8 @@ export interface CaseLineAssessment {
   impact?: AttackImpact;
   confidence: JudgmentConfidence;
   cluster: string;
+  /** A direct pro line explicitly certified as sufficient to establish the thesis. */
+  proves?: boolean;
   reasoning?: string;
 }
 
@@ -47,6 +49,8 @@ export interface CaseLineWeight {
   weight: number;
   quality?: ArgumentQuality;
   impact?: AttackImpact;
+  /** Certified as sufficient to establish the thesis. Pro lines only. */
+  proves?: boolean;
   reasoning?: string;
 }
 
@@ -92,6 +96,10 @@ export interface JudgmentSnapshot {
   hardDefeats: string[];
   /** Direct `defeats` rulings that did not meet the corroboration rule. */
   withheldHardDefeats: string[];
+  /** Direct pro supports certified as sufficient to establish the thesis. */
+  proofs: string[];
+  /** A certified proof and a corroborated direct defeat both exist. */
+  proofConflict: boolean;
   thesisStatus: ArgumentStatus;
   /** Support edges from a standing argument to the thesis. */
   liveSupports: string[];
@@ -349,6 +357,18 @@ export function solveJudgment(
   let thesisStatus = statuses[debate.thesisId] ?? "contested";
   const verdictByEdge = new Map(verdicts.map((verdict) => [verdict.edgeId, verdict]));
   const assessmentByEdge = new Map(assessments.map((item) => [item.edgeId, item]));
+  const setThesisStatus = (next: ArgumentStatus) => {
+    if (thesisStatus === next) return;
+    for (const list of [standing, defeated, contested]) {
+      const index = list.indexOf(debate.thesisId);
+      if (index >= 0) list.splice(index, 1);
+    }
+    thesisStatus = next;
+    statuses[debate.thesisId] = next;
+    if (next === "standing") standing.push(debate.thesisId);
+    else if (next === "defeated") defeated.push(debate.thesisId);
+    else contested.push(debate.thesisId);
+  };
 
   const supportEdges = debate.edges.filter(
     (edge) => edge.type === "support" && edge.to === debate.thesisId
@@ -434,12 +454,32 @@ export function solveJudgment(
   const withheldHardDefeats = directDefeatEdges
     .filter((edge) => !hardDefeatIds.has(edge.id))
     .map((edge) => edge.id);
-  if (assessments.length > 0 && thesisStatus === "defeated" && hardDefeatEdges.length === 0) {
-    thesisStatus = "contested";
-    statuses[debate.thesisId] = "contested";
-    const defeatedIndex = defeated.indexOf(debate.thesisId);
-    if (defeatedIndex >= 0) defeated.splice(defeatedIndex, 1);
-    if (!contested.includes(debate.thesisId)) contested.push(debate.thesisId);
+
+  // A proof is a higher bar than a strong support: it must be clean, strong,
+  // high-confidence, and explicitly certified by the weighing pass as carrying
+  // the thesis. A proof and a corroborated direct defeat are opposing decisive
+  // claims; they leave the thesis contested rather than letting either side's
+  // binary rule decide the motion alone.
+  const proofEdges = supportEdges.filter((edge) => {
+    if (statuses[edge.from] !== "standing") return false;
+    if (!cleanSupports.includes(edge.id)) return false;
+    const assessment = assessmentByEdge.get(edge.id);
+    return (
+      assessment?.side === "pro" &&
+      assessment.proves === true &&
+      assessment.quality === "strong" &&
+      assessment.confidence === "high"
+    );
+  });
+  const proofIds = new Set(proofEdges.map((edge) => edge.id));
+  const proofConflict = proofIds.size > 0 && hardDefeatIds.size > 0;
+
+  if (proofConflict) {
+    setThesisStatus("contested");
+  } else if (proofIds.size > 0) {
+    setThesisStatus("standing");
+  } else if (assessments.length > 0 && thesisStatus === "defeated" && hardDefeatEdges.length === 0) {
+    setThesisStatus("contested");
   }
 
   const unsupportedThesis = Boolean(thesis) && thesisStatus === "standing" && liveSupports.length === 0;
@@ -458,7 +498,11 @@ export function solveJudgment(
   // it carries even the side with the burden; only a close record lets the
   // standard decide. A direct defeat of the thesis is still a hard fall.
   let outcome: JudgmentOutcome;
-  if (thesisStatus === "defeated") {
+  if (proofConflict) {
+    outcome = "undecided";
+  } else if (proofIds.size > 0) {
+    outcome = "stands";
+  } else if (thesisStatus === "defeated") {
     outcome = "falls";
   } else if (balance.pro <= 0) {
     outcome = "unestablished";
@@ -488,6 +532,8 @@ export function solveJudgment(
     weakened: debate.nodes.filter((node) => weakened.has(node.id)).map((node) => node.id),
     hardDefeats: [...hardDefeatIds],
     withheldHardDefeats,
+    proofs: [...proofIds],
+    proofConflict,
     thesisStatus,
     liveSupports,
     liveAttacks,
@@ -571,6 +617,12 @@ export function buildCaseBalance(input: {
       independence: 1,
       weight: base * confidence * pressure,
       quality,
+      proves:
+        assessment?.side === "pro" &&
+        assessment.proves === true &&
+        assessment.quality === "strong" &&
+        assessment.confidence === "high" &&
+        clean.has(edgeId),
       reasoning: assessment?.side === "pro" ? assessment.reasoning : undefined
     });
   }
@@ -807,6 +859,34 @@ export function judgmentSummary(
   const proLines = topCaseLines(snapshot.balance, "pro");
   const conLines = topCaseLines(snapshot.balance, "con");
   const margin = `${snapshot.balance.margin >= 0 ? "+" : ""}${snapshot.balance.margin}`;
+  const proofSteps = snapshot.proofs.flatMap((edgeId) => {
+    const edge = debate.edges.find((candidate) => candidate.id === edgeId);
+    if (!edge) return [];
+    return [{ edgeId, from: edge.from, to: edge.to, kind: "support" as const }];
+  });
+  const conflictSteps = snapshot.hardDefeats.flatMap((edgeId) => {
+    const edge = debate.edges.find((candidate) => candidate.id === edgeId);
+    if (!edge) return [];
+    return [
+      {
+        edgeId,
+        from: edge.from,
+        to: edge.to,
+        kind: "attack" as const,
+        verdict: judgmentForEdge(verdicts, edgeId)?.verdict
+      }
+    ];
+  });
+
+  if (snapshot.proofConflict) {
+    return {
+      outcome: "undecided",
+      balance: snapshot.balance,
+      summary:
+        "The motion remains contested. A clean direct support is certified as a proof, while a direct objection is a live defeat; neither can displace the other on this record.",
+      decisive: [...proofSteps, ...conflictSteps].slice(0, 6)
+    };
+  }
 
   if (snapshot.outcome === "falls") {
     if (snapshot.thesisStatus === "defeated") {
@@ -838,6 +918,15 @@ export function judgmentSummary(
   }
 
   if (snapshot.outcome === "stands") {
+    if (snapshot.proofs.length) {
+      return {
+        outcome: snapshot.outcome,
+        balance: snapshot.balance,
+        summary:
+          "The motion stands. A clean direct support is certified as a proof of the thesis; no corroborated direct defeat survives against it.",
+        decisive: proofSteps
+      };
+    }
     return {
       outcome: snapshot.outcome,
       balance: snapshot.balance,
@@ -961,7 +1050,11 @@ export function judgmentMarkdown(debate: Debate, run: JudgmentRun): string {
     lines.push(`- **Basis:** ${run.balance.assessed ? "judge-rated case lines" : "structural weights"}`);
     lines.push("");
     for (const line of run.balance.lines) {
-      const rating = line.side === "pro" ? line.quality ? QUALITY_LABEL[line.quality] : "Moderate" : line.impact ? IMPACT_LABEL[line.impact] : "Material";
+      const rating = line.proves
+        ? "Proves"
+        : line.side === "pro"
+          ? line.quality ? QUALITY_LABEL[line.quality] : "Moderate"
+          : line.impact ? IMPACT_LABEL[line.impact] : "Material";
       lines.push(`- **${titleOf(debate, line.sourceId)}** — ${line.side === "pro" ? "pro" : "con"}, ${rating}, ${line.weight} points`);
     }
     lines.push("");
