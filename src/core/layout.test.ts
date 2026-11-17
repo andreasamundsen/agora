@@ -92,6 +92,19 @@ describe("computeLayout", () => {
     expect(proReplyTwo.parentId).toBe("pro-reply");
   });
 
+  it("anchors replies to their parent's vertical centre", () => {
+    const layout = computeLayout(makeDebate(), "thread");
+    const parent = card(layout, "pro1");
+    const reply = card(layout, "pro-reply");
+    const replyTwo = card(layout, "pro-reply-two");
+    const conParent = card(layout, "con1");
+    const conReply = card(layout, "con-reply");
+
+    expect(reply.y + reply.height / 2).toBeCloseTo(parent.y + parent.height / 2, 5);
+    expect(replyTwo.y + replyTwo.height / 2).toBeCloseTo(reply.y + reply.height / 2, 5);
+    expect(conReply.y + conReply.height / 2).toBeCloseTo(conParent.y + conParent.height / 2, 5);
+  });
+
   it("stacks sibling replies around their parent without overlapping", () => {
     const debate = makeDebate();
     debate.nodes.push(makeNode("pro-reply-b", "con", "Another reply to pro one"));
@@ -105,6 +118,11 @@ describe("computeLayout", () => {
     const upper = first.y < second.y ? first : second;
     const lower = first.y < second.y ? second : first;
     expect(upper.y + upper.height).toBeLessThanOrEqual(lower.y);
+    const parent = card(layout, "pro1");
+    expect((first.y + first.height / 2 + second.y + second.height / 2) / 2).toBeCloseTo(
+      parent.y + parent.height / 2,
+      5
+    );
   });
 
   it("grows argument cards to fit a third line of text", () => {

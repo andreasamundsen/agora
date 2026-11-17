@@ -37,6 +37,7 @@ const CARD_WIDTH = 248;
 const THESIS_WIDTH = 296;
 const THREAD_GAP = 52;
 const THREAD_SIBLING_GAP = 18;
+const THREAD_ROW_GAP = 32;
 
 function cardSize(node: DebateNode, isThesis: boolean): { width: number; height: number } {
   if (isThesis) {
@@ -357,12 +358,12 @@ function computeThreadLayout(debate: Debate): GraphLayout {
 
   const placeDirectLane = (roots: DebateNode[], direction: -1 | 1, branch: "pro" | "con") => {
     const sizes = roots.map((node) => cardSize(node, false));
-    const totalHeight = sizes.reduce((sum, size) => sum + size.height, 0) + ROW_GAP * Math.max(0, roots.length - 1);
+    const totalHeight = sizes.reduce((sum, size) => sum + size.height, 0) + THREAD_ROW_GAP * Math.max(0, roots.length - 1);
     let y = -totalHeight / 2;
     roots.forEach((node, index) => {
       const size = sizes[index]!;
       addCard(node, direction * COLUMN_GAP, y, 1, branch, thesis.id);
-      y += size.height + ROW_GAP;
+      y += size.height + THREAD_ROW_GAP;
     });
   };
 
@@ -371,32 +372,50 @@ function computeThreadLayout(debate: Debate): GraphLayout {
     const laneDepths = [...lanes.keys()].sort((a, b) => a - b);
     for (const depth of laneDepths) {
       const nodes = lanes.get(depth)!;
-      const items = nodes
-        .map((node) => {
-          const size = cardSize(node, false);
-          const parent = parentOf.get(node.id);
-          const parentCard = parent ? cardById.get(parent) : undefined;
-          const preferred = parentCard ? parentCard.y + parentCard.height / 2 : 0;
-          return { node, size, preferred, center: 0 };
-        })
-        .sort((a, b) => a.preferred - b.preferred || a.node.title.localeCompare(b.node.title));
+      const items = nodes.map((node) => {
+        const size = cardSize(node, false);
+        const parent = parentOf.get(node.id);
+        const parentCard = parent ? cardById.get(parent) : undefined;
+        const preferred = parentCard ? parentCard.y + parentCard.height / 2 : 0;
+        return { node, size, parentId: parent, preferred, center: 0 };
+      });
 
-      // Start every reply near its parent, then push overlapping replies
-      // down in parent order. Finally centre the lane around the motion.
+      // Treat the replies to one parent as a small fan. One reply sits on the
+      // parent's centre; several replies are distributed around it instead of
+      // all being pushed downward.
+      const siblingGroups = new Map<string, typeof items>();
+      for (const item of items) {
+        const key = item.parentId ?? `root:${item.node.id}`;
+        const list = siblingGroups.get(key) ?? [];
+        list.push(item);
+        siblingGroups.set(key, list);
+      }
+      for (const group of siblingGroups.values()) {
+        group.sort((a, b) => a.node.title.localeCompare(b.node.title));
+        const wholeHeight = group.reduce((sum, item) => sum + item.size.height, 0) + THREAD_SIBLING_GAP * Math.max(0, group.length - 1);
+        let offset = -wholeHeight / 2;
+        for (const item of group) {
+          const parentCard = item.parentId ? cardById.get(item.parentId) : undefined;
+          const parentCenter = parentCard ? parentCard.y + parentCard.height / 2 : 0;
+          item.preferred = parentCenter + offset + item.size.height / 2;
+          offset += item.size.height + THREAD_SIBLING_GAP;
+        }
+      }
+      items.sort((a, b) => a.preferred - b.preferred || a.node.title.localeCompare(b.node.title));
+
+      // Replies to one parent form a small fan: one sits on the parent's
+      // centre, several distribute around it. Remaining collisions are packed
+      // downward just enough to keep the lane readable. There is deliberately
+      // no lane-wide recentering after that.
       let nextTop = Number.NEGATIVE_INFINITY;
-      let minTop = Number.POSITIVE_INFINITY;
-      let maxBottom = Number.NEGATIVE_INFINITY;
       for (const item of items) {
         const top = Math.max(item.preferred - item.size.height / 2, nextTop);
         item.center = top + item.size.height / 2;
         nextTop = top + item.size.height + THREAD_SIBLING_GAP;
-        minTop = Math.min(minTop, top);
-        maxBottom = Math.max(maxBottom, top + item.size.height);
       }
-      const shift = -(minTop + maxBottom) / 2;
       const centerX = direction * (COLUMN_GAP + (depth - 1) * (CARD_WIDTH + THREAD_GAP));
       for (const item of items) {
-        addCard(item.node, centerX, item.center + shift - item.size.height / 2, depth, branch, parentOf.get(item.node.id));
+        addCard(item.node, centerX, item.center - item.size.height / 2, depth, branch, parentOf.get(item.node.id));
       }
     }
   };
