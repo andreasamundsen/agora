@@ -17,7 +17,7 @@ import {
   uniqueId
 } from "../core/model";
 import { debateContext } from "../core/argdown";
-import { chatEndpoint, providerUrlProblem } from "../shared/provider-url";
+import { chatEndpoint, isLocalProvider, providerUrlProblem } from "../shared/provider-url";
 import { getSettings, isReady, StoredSettings, ReasoningEffort } from "./settings";
 
 /**
@@ -173,6 +173,14 @@ const THINKING_TOKEN_BUDGET: Record<ReasoningEffort, number> = {
   max: 32768
 };
 
+/**
+ * Local models often expose their chain of thought in reasoning_content.
+ * Some of them spend the whole completion budget there before emitting the
+ * final answer, especially when asked for a large JSON map. Keep a roomier
+ * floor for loopback providers without changing remote-provider costs.
+ */
+const LOCAL_OUTPUT_TOKEN_FLOOR = 12_000;
+
 export async function callModel(
   settings: StoredSettings,
   messages: { role: "system" | "user"; content: string }[],
@@ -183,9 +191,16 @@ export async function callModel(
   if (!isReady(settings)) throw new Error("No model is configured.");
   const thinkingModel = supportsDeepSeekThinking(settings);
   const thinking = thinkingModel && settings.reasoningEffort !== "off";
+  const localProvider = isLocalProvider(settings.baseUrl);
   const maxTokens = thinking
-    ? Math.max(options.maxTokens ?? 0, THINKING_TOKEN_BUDGET[settings.reasoningEffort])
-    : options.maxTokens ?? 4200;
+    ? Math.max(
+        options.maxTokens ?? 0,
+        THINKING_TOKEN_BUDGET[settings.reasoningEffort],
+        localProvider ? LOCAL_OUTPUT_TOKEN_FLOOR : 0
+      )
+    : localProvider
+      ? Math.max(options.maxTokens ?? 0, LOCAL_OUTPUT_TOKEN_FLOOR)
+      : options.maxTokens ?? 4200;
   const body: Record<string, unknown> = {
     model: settings.model,
     messages,
@@ -202,7 +217,8 @@ export async function callModel(
 
   const send = async (useJsonMode: boolean): Promise<Response> => {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), thinking ? 240_000 : 150_000);
+    const timeoutMs = thinking ? 240_000 : localProvider ? 300_000 : 150_000;
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       return await fetch(chatEndpoint(settings.baseUrl), {
         method: "POST",
@@ -230,7 +246,10 @@ export async function callModel(
   const payload = (await response.json()) as {
     choices?: {
       finish_reason?: string;
-      message?: { content?: string | { type?: string; text?: string }[] };
+      message?: {
+        content?: string | { type?: string; text?: string }[];
+        reasoning_content?: string;
+      };
     }[];
   };
   const choice = payload.choices?.[0];
@@ -240,9 +259,15 @@ export async function callModel(
       "The model reached its output limit before finishing. Lower the reasoning effort or raise the token budget."
     );
   }
-  if (typeof content === "string") return content;
+  if (typeof content === "string" && content.trim()) return content;
   if (Array.isArray(content)) {
-    return content.map((part) => (typeof part === "string" ? part : part?.text ?? "")).join("\n");
+    const text = content.map((part) => (typeof part === "string" ? part : part?.text ?? "")).join("\n");
+    if (text.trim()) return text;
+  }
+  if (typeof choice?.message?.reasoning_content === "string" && choice.message.reasoning_content.trim()) {
+    throw new Error(
+      "The model returned only hidden reasoning and no final answer. Turn off reasoning in the local model or choose a model that returns a final response."
+    );
   }
   throw new Error("The model returned no text.");
 }

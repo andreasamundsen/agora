@@ -32,7 +32,7 @@ npm start
 npm run dist
 ```
 
-This produces `release/Agora-Setup-0.1.18.exe`, a per-user Windows NSIS installer. The installer is intentionally **unsigned** and does not auto-update. It bundles Electron and the compiled server, so testers do not need Node.
+This produces `release/Agora-Setup-0.1.19.exe`, a per-user Windows NSIS installer. The installer is intentionally **unsigned** and does not auto-update. It bundles Electron and the compiled server, so testers do not need Node.
 
 `npm run electron` runs the desktop shell directly; `npm run pack` produces an unpacked build for inspection.
 
@@ -71,6 +71,8 @@ Open **Settings** (the gear). Agora speaks to any OpenAI-compatible `/chat/compl
 - **Custom** — any compatible base URL and model
 
 DeepSeek Flash supports thinking. Its **Reasoning effort** control offers **Off / Low / High / Max**; High is the default. Higher effort can improve difficult judgments, but it costs more and takes longer. Temperature is disabled for DeepSeek because the model ignores it; use reasoning effort instead. The app raises the output budget automatically when thinking is active so the JSON graph is not cut off.
+
+Local models may expose their chain of thought in a separate `reasoning_content` field and spend much of the completion budget there before writing the final JSON. Agora gives loopback providers a 12,000-token output floor and up to five minutes for a generation. If the model still returns only hidden reasoning, Agora reports that clearly instead of treating the empty final content as a map.
 
 `Save & test` first requests the provider's model list and, if necessary, sends a tiny completion; it gives up after 15 seconds with a visible error. A key is stored locally in Agora's data folder as plain JSON (gitignored in a source checkout) and is never returned to the browser; the UI only learns whether a key exists. Development runs can use environment fallbacks (`AGORA_LLM_BASE_URL`, `AGORA_LLM_MODEL`, `AGORA_LLM_REASONING_EFFORT`, `AGORA_LLM_API_KEY`, `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`, `DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY`). The packaged desktop build ignores ambient provider keys and `.env` files; enter the key in Settings. Copy `.env.example` to `.env` only for development; a saved settings file wins over the environment.
 
