@@ -4,17 +4,18 @@ Agora is a local debate harness. You install it like a normal Windows app; no No
 
 ## Install
 
-1. Run `Agora-Setup-0.1.11.exe`.
+1. Run `Agora-Setup-0.1.12.exe`.
 2. Windows will warn that the publisher is unknown. This build is intentionally unsigned: choose **More info → Run anyway**.
 3. The installer is per-user and does not need administrator rights. Agora opens when it finishes.
 
-## What's new in 0.1.11
+## What's new in 0.1.12
 
-- Initial maps now build the argument case as a structure of claims and replies, rather than mostly two lists of direct arguments.
-- Each major direct argument should normally carry at least one serious reply; a contested reply can carry a further response.
-- The authoring guideline is now roughly 14–20 nodes, with room for replies while still refusing filler. Genuinely unanswered objections remain unanswered.
-- Chamber extension patches are unchanged at 2–5 nodes per request.
-- Night Reading Room dark mode from 0.1.10 is unchanged.
+- Judgment is now symmetric. A direct **defeats** ruling on the motion only makes it fall when the attacker is still standing and the ruling is decisive with at least medium confidence.
+- A clean, strong, high-confidence pro line can now be certified as **proves**. A certified proof alone can carry the motion; a certified proof and a corroborated defeat together are a procedural tie.
+- Contested direct case lines now count at **half weight on both sides**. A contested support no longer silently disappears from the pro balance.
+- The bench still uses one model for the whole run and no extra judge calls were added.
+- The selected standard of proof remains the only intentional asymmetry.
+- Night Reading Room dark mode is unchanged.
 
 ## Connect a model
 
