@@ -32,7 +32,7 @@ npm start
 npm run dist
 ```
 
-This produces `release/Agora-Setup-0.1.16.exe`, a per-user Windows NSIS installer. The installer is intentionally **unsigned** and does not auto-update. It bundles Electron and the compiled server, so testers do not need Node.
+This produces `release/Agora-Setup-0.1.17.exe`, a per-user Windows NSIS installer. The installer is intentionally **unsigned** and does not auto-update. It bundles Electron and the compiled server, so testers do not need Node.
 
 `npm run electron` runs the desktop shell directly; `npm run pack` produces an unpacked build for inspection.
 
@@ -46,7 +46,7 @@ The app works **before you connect a model**. Two reference debates are seeded o
 
 **The library** — every debate is stored as plain JSON under `data/debates/`. Click a card to open it, `×` to remove it.
 
-**The map** — a pan/zoom argument graph. The thesis sits in the centre. The default **Case view** groups direct pro arguments on the left and direct con arguments on the right; **Thread view** keeps those two direct cases in place but attaches each response to the argument it answers, extending the response chain outward on that argument's side. Replies share vertical space in each outward lane, so Thread view stays close to the Case view's height. Stance remains on the card's For/Against badge and colour, so a con reply can sit on the pro side where its target lives. Dense maps open as a complete overview; small maps open at a readable scale. Drag to pan, scroll to zoom, use `Fit` to recover the whole shape. The static map refits when the window changes size; after a manual pan or zoom it preserves your view until you press `Fit`. Select any card for the inspector: full text, premises, conclusion, relations, and two actions that send a targeted request to the chamber.
+**The map** — a pan/zoom argument graph. The thesis sits in the centre. The default **Case view** groups direct pro arguments on the left and direct con arguments on the right; **Thread view** keeps those two direct cases in place but attaches each response to the argument it answers, extending the response chain outward on that argument's side. Each response is anchored to its target's vertical centre; sibling responses fan around it, and a card only moves when it would collide with another card. Replies share vertical space in each outward lane, so Thread view stays close to the Case view's height. Stance remains on the card's For/Against badge and colour, so a con reply can sit on the pro side where its target lives. Dense maps open as a complete overview; small maps open at a readable scale. Drag to pan, scroll to zoom, use `Fit` to recover the whole shape. The static map refits when the window changes size; after a manual pan or zoom it preserves your view until you press `Fit`. Select any card for the inspector: full text, premises, conclusion, relations, and two actions that send a targeted request to the chamber.
 
 **The chamber** — a conversation with the cartographer. Ask for the strongest counterargument, attack a weak premise, steel-man the other side, or request a specific missing branch. With a model connected, the reply extends the graph and updates the map. Without one, the local scaffolder adds a structural node and says so.
 

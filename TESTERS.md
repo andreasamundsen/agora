@@ -4,9 +4,16 @@ Agora is a local debate harness. You install it like a normal Windows app; no No
 
 ## Install
 
-1. Run `Agora-Setup-0.1.16.exe`.
+1. Run `Agora-Setup-0.1.17.exe`.
 2. Windows will warn that the publisher is unknown. This build is intentionally unsigned: choose **More info → Run anyway**.
 3. The installer is per-user and does not need administrator rights. Agora opens when it finishes.
+
+## What's new in 0.1.17
+
+- Thread view now anchors each response to the vertical centre of the argument it answers.
+- Sibling responses fan around their shared target instead of stacking only downward.
+- A response only moves when it would collide with another card; lanes are no longer recentred as a whole.
+- Direct arguments in Thread view have a little more breathing room. The map remains close to Case view's height and keeps cards from overlapping.
 
 ## What's new in 0.1.16
 
