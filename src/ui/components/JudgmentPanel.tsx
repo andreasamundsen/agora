@@ -62,6 +62,12 @@ function effectLine(judgment: ClashJudgment, snapshot: JudgmentSnapshot): string
     if (source === "defeated") return "The ruling is recorded, but the attacker is itself defeated; it cannot carry.";
     if (source === "contested") return "The ruling is recorded, but the attacker is itself contested; it cannot carry.";
     if (!source) return "The ruling is recorded, but the attacker is no longer standing; it cannot carry.";
+    if (snapshot.withheldHardDefeats.includes(judgment.edgeId) && target !== "defeated") {
+      if (snapshot.weakened.includes(judgment.from)) {
+        return "The ruling is recorded, but the attacker is itself weakened; it cannot deliver a hard fall.";
+      }
+      return "The clash was ruled a defeat, but the weighing pass did not corroborate a decisive strike; the target remains contested.";
+    }
     if (target === "defeated") return "The target is struck from the record.";
     if (target === "contested") return "The target remains contested; this strike does not settle it.";
   }

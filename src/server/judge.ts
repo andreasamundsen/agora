@@ -576,6 +576,15 @@ export async function judgeDebate(debate: Debate, options: JudgeOptions): Promis
       ? await assessCaseLines(debate, verdicts, options.standard, judgeSettings, warnings)
       : [];
 
+  if (assessments.length) {
+    const corroborated = solveJudgment(debate, verdicts, options.standard, assessments);
+    if (corroborated.withheldHardDefeats.length) {
+      warnings.push(
+        "A hard fall was withheld: the direct defeat of the thesis was not corroborated by a decisive assessment, or its attacker was weakened. It remains a live attack, and the balance decided the motion."
+      );
+    }
+  }
+
   return buildJudgmentRun({
     id: uid("judgment"),
     debate,

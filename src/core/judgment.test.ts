@@ -377,11 +377,14 @@ describe("judgment solver", () => {
     expect(solveJudgment(debate, verdicts, "preponderance", assessments).outcome).toBe("falls");
   });
 
-  it("keeps a direct defeat of the thesis as a hard fall", () => {
+  it("keeps a corroborated direct defeat of the thesis as a hard fall", () => {
     const debate = weightedDebate(10, 1);
-    const assessments = Array.from({ length: 10 }, (_, index) =>
-      assess(`e_pro${index}_thesis`, "pro", "strong", `pro-line-${index}`)
-    );
+    const assessments = [
+      ...Array.from({ length: 10 }, (_, index) =>
+        assess(`e_pro${index}_thesis`, "pro", "strong", `pro-line-${index}`)
+      ),
+      assess("e_con0_thesis", "con", "decisive", "con-line")
+    ];
     const snapshot = solveJudgment(
       debate,
       [verdict("e_con0_thesis", "con0", "thesis")],
@@ -390,6 +393,55 @@ describe("judgment solver", () => {
     );
     expect(snapshot.thesisStatus).toBe("defeated");
     expect(snapshot.outcome).toBe("falls");
+    expect(snapshot.hardDefeats).toEqual(["e_con0_thesis"]);
+    expect(snapshot.withheldHardDefeats).toEqual([]);
+  });
+
+  it("withholds a hard fall when the weighing pass does not corroborate it", () => {
+    const debate = weightedDebate(3, 1);
+    const verdicts = [verdict("e_con0_thesis", "con0", "thesis")];
+    const proAssessments = Array.from({ length: 3 }, (_, index) =>
+      assess(`e_pro${index}_thesis`, "pro", "strong", `pro-line-${index}`)
+    );
+    for (const [impact, confidence] of [
+      ["material", "high"],
+      ["decisive", "low"]
+    ] as const) {
+      const snapshot = solveJudgment(debate, verdicts, "pro", [
+        ...proAssessments,
+        assess("e_con0_thesis", "con", impact, "con-line", confidence)
+      ]);
+      expect(snapshot.thesisStatus).toBe("contested");
+      expect(snapshot.outcome).toBe("stands");
+      expect(snapshot.hardDefeats).toEqual([]);
+      expect(snapshot.withheldHardDefeats).toEqual(["e_con0_thesis"]);
+    }
+  });
+
+  it("does not let a weakened objection deliver a hard fall", () => {
+    const debate = debateWith([
+      { from: "support", to: "thesis", type: "support" },
+      { from: "objection", to: "thesis", type: "attack" },
+      { from: "rebuttal", to: "objection", type: "attack" }
+    ]);
+    const snapshot = solveJudgment(
+      debate,
+      [
+        verdict("e_objection_thesis", "objection", "thesis"),
+        verdict("e_rebuttal_objection", "rebuttal", "objection", "weakens")
+      ],
+      "preponderance",
+      [
+        assess("e_support_thesis", "pro", "strong", "support-line"),
+        assess("e_objection_thesis", "con", "decisive", "objection-line")
+      ]
+    );
+    expect(snapshot.statuses.objection).toBe("standing");
+    expect(snapshot.weakened).toEqual(["objection"]);
+    expect(snapshot.thesisStatus).toBe("contested");
+    expect(snapshot.outcome).toBe("undecided");
+    expect(snapshot.hardDefeats).toEqual([]);
+    expect(snapshot.withheldHardDefeats).toEqual(["e_objection_thesis"]);
   });
 
   it("lets an irrelevant direct attack leave the motion standing", () => {

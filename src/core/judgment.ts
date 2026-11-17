@@ -88,6 +88,10 @@ export interface JudgmentSnapshot {
   contested: string[];
   /** Non-thesis nodes that survive a live `weakens` ruling. A condition, not a structural status. */
   weakened: string[];
+  /** Direct thesis defeats that count as a hard fall under the corroboration rule. */
+  hardDefeats: string[];
+  /** Direct `defeats` rulings that did not meet the corroboration rule. */
+  withheldHardDefeats: string[];
   thesisStatus: ArgumentStatus;
   /** Support edges from a standing argument to the thesis. */
   liveSupports: string[];
@@ -342,8 +346,9 @@ export function solveJudgment(
   }
 
   const thesis = nodeById(debate, debate.thesisId);
-  const thesisStatus = statuses[debate.thesisId] ?? "contested";
+  let thesisStatus = statuses[debate.thesisId] ?? "contested";
   const verdictByEdge = new Map(verdicts.map((verdict) => [verdict.edgeId, verdict]));
+  const assessmentByEdge = new Map(assessments.map((item) => [item.edgeId, item]));
 
   const supportEdges = debate.edges.filter(
     (edge) => edge.type === "support" && edge.to === debate.thesisId
@@ -401,6 +406,42 @@ export function solveJudgment(
     weakened.add(verdict.to);
   }
 
+  // A direct `defeats` ruling is not automatically a hard fall. Once the
+  // weighing pass has rated the case, a thesis defeat must be corroborated by
+  // a decisive con-line assessment, and the defeating attacker must not itself
+  // be weakened. Without assessments (local structural review or a failed
+  // weighing pass), retain the structural fallback.
+  const directDefeatEdges = debate.edges.filter(
+    (edge) =>
+      edge.to === debate.thesisId &&
+      isClashEdge(edge) &&
+      statuses[edge.from] === "standing" &&
+      verdictByEdge.get(edge.id)?.verdict === "defeats"
+  );
+  const hardDefeatEdges =
+    assessments.length === 0
+      ? directDefeatEdges
+      : directDefeatEdges.filter((edge) => {
+          if (weakened.has(edge.from)) return false;
+          const assessment = assessmentByEdge.get(edge.id);
+          return (
+            assessment?.side === "con" &&
+            assessment.impact === "decisive" &&
+            assessment.confidence !== "low"
+          );
+        });
+  const hardDefeatIds = new Set(hardDefeatEdges.map((edge) => edge.id));
+  const withheldHardDefeats = directDefeatEdges
+    .filter((edge) => !hardDefeatIds.has(edge.id))
+    .map((edge) => edge.id);
+  if (assessments.length > 0 && thesisStatus === "defeated" && hardDefeatEdges.length === 0) {
+    thesisStatus = "contested";
+    statuses[debate.thesisId] = "contested";
+    const defeatedIndex = defeated.indexOf(debate.thesisId);
+    if (defeatedIndex >= 0) defeated.splice(defeatedIndex, 1);
+    if (!contested.includes(debate.thesisId)) contested.push(debate.thesisId);
+  }
+
   const unsupportedThesis = Boolean(thesis) && thesisStatus === "standing" && liveSupports.length === 0;
   const balance = buildCaseBalance({
     debate,
@@ -445,6 +486,8 @@ export function solveJudgment(
     defeated,
     contested,
     weakened: debate.nodes.filter((node) => weakened.has(node.id)).map((node) => node.id),
+    hardDefeats: [...hardDefeatIds],
+    withheldHardDefeats,
     thesisStatus,
     liveSupports,
     liveAttacks,
