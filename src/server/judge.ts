@@ -84,10 +84,10 @@ Return JSON only:
   "reasoning": "2-4 sentences. Quote or point to the exact part of the target that fails or survives."
 }`;
 
-const ASSESSMENT_RULES = `You are the weighing clerk inside AGORA, a debate harness. The judge has already ruled on every clash. Your job is to rate the surviving direct case lines; you do not decide the motion.
+const ASSESSMENT_RULES = `You are the weighing clerk inside AGORA, a debate harness. The judge has already ruled on every clash. Your job is to rate the live direct case lines; you do not decide the motion.
 
 A case line is either:
-- a direct SUPPORT edge from a standing argument to the thesis, or
+- a direct SUPPORT edge from a standing or contested argument to the thesis, or
 - a direct ATTACK or UNDERCUT edge from a live argument to the thesis.
 
 Do not rate replies to other arguments as separate lines. A reply has already done its work by changing whether the line it answers survives or is under pressure.
@@ -96,6 +96,7 @@ For a SUPPORT, rate its quality:
 - strong: relevant, adequately grounded, valid inference, and load-bearing for the motion.
 - moderate: relevant and plausible, but with a real weakness, gap, or unresolved pressure.
 - weak: relevant but poorly grounded, overbroad, circular, or easily answered.
+- A contested support is still a live case line. Rate its quality on the argument itself; do not lower it merely because the source is contested. The engine discounts the line's survival separately.
 
 For a SUPPORT, also certify "proves":
 - proves: true only if this one line, on its own, is sufficient to establish the thesis under the standard of proof. It must be complete, load-bearing, and free of a real gap or unresolved pressure. A strong line is not automatically a proof.
@@ -172,7 +173,7 @@ function normalizeAssessmentRaw(value: unknown): unknown {
   };
 }
 
-function assessmentPrompt(
+export function assessmentPrompt(
   debate: Debate,
   provisional: ReturnType<typeof solveJudgment>,
   verdicts: ClashJudgment[],
@@ -182,7 +183,8 @@ function assessmentPrompt(
     (edge) =>
       edge.type === "support" &&
       edge.to === debate.thesisId &&
-      provisional.liveSupports.includes(edge.id)
+      (provisional.liveSupports.includes(edge.id) ||
+        provisional.statuses[edge.from] === "contested")
   );
   const attackEdges = debate.edges.filter(
     (edge) =>
@@ -200,7 +202,9 @@ function assessmentPrompt(
     return [
       `LINE ${edge.id} — PRO SUPPORT`,
       nodeBlock(source, "SUPPORTING ARGUMENT"),
-      `Pressure: ${clean ? "clean; no live attack against the source" : "under a live attack"}`,
+      `Source status: ${provisional.statuses[source.id] ?? "unknown"}. Pressure: ${
+        clean ? "clean; no live attack against the source" : "under a live attack"
+      }`,
       ""
     ].join("\n");
   });
@@ -459,7 +463,13 @@ async function assessCaseLines(
   const sides = new Map<string, CaseSide>();
   for (const edge of debate.edges) {
     if (edge.to !== debate.thesisId) continue;
-    if (edge.type === "support" && provisional.liveSupports.includes(edge.id)) sides.set(edge.id, "pro");
+    if (
+      edge.type === "support" &&
+      (provisional.liveSupports.includes(edge.id) ||
+        provisional.statuses[edge.from] === "contested")
+    ) {
+      sides.set(edge.id, "pro");
+    }
     if (isClashEdge(edge) && provisional.liveAttacks.includes(edge.id)) sides.set(edge.id, "con");
   }
 

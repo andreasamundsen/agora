@@ -156,13 +156,15 @@ function BalanceCard({
                   className={`balance-line balance-line--${line.side}`}
                   title={`${rating} ${formatPoints(line.base)} × ${line.confidenceLabel} confidence ${formatPoints(line.confidence)} × ${
                     line.side === "pro"
-                      ? line.pressure === 1
-                        ? "clean"
-                        : "under attack"
+                      ? line.survival === 0.5
+                        ? "contested support"
+                        : line.pressure === 1
+                          ? "clean"
+                          : "under attack"
                       : line.survival === 1
                         ? "standing"
                         : "contested"
-                  } ${formatPoints(line.side === "pro" ? line.pressure : line.survival)} × overlap ${formatPoints(line.independence)} = ${formatPoints(line.weight)}`}
+                  } ${formatPoints(line.side === "pro" ? line.pressure * line.survival : line.survival)} × overlap ${formatPoints(line.independence)} = ${formatPoints(line.weight)}`}
                 >
                   <div className="balance-line-main">
                     <span className="balance-line-side">{line.side === "pro" ? "Pro" : "Con"}</span>
@@ -175,9 +177,11 @@ function BalanceCard({
                     {line.proves && <span>certified proof</span>}
                     <span>
                       {line.side === "pro"
-                        ? line.pressure === 1
-                          ? "clean line"
-                          : "under attack"
+                        ? line.survival === 0.5
+                          ? "support contested"
+                          : line.pressure === 1
+                            ? "clean line"
+                            : "under attack"
                         : line.survival === 1
                           ? "attacker standing"
                           : "attacker contested"}

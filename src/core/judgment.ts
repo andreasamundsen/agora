@@ -482,7 +482,6 @@ export function solveJudgment(
     setThesisStatus("contested");
   }
 
-  const unsupportedThesis = Boolean(thesis) && thesisStatus === "standing" && liveSupports.length === 0;
   const balance = buildCaseBalance({
     debate,
     verdicts,
@@ -493,6 +492,7 @@ export function solveJudgment(
     cleanSupports,
     standard
   });
+  const unsupportedThesis = Boolean(thesis) && thesisStatus === "standing" && balance.pro <= 0;
 
   // The burden is a threshold, not a veto. The record can be so lopsided that
   // it carries even the side with the burden; only a close record lets the
@@ -592,37 +592,44 @@ export function buildCaseBalance(input: {
   const rulingByEdge = new Map(input.verdicts.map((item) => [item.edgeId, item]));
   const clean = new Set(input.cleanSupports);
   const lines: CaseLineWeight[] = [];
+  const supportEdges = input.debate.edges.filter(
+    (edge) => edge.type === "support" && edge.to === input.debate.thesisId
+  );
 
-  for (const edgeId of input.liveSupports) {
-    const edge = input.debate.edges.find((candidate) => candidate.id === edgeId);
-    if (!edge || edge.type !== "support") continue;
+  for (const edge of supportEdges) {
     const source = nodeById(input.debate, edge.from);
-    if (!source || input.statuses[source.id] !== "standing") continue;
-    const assessment = assessmentByEdge.get(edgeId);
+    if (!source) continue;
+    const sourceStatus = input.statuses[source.id];
+    if (sourceStatus !== "standing" && sourceStatus !== "contested") continue;
+    if (sourceStatus === "standing" && !input.liveSupports.includes(edge.id)) continue;
+    const assessment = assessmentByEdge.get(edge.id);
     const quality = assessment?.side === "pro" ? assessment.quality ?? "moderate" : "moderate";
     const confidenceLabel = assessment?.side === "pro" ? assessment.confidence : "high";
-    const pressure = clean.has(edgeId) ? 1 : 0.6;
+    // A contested support is already carrying the uncertainty of its source.
+    // Do not apply the additional pressure discount on top of the half-weight.
+    const pressure = sourceStatus === "contested" ? 1 : clean.has(edge.id) ? 1 : 0.6;
+    const survival = sourceStatus === "contested" ? 0.5 : 1;
     const base = QUALITY_POINTS[quality];
     const confidence = RATING_CONFIDENCE_FACTOR[confidenceLabel];
     lines.push({
-      edgeId,
+      edgeId: edge.id,
       side: "pro",
       sourceId: source.id,
-      cluster: clusterKey(assessment?.side === "pro" ? assessment.cluster : undefined, edgeId),
+      cluster: clusterKey(assessment?.side === "pro" ? assessment.cluster : undefined, edge.id),
       base,
       confidence,
       confidenceLabel,
-      survival: 1,
+      survival,
       pressure,
       independence: 1,
-      weight: base * confidence * pressure,
+      weight: base * confidence * pressure * survival,
       quality,
       proves:
         assessment?.side === "pro" &&
         assessment.proves === true &&
         assessment.quality === "strong" &&
         assessment.confidence === "high" &&
-        clean.has(edgeId),
+        clean.has(edge.id),
       reasoning: assessment?.side === "pro" ? assessment.reasoning : undefined
     });
   }
@@ -856,6 +863,9 @@ export function judgmentSummary(
     (edge) => edge.to === debate.thesisId && edge.type === "support"
   );
   const liveSupports = directSupports.filter((edge) => snapshot.liveSupports.includes(edge.id));
+  const contestedSupports = directSupports.filter(
+    (edge) => snapshot.statuses[edge.from] === "contested"
+  );
   const proLines = topCaseLines(snapshot.balance, "pro");
   const conLines = topCaseLines(snapshot.balance, "con");
   const margin = `${snapshot.balance.margin >= 0 ? "+" : ""}${snapshot.balance.margin}`;
@@ -959,7 +969,11 @@ export function judgmentSummary(
     verdict: judgmentForEdge(verdicts, edge.id)?.verdict
   }));
   const failedSupports = directSupports
-    .filter((edge) => !snapshot.liveSupports.includes(edge.id))
+    .filter(
+      (edge) =>
+        !snapshot.liveSupports.includes(edge.id) &&
+        snapshot.statuses[edge.from] !== "contested"
+    )
     .slice(0, 3)
     .map((edge) => ({
       edgeId: edge.id,
@@ -967,6 +981,12 @@ export function judgmentSummary(
       to: edge.to,
       kind: "support" as const
     }));
+  const contestedSteps = contestedSupports.slice(0, 3).map((edge) => ({
+    edgeId: edge.id,
+    from: edge.from,
+    to: edge.to,
+    kind: "support" as const
+  }));
   const pressuredSupports = directSupports
     .filter(
       (edge) =>
@@ -986,10 +1006,10 @@ export function judgmentSummary(
     summary:
       snapshot.liveAttacks.length > 0
         ? `The motion is unestablished under the ${burden} standard. A live objection remains on the record; the supporting case is at ${margin} points and has not carried the motion.`
-        : liveSupports.length > 0
+        : liveSupports.length > 0 || contestedSupports.length > 0
           ? `The motion is unestablished under the ${burden} standard. The supporting case remains contested at ${margin} points and has not carried the motion.`
           : "The motion is unestablished. No supporting argument survives the record, although no standing objection defeats the motion outright.",
-    decisive: liveSteps.length ? liveSteps : pressuredSupports.length ? pressuredSupports : failedSupports
+    decisive: liveSteps.length ? liveSteps : pressuredSupports.length ? pressuredSupports : contestedSteps.length ? contestedSteps : failedSupports
   };
 }
 

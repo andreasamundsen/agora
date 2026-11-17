@@ -315,6 +315,54 @@ describe("judgment solver", () => {
     expect(solveJudgment(debate, verdicts, "con").outcome).toBe("stands");
   });
 
+  it("gives a contested pro support half weight instead of dropping it", () => {
+    const debate = debateWith([
+      { from: "support", to: "thesis", type: "support" },
+      { from: "objection", to: "support", type: "attack" },
+      { from: "support", to: "objection", type: "attack" }
+    ]);
+    const snapshot = solveJudgment(
+      debate,
+      [
+        verdict("e_objection_support", "objection", "support"),
+        verdict("e_support_objection", "support", "objection")
+      ],
+      "preponderance",
+      [assess("e_support_thesis", "pro", "strong", "pro-line")]
+    );
+    expect(snapshot.statuses.support).toBe("contested");
+    expect(snapshot.balance.pro).toBe(1.5);
+    const line = snapshot.balance.lines.find((candidate) => candidate.edgeId === "e_support_thesis");
+    expect(line?.survival).toBe(0.5);
+    expect(line?.pressure).toBe(1);
+    expect(snapshot.balance.con).toBe(0);
+    expect(snapshot.unsupportedThesis).toBe(false);
+  });
+
+  it("keeps a contested con attack at half weight", () => {
+    const debate = debateWith([
+      { from: "support", to: "thesis", type: "support" },
+      { from: "objection", to: "thesis", type: "attack" },
+      { from: "rebuttal", to: "objection", type: "attack" },
+      { from: "objection", to: "rebuttal", type: "attack" }
+    ]);
+    const snapshot = solveJudgment(
+      debate,
+      [
+        verdict("e_objection_thesis", "objection", "thesis", "weakens"),
+        verdict("e_rebuttal_objection", "rebuttal", "objection"),
+        verdict("e_objection_rebuttal", "objection", "rebuttal")
+      ],
+      "preponderance",
+      [assess("e_objection_thesis", "con", "decisive", "con-line")]
+    );
+    expect(snapshot.statuses.objection).toBe("contested");
+    const line = snapshot.balance.lines.find((candidate) => candidate.edgeId === "e_objection_thesis");
+    expect(line?.survival).toBe(0.5);
+    expect(line?.weight).toBe(1.5);
+    expect(snapshot.balance.con).toBe(1.5);
+  });
+
   it("lets a lopsided pro case carry a pro burden", () => {
     const debate = weightedDebate(10, 1);
     const verdicts = [verdict("e_con0_thesis", "con0", "thesis", "weakens")];

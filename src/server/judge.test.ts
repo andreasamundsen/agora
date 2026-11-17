@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { reconcileDebate } from "../core/model";
-import { clashEdges } from "../core/judgment";
-import { clashPrompt } from "./judge";
+import { clashEdges, solveJudgment, type ClashJudgment } from "../core/judgment";
+import { assessmentPrompt, clashPrompt } from "./judge";
 
 function promptDebate() {
   return reconcileDebate({
@@ -81,5 +81,69 @@ describe("clash prompt context", () => {
     expect(prompt).toContain("“P1 supports the thesis” — P1 conclusion.");
     expect(prompt).not.toContain("P1 TEXT SHOULD ONLY APPEAR AS A CONCLUSION HERE.");
     expect(prompt).not.toContain("UNRELATED CONTEXT SHOULD NOT APPEAR.");
+  });
+});
+
+describe("assessment prompt", () => {
+  function contestedSupportDebate() {
+    return reconcileDebate({
+      id: "contested-support",
+      motion: "Should the test pass?",
+      thesisId: "thesis",
+      nodes: [
+        { id: "thesis", kind: "statement", title: "The test passes", text: "The test passes." },
+        {
+          id: "support",
+          kind: "argument",
+          title: "A reason for the test",
+          text: "A reason.",
+          stance: "pro",
+          premises: ["The reason holds."],
+          conclusion: "The test passes."
+        },
+        {
+          id: "objection",
+          kind: "argument",
+          title: "An objection",
+          text: "An objection.",
+          stance: "con",
+          premises: ["The objection holds."],
+          conclusion: "The test does not pass."
+        }
+      ],
+      edges: [
+        { id: "e_support_thesis", from: "support", to: "thesis", type: "support" },
+        { id: "e_objection_support", from: "objection", to: "support", type: "attack" },
+        { id: "e_support_objection", from: "support", to: "objection", type: "attack" }
+      ]
+    });
+  }
+
+  function ruling(edgeId: string, from: string, to: string): ClashJudgment {
+    return {
+      edgeId,
+      from,
+      to,
+      type: "attack",
+      verdict: "defeats",
+      criterion: "sufficiency",
+      confidence: "high",
+      targetComponent: "conclusion",
+      reasoning: "A test ruling."
+    };
+  }
+
+  it("includes a contested pro support in the weighing pass", () => {
+    const debate = contestedSupportDebate();
+    const verdicts = [
+      ruling("e_objection_support", "objection", "support"),
+      ruling("e_support_objection", "support", "objection")
+    ];
+    const provisional = solveJudgment(debate, verdicts, "preponderance");
+    const prompt = assessmentPrompt(debate, provisional, verdicts, "preponderance");
+
+    expect(provisional.statuses.support).toBe("contested");
+    expect(prompt).toContain("LINE e_support_thesis — PRO SUPPORT");
+    expect(prompt).toContain("Source status: contested");
   });
 });
