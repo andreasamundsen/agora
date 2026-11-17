@@ -1997,6 +1997,15 @@ button:disabled { cursor: not-allowed; }
   border-color: var(--gold);
   box-shadow: 0 0 0 3px rgba(185, 138, 58, 0.07), var(--shadow-card);
 }
+.graph-node.is-case-line {
+  z-index: 7;
+  opacity: 1;
+  filter: none;
+  border-color: var(--pro);
+  outline: 1px solid var(--pro);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--pro) 14%, transparent), 0 0 30px color-mix(in srgb, var(--pro) 18%, transparent), var(--shadow-card);
+}
 .graph-node.is-unsupported {
   border-style: dashed;
   border-color: var(--line-strong);
@@ -2111,6 +2120,15 @@ button:disabled { cursor: not-allowed; }
 .graph.is-judging .graph-edge.is-judged--undecided .edge-path { opacity: 0.42; }
 .graph.is-judging .graph-edge.is-judged--irrelevant .edge-path { opacity: 0.13; }
 .graph.is-judging .graph-edge.is-judged--defeats .edge-path { opacity: 0.8; }
+.graph-edge.is-case-line .edge-path {
+  stroke: var(--pro);
+  stroke-width: 2.7;
+  opacity: 1;
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--pro) 55%, transparent));
+}
+.graph-edge.is-case-line .edge-glyph { fill: var(--pro); opacity: 1; }
+.graph-edge.is-case-line .edge-halo { fill: color-mix(in srgb, var(--pro) 20%, transparent); }
+.graph-edge.is-case-line .edge-pulse-dot { fill: var(--pro); filter: drop-shadow(0 0 6px var(--pro)); }
 .graph-edge.is-clash .edge-path {
   stroke: var(--gold);
   stroke-width: 3;

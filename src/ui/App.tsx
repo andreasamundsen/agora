@@ -44,6 +44,10 @@ interface JudgmentState {
   step: number;
   playing: boolean;
   speed: number;
+  /** A direct support being introduced before the first clash against it. */
+  caseLineId?: string;
+  /** Case lines already introduced at the current playback position. */
+  caseLineSeen: string[];
 }
 
 const ACTIVE_KEY = "agora.active";
@@ -58,6 +62,20 @@ function timeAgo(timestamp: number): string {
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d ago`;
   return new Date(timestamp).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+/** Stable, replay-safe ordering for case-line cues. */
+function caseLineRank(id: string, seed: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash ^= seed.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  for (let index = 0; index < id.length; index += 1) {
+    hash ^= id.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
 }
 
 export default function App() {
@@ -171,6 +189,29 @@ export default function App() {
     [judgment?.run, judgment?.step]
   );
 
+  /**
+   * Direct supports are introduced before the first clash that targets their
+   * source argument. Supports with no incoming clash are introduced before the
+   * first ruling. This is visual only; it changes no verdict or status.
+   */
+  const caseLineCues = useMemo(() => {
+    const cues = new Map<number, string[]>();
+    if (!debate || !judgment) return cues;
+    for (const edge of debate.edges) {
+      if (edge.type !== "support" || edge.to !== debate.thesisId) continue;
+      const firstAttack = judgment.run.verdicts.findIndex((verdict) => verdict.to === edge.from);
+      const cueStep = firstAttack >= 0 ? firstAttack : 0;
+      const list = cues.get(cueStep) ?? [];
+      list.push(edge.id);
+      cues.set(cueStep, list);
+    }
+    for (const [cueStep, ids] of cues) {
+      ids.sort((a, b) => caseLineRank(a, judgment.run.id) - caseLineRank(b, judgment.run.id));
+      cues.set(cueStep, ids);
+    }
+    return cues;
+  }, [debate, judgment?.run]);
+
   const judgmentSnapshot = useMemo(
     () => (debate && judgment ? solveJudgment(debate, appliedVerdicts, judgment.run.standard, judgment.run.assessments) : null),
     [debate, judgment, appliedVerdicts]
@@ -204,12 +245,17 @@ export default function App() {
       complete: settled,
       outcome: judgmentSnapshot.outcome
     });
+    const caseLine = judgment.caseLineId
+      ? debate.edges.find((edge) => edge.id === judgment.caseLineId)
+      : undefined;
     return {
       active: true,
       statuses: judgment.step > 0 || settled ? judgmentSnapshot.statuses : {},
       weakened: judgment.step > 0 || settled ? judgmentSnapshot.weakened : [],
-      activeEdgeId: settled ? undefined : current?.edgeId,
-      activeNodeIds: settled || !current ? [] : [current.from, current.to],
+      activeEdgeId: settled || caseLine ? undefined : current?.edgeId,
+      activeNodeIds: settled || caseLine || !current ? [] : [current.from, current.to],
+      caseLineEdgeId: caseLine?.id,
+      caseLineNodeId: caseLine?.from,
       reinstated: restored,
       verdictByEdge,
       complete: settled,
@@ -275,7 +321,7 @@ export default function App() {
     setRestored([]);
     setStage(null);
     setSelectedId(null);
-    setJudgment({ run: response.run, step: 0, playing: true, speed: 1 });
+    setJudgment({ run: response.run, step: 0, playing: true, speed: 1, caseLineSeen: [] });
     setModal(null);
     showToast(
       response.run.engine === "local"
@@ -295,7 +341,9 @@ export default function App() {
     setJudgment((current) => {
       if (!current) return current;
       const total = current.run.verdicts.length;
-      if (current.step >= total) return { ...current, step: 0, playing: true };
+      if (current.step >= total) {
+        return { ...current, step: 0, playing: true, caseLineId: undefined, caseLineSeen: [] };
+      }
       return { ...current, playing: !current.playing };
     });
   }, []);
@@ -304,25 +352,45 @@ export default function App() {
     setJudgment((current) => {
       if (!current) return current;
       if (current.step >= current.run.verdicts.length) return { ...current, playing: false };
-      return { ...current, step: current.step + 1, playing: false };
+      return {
+        ...current,
+        step: current.step + 1,
+        playing: false,
+        caseLineId: undefined,
+        caseLineSeen: []
+      };
     });
   }, []);
 
   const previousRuling = useCallback(() => {
     setJudgment((current) => {
       if (!current) return current;
-      return { ...current, step: Math.max(0, current.step - 1), playing: false };
+      return {
+        ...current,
+        step: Math.max(0, current.step - 1),
+        playing: false,
+        caseLineId: undefined,
+        caseLineSeen: []
+      };
     });
   }, []);
 
   const restartJudgment = useCallback(() => {
-    setJudgment((current) => current ? { ...current, step: 0, playing: true } : current);
+    setJudgment((current) => current
+      ? { ...current, step: 0, playing: true, caseLineId: undefined, caseLineSeen: [] }
+      : current);
   }, []);
 
   const seekRuling = useCallback((step: number) => {
     setJudgment((current) => {
       if (!current) return current;
-      return { ...current, step: Math.max(0, Math.min(current.run.verdicts.length, step)), playing: false };
+      return {
+        ...current,
+        step: Math.max(0, Math.min(current.run.verdicts.length, step)),
+        playing: false,
+        caseLineId: undefined,
+        caseLineSeen: []
+      };
     });
   }, []);
 
@@ -344,9 +412,31 @@ export default function App() {
 
   useEffect(() => {
     if (!judgment?.playing) return;
+    if (judgment.caseLineId) {
+      const timer = window.setTimeout(() => {
+        setJudgment((current) => {
+          if (!current || !current.caseLineId) return current;
+          return {
+            ...current,
+            caseLineId: undefined,
+            caseLineSeen: [...current.caseLineSeen, current.caseLineId]
+          };
+        });
+      }, 1600 / judgment.speed);
+      return () => window.clearTimeout(timer);
+    }
     const total = judgment.run.verdicts.length;
     if (total === 0 || judgment.step >= total) {
       setJudgment((current) => current ? { ...current, playing: false } : current);
+      return;
+    }
+    const nextCaseLine = (caseLineCues.get(judgment.step) ?? [])
+      .find((edgeId) => !judgment.caseLineSeen.includes(edgeId));
+    if (nextCaseLine) {
+      setJudgment((current) => {
+        if (!current || current.caseLineId || current.step !== judgment.step) return current;
+        return { ...current, caseLineId: nextCaseLine };
+      });
       return;
     }
     const delay = (judgment.step === 0 ? 2100 : 5200) / judgment.speed;
@@ -357,7 +447,7 @@ export default function App() {
       });
     }, delay);
     return () => window.clearTimeout(timer);
-  }, [judgment?.playing, judgment?.step, judgment?.speed, judgment?.run.verdicts.length]);
+  }, [judgment?.playing, judgment?.step, judgment?.speed, judgment?.caseLineId, judgment?.caseLineSeen, judgment?.run.verdicts.length, caseLineCues]);
 
   useEffect(() => {
     if (!judgment || modal) return;

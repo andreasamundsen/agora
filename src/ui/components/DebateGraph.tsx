@@ -22,6 +22,9 @@ export interface GraphJudgment {
   weakened: string[];
   activeEdgeId?: string;
   activeNodeIds: string[];
+  /** A direct support being introduced before its first incoming clash. */
+  caseLineEdgeId?: string;
+  caseLineNodeId?: string;
   reinstated: string[];
   verdictByEdge: Record<string, ClashVerdict>;
   complete: boolean;
@@ -416,7 +419,9 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
       {!dragging && (
         <div className="graph-hint" aria-hidden="true">
           {judgment?.active
-            ? "the bench is following the record · select a node to inspect"
+            ? judgment.caseLineEdgeId
+              ? "a case line is entered · select a node to inspect"
+              : "the bench is following the record · select a node to inspect"
             : view === "thread"
               ? <>responses follow the argument they answer <span>·</span> drag to pan <span>·</span> scroll to zoom</>
               : <>drag to pan <span>·</span> scroll to zoom <span>·</span> select a node to inspect</>}
@@ -457,15 +462,16 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
               {edgesVisible.map(({ edge, path, labelX, labelY, secondary }) => {
                 const active = stage?.active && stage.litEdges.has(edge.id);
                 const clash = Boolean(judgment?.active && judgment.activeEdgeId === edge.id);
+                const caseLine = Boolean(judgment?.active && judgment.caseLineEdgeId === edge.id);
                 const judged = judgment?.active ? judgment.verdictByEdge[edge.id] : undefined;
                 const connected = hoverId && (edge.from === hoverId || edge.to === hoverId);
                 const dim = Boolean(hoverId) && !connected;
                 const color = EDGE_COLORS[edge.type];
-                const lit = active || clash;
+                const lit = active || clash || caseLine;
                 return (
                   <g
                     key={edge.id}
-                    className={`graph-edge ${active ? "is-active" : ""} ${clash ? "is-clash" : ""} ${judged ? `is-judged is-judged--${judged}` : ""} ${dim ? "is-dim" : ""} ${connected ? "is-connected" : ""} ${secondary ? "is-secondary" : ""}`}
+                    className={`graph-edge ${active ? "is-active" : ""} ${clash ? "is-clash" : ""} ${caseLine ? "is-case-line" : ""} ${judged ? `is-judged is-judged--${judged}` : ""} ${dim ? "is-dim" : ""} ${connected ? "is-connected" : ""} ${secondary ? "is-secondary" : ""}`}
                     style={{ ["--edge-color" as string]: color }}
                   >
                     <path
@@ -522,6 +528,7 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
                   judging={Boolean(judgment?.active)}
                   judgmentStatus={judgmentStatus}
                   weakened={Boolean(judgment?.weakened.includes(card.node.id))}
+                  caseLine={Boolean(judgment?.active && judgment.caseLineNodeId === card.node.id)}
                   judgmentRole={judgmentRole}
                   motionDisposition={judgment?.motionDisposition}
                   motionProvisional={Boolean(judgment?.motionProvisional)}
@@ -552,6 +559,7 @@ interface NodeCardProps {
   judging: boolean;
   judgmentStatus?: ArgumentStatus;
   weakened: boolean;
+  caseLine: boolean;
   judgmentRole?: "source" | "target";
   motionDisposition?: JudgmentOutcome;
   motionProvisional: boolean;
@@ -573,6 +581,7 @@ function NodeCard({
   judging,
   judgmentStatus,
   weakened,
+  caseLine,
   judgmentRole,
   motionDisposition,
   motionProvisional,
@@ -610,6 +619,7 @@ function NodeCard({
         judging ? "is-judging" : "",
         motion ? `is-motion-${motion}` : statusKey ? `is-${statusKey}` : "",
         showWeakened ? "is-weakened" : "",
+        caseLine ? "is-case-line" : "",
         judgmentRole ? `is-clash-${judgmentRole}` : "",
         reinstated ? "is-reinstated" : ""
       ].join(" ")}
