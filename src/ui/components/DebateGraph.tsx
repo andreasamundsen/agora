@@ -22,11 +22,6 @@ export interface GraphJudgment {
   weakened: string[];
   activeEdgeId?: string;
   activeNodeIds: string[];
-  /** Direct support edges highlighted when the pro case is entered or weighed. */
-  supportBeatEdges: string[];
-  /** Source cards for the highlighted direct supports. */
-  supportBeatNodes: string[];
-  supportBeat?: "opening" | "final";
   reinstated: string[];
   verdictByEdge: Record<string, ClashVerdict>;
   complete: boolean;
@@ -421,11 +416,7 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
       {!dragging && (
         <div className="graph-hint" aria-hidden="true">
           {judgment?.active
-            ? judgment.supportBeat === "opening"
-              ? "the pro case is entered · select a node to inspect"
-              : judgment.supportBeat === "final"
-                ? "the weighed case lines · select a node to inspect"
-                : "the bench is following the record · select a node to inspect"
+            ? "the bench is following the record · select a node to inspect"
             : view === "thread"
               ? <>responses follow the argument they answer <span>·</span> drag to pan <span>·</span> scroll to zoom</>
               : <>drag to pan <span>·</span> scroll to zoom <span>·</span> select a node to inspect</>}
@@ -466,16 +457,15 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
               {edgesVisible.map(({ edge, path, labelX, labelY, secondary }) => {
                 const active = stage?.active && stage.litEdges.has(edge.id);
                 const clash = Boolean(judgment?.active && judgment.activeEdgeId === edge.id);
-                const supportBeat = Boolean(judgment?.active && judgment.supportBeatEdges.includes(edge.id));
                 const judged = judgment?.active ? judgment.verdictByEdge[edge.id] : undefined;
                 const connected = hoverId && (edge.from === hoverId || edge.to === hoverId);
                 const dim = Boolean(hoverId) && !connected;
                 const color = EDGE_COLORS[edge.type];
-                const lit = active || clash || supportBeat;
+                const lit = active || clash;
                 return (
                   <g
                     key={edge.id}
-                    className={`graph-edge ${active ? "is-active" : ""} ${clash ? "is-clash" : ""} ${supportBeat ? "is-support-beat" : ""} ${judged ? `is-judged is-judged--${judged}` : ""} ${dim ? "is-dim" : ""} ${connected ? "is-connected" : ""} ${secondary ? "is-secondary" : ""}`}
+                    className={`graph-edge ${active ? "is-active" : ""} ${clash ? "is-clash" : ""} ${judged ? `is-judged is-judged--${judged}` : ""} ${dim ? "is-dim" : ""} ${connected ? "is-connected" : ""} ${secondary ? "is-secondary" : ""}`}
                     style={{ ["--edge-color" as string]: color }}
                   >
                     <path
@@ -532,7 +522,6 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
                   judging={Boolean(judgment?.active)}
                   judgmentStatus={judgmentStatus}
                   weakened={Boolean(judgment?.weakened.includes(card.node.id))}
-                  caseSupport={Boolean(judgment?.active && judgment.supportBeatNodes.includes(card.node.id))}
                   judgmentRole={judgmentRole}
                   motionDisposition={judgment?.motionDisposition}
                   motionProvisional={Boolean(judgment?.motionProvisional)}
@@ -563,7 +552,6 @@ interface NodeCardProps {
   judging: boolean;
   judgmentStatus?: ArgumentStatus;
   weakened: boolean;
-  caseSupport: boolean;
   judgmentRole?: "source" | "target";
   motionDisposition?: JudgmentOutcome;
   motionProvisional: boolean;
@@ -585,7 +573,6 @@ function NodeCard({
   judging,
   judgmentStatus,
   weakened,
-  caseSupport,
   judgmentRole,
   motionDisposition,
   motionProvisional,
@@ -623,7 +610,6 @@ function NodeCard({
         judging ? "is-judging" : "",
         motion ? `is-motion-${motion}` : statusKey ? `is-${statusKey}` : "",
         showWeakened ? "is-weakened" : "",
-        caseSupport ? "is-case-support" : "",
         judgmentRole ? `is-clash-${judgmentRole}` : "",
         reinstated ? "is-reinstated" : ""
       ].join(" ")}

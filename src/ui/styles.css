@@ -1997,13 +1997,6 @@ button:disabled { cursor: not-allowed; }
   border-color: var(--gold);
   box-shadow: 0 0 0 3px rgba(185, 138, 58, 0.07), var(--shadow-card);
 }
-.graph-node.is-case-support {
-  z-index: 6;
-  opacity: 1;
-  filter: none;
-  border-color: var(--pro);
-  animation: case-support-glow 2.4s ease-in-out infinite;
-}
 .graph-node.is-unsupported {
   border-style: dashed;
   border-color: var(--line-strong);
@@ -2118,14 +2111,6 @@ button:disabled { cursor: not-allowed; }
 .graph.is-judging .graph-edge.is-judged--undecided .edge-path { opacity: 0.42; }
 .graph.is-judging .graph-edge.is-judged--irrelevant .edge-path { opacity: 0.13; }
 .graph.is-judging .graph-edge.is-judged--defeats .edge-path { opacity: 0.8; }
-.graph-edge.is-support-beat .edge-path {
-  opacity: 1;
-  stroke-width: 2.7;
-  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--pro) 55%, transparent));
-}
-.graph-edge.is-support-beat .edge-glyph { fill: var(--pro); opacity: 1; }
-.graph-edge.is-support-beat .edge-halo { fill: color-mix(in srgb, var(--pro) 20%, transparent); }
-.graph-edge.is-support-beat .edge-pulse-dot { fill: var(--pro); filter: drop-shadow(0 0 6px var(--pro)); }
 .graph-edge.is-clash .edge-path {
   stroke: var(--gold);
   stroke-width: 3;
@@ -2826,14 +2811,6 @@ button:disabled { cursor: not-allowed; }
 @keyframes restored-banner {
   0% { opacity: 0; transform: translateY(-4px); }
   100% { opacity: 1; transform: translateY(0); }
-}
-@keyframes case-support-glow {
-  0%, 100% {
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--pro) 12%, transparent), var(--shadow-card);
-  }
-  50% {
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--pro) 24%, transparent), 0 0 28px color-mix(in srgb, var(--pro) 20%, transparent), var(--shadow-card);
-  }
 }
 @keyframes judgment-dash { to { stroke-dashoffset: -26; } }
 @keyframes scales-weigh {

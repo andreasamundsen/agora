@@ -204,32 +204,12 @@ export default function App() {
       complete: settled,
       outcome: judgmentSnapshot.outcome
     });
-    const directSupports = debate.edges.filter(
-      (edge) => edge.type === "support" && edge.to === debate.thesisId
-    );
-    const supportBeat = settled
-      ? "final"
-      : judgment.step === 0 && directSupports.length > 0
-        ? "opening"
-        : undefined;
-    const weightedSupportIds = new Set(
-      judgmentSnapshot.balance.lines.filter((line) => line.side === "pro").map((line) => line.edgeId)
-    );
-    const supportEdges =
-      supportBeat === "final"
-        ? directSupports.filter((edge) => weightedSupportIds.has(edge.id))
-        : supportBeat === "opening"
-          ? directSupports
-          : [];
     return {
       active: true,
       statuses: judgment.step > 0 || settled ? judgmentSnapshot.statuses : {},
       weakened: judgment.step > 0 || settled ? judgmentSnapshot.weakened : [],
       activeEdgeId: settled ? undefined : current?.edgeId,
       activeNodeIds: settled || !current ? [] : [current.from, current.to],
-      supportBeatEdges: supportEdges.map((edge) => edge.id),
-      supportBeatNodes: [...new Set(supportEdges.map((edge) => edge.from))],
-      supportBeat: supportEdges.length > 0 ? supportBeat : undefined,
       reinstated: restored,
       verdictByEdge,
       complete: settled,
