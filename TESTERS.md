@@ -4,16 +4,22 @@ Agora is a local debate harness. You install it like a normal Windows app; no No
 
 ## Install
 
-1. Run `Agora-Setup-0.1.13.exe`.
+1. Run `Agora-Setup-0.1.14.exe`.
 2. Windows will warn that the publisher is unknown. This build is intentionally unsigned: choose **More info → Run anyway**.
 3. The installer is per-user and does not need administrator rights. Agora opens when it finishes.
 
+## What's new in 0.1.14
+
+- Judgment animation is clash-only again. Direct supports no longer get an opening or ending highlight, so the map never implies that surviving support lines won the motion.
+- Argument cards keep the single status badge: **Weakened** replaces **Stands** for a standing argument that has taken damage; contested and defeated states take precedence.
+- The judgment setup header and playback controls keep the darker dark-mode surfaces and stronger speed/exit labels.
+- The motion's opening display remains standard-aware.
+
 ## What's new in 0.1.13
 
-- Judgment playback now opens with a short beat over the direct supporting arguments, then returns to the surviving support lines when the final balance is struck.
-- Argument cards now show one status badge. **Weakened** replaces **Stands** for a standing argument that has taken damage; contested and defeated states take precedence.
-- The judgment setup header and playback controls are darker in dark mode, with stronger labels on the speed and exit controls.
-- The motion's opening display remains standard-aware, as before.
+- Superseded by 0.1.14: the first support-beat animation was removed after review.
+- Argument cards now show one status badge.
+- The judgment setup header and playback controls are darker in dark mode.
 
 ## What's new in 0.1.12
 
