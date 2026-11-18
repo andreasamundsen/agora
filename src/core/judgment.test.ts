@@ -776,6 +776,38 @@ describe("judgment solver", () => {
     );
   });
 
+  it("opens a nested support before a reply that answers it", () => {
+    const debate = reconcileDebate({
+      id: "nested-support-debate",
+      motion: "Should the nested support open?",
+      thesisId: "thesis",
+      nodes: [
+        { id: "thesis", kind: "statement", title: "The nested support opens", text: "It opens." },
+        { id: "root", kind: "argument", title: "The root objection", text: "An objection.", stance: "con" },
+        { id: "support", kind: "argument", title: "The nested support", text: "A reason.", stance: "pro" },
+        { id: "reply", kind: "argument", title: "The reply to the support", text: "A reply.", stance: "con" }
+      ],
+      edges: [
+        { id: "e_root_thesis", from: "root", to: "thesis", type: "attack" },
+        { id: "e_support_root", from: "support", to: "root", type: "support" },
+        { id: "e_reply_support", from: "reply", to: "support", type: "attack" }
+      ]
+    });
+    const ordered = orderVerdicts(debate, [
+      verdict("e_root_thesis", "root", "thesis"),
+      verdict("e_reply_support", "reply", "support")
+    ]);
+    expect(ordered.verdicts.map((item) => item.edgeId)).toEqual([
+      "e_root_thesis",
+      "e_reply_support"
+    ]);
+    const supportOpening = ordered.waves
+      .flatMap((wave) => wave.openings ?? [])
+      .find((opening) => opening.nodeId === "support");
+    expect(supportOpening?.edgeId).toBe("e_support_root");
+    expect(supportOpening?.step).toBe(1);
+  });
+
   it("alternates sides for case roots when both sides are available", () => {
     const debate = reconcileDebate({
       id: "side-case-debate",

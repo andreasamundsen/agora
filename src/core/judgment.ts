@@ -80,6 +80,15 @@ export interface ClashJudgment {
 export type JudgmentCaseSide = "pro" | "con" | "neutral";
 export type JudgmentCaseKind = "support" | "attack";
 
+export interface JudgmentBranchOpening {
+  /** Number of rulings already entered when this branch opens. */
+  step: number;
+  /** The argument being answered by the branch's first ruling. */
+  nodeId: string;
+  /** A support edge that visibly belongs to this argument, when one exists. */
+  edgeId?: string;
+}
+
 export interface JudgmentWave {
   id: string;
   label: string;
@@ -94,6 +103,8 @@ export interface JudgmentWave {
   side?: JudgmentCaseSide;
   /** Number of rulings already entered when this case opens. */
   startStep?: number;
+  /** Branch starts that need their target shown before the first ruling. */
+  openings?: JudgmentBranchOpening[];
 }
 
 export interface JudgmentSnapshot {
@@ -882,6 +893,23 @@ export function orderVerdicts(
     );
   }
 
+  // A branch starts at the argument its first ruling answers. When that
+  // argument is a support, the branch needs that support visible first, even
+  // when it is not the direct case root.
+  const supportEdgeByNode = new Map<string, string>();
+  for (const edge of debate.edges) {
+    if (edge.type !== "support" || edge.from === edge.to) continue;
+    const existing = supportEdgeByNode.get(edge.from);
+    if (!existing) {
+      supportEdgeByNode.set(edge.from, edge.id);
+      continue;
+    }
+    const existingEdge = edgeById.get(existing);
+    const existingIsDirect = existingEdge?.to === debate.thesisId;
+    const candidateIsDirect = edge.to === debate.thesisId;
+    if (candidateIsDirect && !existingIsDirect) supportEdgeByNode.set(edge.from, edge.id);
+  }
+
   const orderedInfo: string[] = [];
   const startSide = rankBySeed("case-order", seed) % 2 === 0 ? "pro" : "con";
   let turn: "pro" | "con" = startSide;
@@ -929,10 +957,20 @@ export function orderVerdicts(
     }
 
     const branchOrder: ClashJudgment[] = [];
+    const branchOpenings: JudgmentBranchOpening[] = [];
+    const startStep = ordered.length;
     const played = new Set<string>();
     const visit = (nodeId: string) => {
       for (const reply of repliesByTarget.get(nodeId) ?? []) {
         if (played.has(reply.edgeId)) continue;
+        const supportEdgeId = supportEdgeByNode.get(nodeId);
+        if (supportEdgeId) {
+          branchOpenings.push({
+            step: startStep + branchOrder.length,
+            nodeId,
+            edgeId: supportEdgeId
+          });
+        }
         played.add(reply.edgeId);
         branchOrder.push(reply);
         const edge = edgeFor(reply);
@@ -950,13 +988,24 @@ export function orderVerdicts(
     visit(root);
     // This should only matter for a malformed or externally edited graph; keep
     // every entered ruling in the playback rather than silently dropping it.
+    // A verdict that answers a nested support still opens that support first,
+    // even when the reply graph does not reach it from the direct root.
     for (const item of caseJudgments) {
       if (played.has(item.edgeId)) continue;
+      const edge = edgeFor(item);
+      const target = edge?.to;
+      const supportEdgeId = target ? supportEdgeByNode.get(target) : undefined;
+      if (supportEdgeId && target) {
+        branchOpenings.push({
+          step: startStep + branchOrder.length,
+          nodeId: target,
+          edgeId: supportEdgeId
+        });
+      }
       played.add(item.edgeId);
       branchOrder.push(item);
     }
 
-    const startStep = ordered.length;
     for (const verdict of branchOrder) ordered.push(verdict);
     caseNumber += 1;
     waves.push({
@@ -967,7 +1016,8 @@ export function orderVerdicts(
       rootEdgeId: info.rootEdgeId,
       rootKind: info.rootKind,
       side: info.side,
-      startStep
+      startStep,
+      openings: branchOpenings
     });
   }
 

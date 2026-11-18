@@ -44,9 +44,11 @@ interface JudgmentState {
   step: number;
   playing: boolean;
   speed: number;
-  /** A direct support being introduced before the first clash against it. */
+  /** A branch target being introduced before its first ruling. */
   caseLineId?: string;
-  /** Case lines already introduced at the current playback position. */
+  /** The playback step at which that branch opening belongs. */
+  caseLineStep?: number;
+  /** Branch openings already introduced, keyed by step and edge. */
   caseLineSeen: string[];
 }
 
@@ -62,6 +64,10 @@ function timeAgo(timestamp: number): string {
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d ago`;
   return new Date(timestamp).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function caseLineKey(step: number, edgeId: string): string {
+  return `${step}:${edgeId}`;
 }
 
 export default function App() {
@@ -178,42 +184,68 @@ export default function App() {
   );
 
   /**
-   * A case opens with its direct support when that argument has a support
-   * edge, even when the case has no clash verdict. The cue is tied to the
-   * case's own start, not to the first attack anywhere in the run, so clean
-   * supports are selected in the same random case order as everything else.
-   * This is visual only; it changes no verdict or status.
+   * A branch opens by selecting the argument its first ruling answers. The
+   * engine supplies these branch starts so a support argument is visible even
+   * when it is a fork or a nested support, not only when it owns a direct case.
+   * Clean supports with no replies still get a case cue; there is nothing to
+   * open.
    */
   const caseLineCues = useMemo(() => {
     const cues = new Map<number, string[]>();
     if (!judgment) return cues;
     const total = judgment.run.verdicts.length;
     for (const wave of judgment.run.waves) {
-      if (wave.rootKind !== "support" || !wave.rootEdgeId) continue;
-      const cueStep = Math.max(0, Math.min(wave.startStep ?? 0, total));
-      const list = cues.get(cueStep) ?? [];
-      list.push(wave.rootEdgeId);
-      cues.set(cueStep, list);
+      const openings = wave.openings ?? [];
+      for (const opening of openings) {
+        if (!opening.edgeId) continue;
+        const cueStep = Math.max(0, Math.min(opening.step, total));
+        const list = cues.get(cueStep) ?? [];
+        list.push(opening.edgeId);
+        cues.set(cueStep, list);
+      }
+      if (
+        wave.rootKind === "support" &&
+        wave.rootEdgeId &&
+        (wave.verdictIds.length === 0 || openings.length === 0)
+      ) {
+        const cueStep = Math.max(0, Math.min(wave.startStep ?? 0, total));
+        const list = cues.get(cueStep) ?? [];
+        list.push(wave.rootEdgeId);
+        cues.set(cueStep, list);
+      }
     }
     return cues;
   }, [judgment?.run.waves]);
 
   /**
-   * A support root has no clash ruling of its own. Give it an explicit
-   * opening beat before the first reply, including when the reader steps
-   * manually with Next or seeks to the first ruling. Clean supports with no
-   * replies remain a case cue only; there is nothing to open.
+   * Branch openings are manual steps too: Next, Previous, and seeking to the
+   * first ruling must show the target before the ruling plays. Clean supports
+   * with no replies remain a case cue only.
    */
   const caseOpenings = useMemo(() => {
     const cues = new Map<number, string[]>();
     if (!judgment) return cues;
     const total = judgment.run.verdicts.length;
     for (const wave of judgment.run.waves) {
-      if (wave.rootKind !== "support" || !wave.rootEdgeId || wave.verdictIds.length === 0) continue;
-      const cueStep = Math.max(0, Math.min(wave.startStep ?? 0, total));
-      const list = cues.get(cueStep) ?? [];
-      list.push(wave.rootEdgeId);
-      cues.set(cueStep, list);
+      const openings = wave.openings ?? [];
+      for (const opening of openings) {
+        if (!opening.edgeId) continue;
+        const cueStep = Math.max(0, Math.min(opening.step, total));
+        const list = cues.get(cueStep) ?? [];
+        if (!list.includes(opening.edgeId)) list.push(opening.edgeId);
+        cues.set(cueStep, list);
+      }
+      if (
+        wave.rootKind === "support" &&
+        wave.rootEdgeId &&
+        wave.verdictIds.length > 0 &&
+        openings.length === 0
+      ) {
+        const cueStep = Math.max(0, Math.min(wave.startStep ?? 0, total));
+        const list = cues.get(cueStep) ?? [];
+        if (!list.includes(wave.rootEdgeId)) list.push(wave.rootEdgeId);
+        cues.set(cueStep, list);
+      }
     }
     return cues;
   }, [judgment?.run.waves]);
@@ -356,7 +388,7 @@ export default function App() {
       if (!current) return current;
       const total = current.run.verdicts.length;
       if (current.step >= total) {
-        return { ...current, step: 0, playing: true, caseLineId: undefined, caseLineSeen: [] };
+        return { ...current, step: 0, playing: true, caseLineId: undefined, caseLineStep: undefined, caseLineSeen: [] };
       }
       return { ...current, playing: !current.playing };
     });
@@ -367,14 +399,15 @@ export default function App() {
       if (!current) return current;
       if (current.step >= current.run.verdicts.length) return { ...current, playing: false };
       const opening = (caseOpenings.get(current.step) ?? []).find(
-        (edgeId) => !current.caseLineSeen.includes(edgeId)
+        (edgeId) => !current.caseLineSeen.includes(caseLineKey(current.step, edgeId))
       );
       if (opening) {
         return {
           ...current,
           playing: false,
           caseLineId: opening,
-          caseLineSeen: [...current.caseLineSeen, opening]
+          caseLineStep: current.step,
+          caseLineSeen: [...current.caseLineSeen, caseLineKey(current.step, opening)]
         };
       }
       return {
@@ -382,6 +415,7 @@ export default function App() {
         step: current.step + 1,
         playing: false,
         caseLineId: undefined,
+        caseLineStep: undefined,
         caseLineSeen: []
       };
     });
@@ -391,22 +425,21 @@ export default function App() {
     setJudgment((current) => {
       if (!current) return current;
       const step = Math.max(0, current.step - 1);
-      const opening = (caseOpenings.get(step) ?? []).find(
-        (edgeId) => !current.caseLineSeen.includes(edgeId)
-      );
+      const opening = (caseOpenings.get(step) ?? [])[0];
       return {
         ...current,
         step,
         playing: false,
         caseLineId: opening,
-        caseLineSeen: opening ? [...current.caseLineSeen, opening] : []
+        caseLineStep: opening ? step : undefined,
+        caseLineSeen: opening ? [caseLineKey(step, opening)] : []
       };
     });
   }, [caseOpenings]);
 
   const restartJudgment = useCallback(() => {
     setJudgment((current) => current
-      ? { ...current, step: 0, playing: true, caseLineId: undefined, caseLineSeen: [] }
+      ? { ...current, step: 0, playing: true, caseLineId: undefined, caseLineStep: undefined, caseLineSeen: [] }
       : current);
   }, []);
 
@@ -414,15 +447,22 @@ export default function App() {
     setJudgment((current) => {
       if (!current) return current;
       const target = Math.max(0, Math.min(current.run.verdicts.length, step));
-      const opening = (caseOpenings.get(target) ?? []).find(
-        (edgeId) => !current.caseLineSeen.includes(edgeId)
-      );
+      // Seeking to the first ruling of a branch is also an opening: the target
+      // argument must be visible before that ruling, even when the opening was
+      // shown earlier in this playback.
+      const direct = (caseOpenings.get(target) ?? [])[0];
+      const before = direct
+        ? undefined
+        : (target > 0 ? caseOpenings.get(target - 1) ?? [] : [])[0];
+      const opening = direct ?? before;
+      const openingStep = direct ? target : target - 1;
       return {
         ...current,
         step: target,
         playing: false,
         caseLineId: opening,
-        caseLineSeen: opening ? [...current.caseLineSeen, opening] : []
+        caseLineStep: opening ? openingStep : undefined,
+        caseLineSeen: opening ? [caseLineKey(openingStep, opening)] : []
       };
     });
   }, [caseOpenings]);
@@ -452,7 +492,11 @@ export default function App() {
           return {
             ...current,
             caseLineId: undefined,
-            caseLineSeen: [...current.caseLineSeen, current.caseLineId]
+            caseLineStep: undefined,
+            caseLineSeen: [
+              ...current.caseLineSeen,
+              caseLineKey(current.caseLineStep ?? current.step, current.caseLineId)
+            ]
           };
         });
       }, 1600 / judgment.speed);
@@ -460,11 +504,11 @@ export default function App() {
     }
     const total = judgment.run.verdicts.length;
     const nextCaseLine = (caseLineCues.get(judgment.step) ?? [])
-      .find((edgeId) => !judgment.caseLineSeen.includes(edgeId));
+      .find((edgeId) => !judgment.caseLineSeen.includes(caseLineKey(judgment.step, edgeId)));
     if (nextCaseLine) {
       setJudgment((current) => {
         if (!current || current.caseLineId || current.step !== judgment.step) return current;
-        return { ...current, caseLineId: nextCaseLine };
+        return { ...current, caseLineId: nextCaseLine, caseLineStep: judgment.step };
       });
       return;
     }

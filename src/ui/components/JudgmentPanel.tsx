@@ -397,10 +397,24 @@ export function JudgmentPanel({
               <span>Record</span>
               <span>{step} / {total}</span>
             </div>
-            {run.waves.map((wave) => (
+            {run.waves.map((wave) => {
+              const openings = wave.openings ?? [];
+              return (
               <div className="judge-wave" key={wave.id}>
                 <span className="judge-wave-label">{wave.label}</span>
-                {wave.rootKind === "support" && wave.rootId && wave.verdictIds.length > 0 && (
+                {openings.map((opening) => (
+                  <button
+                    key={`${wave.id}-opening-${opening.step}-${opening.nodeId}`}
+                    type="button"
+                    className="judge-wave-opening"
+                    onClick={() => onSeek(opening.step)}
+                    title={`Open this branch at: ${titleFor(debate, opening.nodeId)}`}
+                  >
+                    <span>{opening.nodeId === wave.rootId ? "Direct support opens" : "Branch opens"}</span>
+                    <b>{titleFor(debate, opening.nodeId)}</b>
+                  </button>
+                ))}
+                {openings.length === 0 && wave.rootKind === "support" && wave.rootId && wave.verdictIds.length > 0 && (
                   <button
                     type="button"
                     className="judge-wave-opening"
@@ -436,7 +450,8 @@ export function JudgmentPanel({
                   })}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
