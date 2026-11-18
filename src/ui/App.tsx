@@ -198,6 +198,26 @@ export default function App() {
     return cues;
   }, [judgment?.run.waves]);
 
+  /**
+   * A support root has no clash ruling of its own. Give it an explicit
+   * opening beat before the first reply, including when the reader steps
+   * manually with Next or seeks to the first ruling. Clean supports with no
+   * replies remain a case cue only; there is nothing to open.
+   */
+  const caseOpenings = useMemo(() => {
+    const cues = new Map<number, string[]>();
+    if (!judgment) return cues;
+    const total = judgment.run.verdicts.length;
+    for (const wave of judgment.run.waves) {
+      if (wave.rootKind !== "support" || !wave.rootEdgeId || wave.verdictIds.length === 0) continue;
+      const cueStep = Math.max(0, Math.min(wave.startStep ?? 0, total));
+      const list = cues.get(cueStep) ?? [];
+      list.push(wave.rootEdgeId);
+      cues.set(cueStep, list);
+    }
+    return cues;
+  }, [judgment?.run.waves]);
+
   const judgmentSnapshot = useMemo(
     () => (debate && judgment ? solveJudgment(debate, appliedVerdicts, judgment.run.standard, judgment.run.assessments, judgment.run.strictness) : null),
     [debate, judgment, appliedVerdicts]
@@ -346,6 +366,17 @@ export default function App() {
     setJudgment((current) => {
       if (!current) return current;
       if (current.step >= current.run.verdicts.length) return { ...current, playing: false };
+      const opening = (caseOpenings.get(current.step) ?? []).find(
+        (edgeId) => !current.caseLineSeen.includes(edgeId)
+      );
+      if (opening) {
+        return {
+          ...current,
+          playing: false,
+          caseLineId: opening,
+          caseLineSeen: [...current.caseLineSeen, opening]
+        };
+      }
       return {
         ...current,
         step: current.step + 1,
@@ -354,20 +385,24 @@ export default function App() {
         caseLineSeen: []
       };
     });
-  }, []);
+  }, [caseOpenings]);
 
   const previousRuling = useCallback(() => {
     setJudgment((current) => {
       if (!current) return current;
+      const step = Math.max(0, current.step - 1);
+      const opening = (caseOpenings.get(step) ?? []).find(
+        (edgeId) => !current.caseLineSeen.includes(edgeId)
+      );
       return {
         ...current,
-        step: Math.max(0, current.step - 1),
+        step,
         playing: false,
-        caseLineId: undefined,
-        caseLineSeen: []
+        caseLineId: opening,
+        caseLineSeen: opening ? [...current.caseLineSeen, opening] : []
       };
     });
-  }, []);
+  }, [caseOpenings]);
 
   const restartJudgment = useCallback(() => {
     setJudgment((current) => current
@@ -378,15 +413,19 @@ export default function App() {
   const seekRuling = useCallback((step: number) => {
     setJudgment((current) => {
       if (!current) return current;
+      const target = Math.max(0, Math.min(current.run.verdicts.length, step));
+      const opening = (caseOpenings.get(target) ?? []).find(
+        (edgeId) => !current.caseLineSeen.includes(edgeId)
+      );
       return {
         ...current,
-        step: Math.max(0, Math.min(current.run.verdicts.length, step)),
+        step: target,
         playing: false,
-        caseLineId: undefined,
-        caseLineSeen: []
+        caseLineId: opening,
+        caseLineSeen: opening ? [...current.caseLineSeen, opening] : []
       };
     });
-  }, []);
+  }, [caseOpenings]);
 
   const saveJudgmentReport = useCallback(() => {
     if (!debate || !judgment) return;

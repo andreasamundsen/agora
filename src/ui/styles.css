@@ -2588,6 +2588,10 @@ button:disabled { cursor: not-allowed; }
 .judge-wave { margin-top: 10px; }
 .judge-wave-label { display: block; margin-bottom: 5px; font-size: 8.5px; font-weight: 700; letter-spacing: 0.11em; text-transform: uppercase; color: var(--muted); }
 .judge-wave-note { display: block; margin-top: -2px; margin-bottom: 4px; font-size: 8px; font-style: italic; color: var(--muted); }
+.judge-wave-opening { display: flex; align-items: baseline; gap: 5px; width: 100%; margin: -1px 0 5px; padding: 0; border: 0; background: transparent; color: var(--muted); font-family: inherit; line-height: 1.3; text-align: left; cursor: pointer; }
+.judge-wave-opening span { flex: none; font-size: 8px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.judge-wave-opening b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; font-weight: 500; color: var(--ink-soft); }
+.judge-wave-opening:hover b { color: var(--ink); text-decoration: underline; }
 .judge-ticks { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
 .judge-tick {
   width: 17px; height: 17px;

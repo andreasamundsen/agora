@@ -400,6 +400,17 @@ export function JudgmentPanel({
             {run.waves.map((wave) => (
               <div className="judge-wave" key={wave.id}>
                 <span className="judge-wave-label">{wave.label}</span>
+                {wave.rootKind === "support" && wave.rootId && wave.verdictIds.length > 0 && (
+                  <button
+                    type="button"
+                    className="judge-wave-opening"
+                    onClick={() => onSeek(wave.startStep ?? 0)}
+                    title={`Open this branch at its direct support: ${titleFor(debate, wave.rootId)}`}
+                  >
+                    <span>Direct support opens</span>
+                    <b>{titleFor(debate, wave.rootId)}</b>
+                  </button>
+                )}
                 {wave.verdictIds.length === 0 && (
                   <span className="judge-wave-note">direct support · no clash</span>
                 )}
