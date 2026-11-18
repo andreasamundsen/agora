@@ -66,8 +66,8 @@ export function ChatPanel({ debate, settings, busy, draft, onDraftChange, onSend
               This is the chamber. The map is not a verdict — it is the state of the argument.
             </p>
             <p>
-              Ask about the arguments on the table. The chamber answers in short prose and does not change the
-              map.
+              Ask about the arguments on the table. The chamber answers in concise prose, usually one substantial
+              paragraph, and does not change the map.
             </p>
             <ol>
               <li>State a position</li>
