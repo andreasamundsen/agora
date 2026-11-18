@@ -4,18 +4,22 @@ Agora is a local debate harness. You install it like a normal Windows app; no No
 
 ## Install
 
-1. Run `Agora-Setup-0.1.24.exe`.
+1. Run `Agora-Setup-0.1.25.exe`.
 2. Windows will warn that the publisher is unknown. This build is intentionally unsigned: choose **More info → Run anyway**.
 3. The installer is per-user and does not need administrator rights. Agora opens when it finishes.
 4. To upgrade, close Agora first, then run the newer installer over it. Your debates stay in `%APPDATA%\Agora\data`.
 5. The SHA-256 checksum should match the file supplied with the build. A matching hash is not a code signature; it only confirms the file has not changed.
 
+## What's new in 0.1.25
+
+- **Judgment playback follows one reply branch at a time.** After the direct clash it takes one randomly chosen reply, then one reply to that reply, and continues to the end of that branch. When the branch ends, it backtracks to the nearest fork and takes the next unplayed reply.
+- **Every ruling still plays exactly once**, and sibling branches remain seeded-random. Case roots, For/Against alternation, the clean-support case cue, and the written record are unchanged.
+
 ## What's new in 0.1.24
 
-- **Judgment playback now follows case branches more cleanly.** Every direct argument opens a case, including a clean support with no clash. Cases alternate between For and Against when both sides have unplayed cases.
-- **Responses are revealed outward by depth** instead of jumping down one chain and back: direct clash, then all immediate replies, then replies to those. Sibling order within a depth is randomized per run.
-- **A clean support gets a one-card case cue, not a ruling.** It is selected in the same random case order as the contested cases.
-- **Shared replies have one case owner**, chosen by the route nearest the motion; other targets remain visible in the inspector. The ruling record is unchanged.
+- **Every direct argument opens a case**, including a clean support with no clash. Cases alternate between For and Against when both sides have unplayed cases.
+- Responses were revealed breadth-first at each depth: the direct clash, then all immediate replies, then replies to those.
+- A clean support got a one-card case cue, not a ruling. Shared replies had one case owner, chosen by the route nearest the motion.
 
 ## What's new in 0.1.23
 
