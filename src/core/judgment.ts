@@ -769,10 +769,14 @@ function rankBySeed(value: string, seed: string): number {
  *
  * Replies belong to the case of the argument they answer. A shared reply has
  * one owner — the branch nearest the motion, with a seeded tie-break — so the
- * same card is not played twice. Inside a case the verdicts run breadth-first:
- * the direct clash, then all depth-one replies, then their replies. Sibling
- * order at a depth is seeded-random. Cases themselves alternate sides when
- * possible, while the choice within each side is seeded-random.
+ * same card is not played twice. Inside a case, the record is walked as one
+ * branch at a time: play the direct clash, choose one reply, follow that reply
+ * outward, then backtrack to the nearest fork and take the next unreplayed
+ * reply. Sibling branches are seeded-random, and every verdict in the case is
+ * still played exactly once.
+ *
+ * Cases themselves alternate sides when possible, while the choice within each
+ * side is seeded-random.
  */
 export function orderVerdicts(
   debate: Debate,
@@ -890,50 +894,75 @@ export function orderVerdicts(
   }
   orderedInfo.push(...bySide.neutral);
 
-  // Depth is measured from the case root through the same ownership tree. A
-  // direct clash sits at depth 0; a reply to the root at depth 1.
-  const depthByCase = new Map<string, Map<string, number>>();
-  for (const root of orderedInfo) {
-    const depths = new Map<string, number>([[root, 0]]);
-    const queue = [root];
-    for (let index = 0; index < queue.length; index += 1) {
-      const target = queue[index]!;
-      for (const source of incoming.get(target) ?? []) {
-        if (ownerByNode.get(source) !== root || depths.has(source)) continue;
-        depths.set(source, (depths.get(target) ?? 0) + 1);
-        queue.push(source);
-      }
-    }
-    depthByCase.set(root, depths);
-  }
-
   const ordered: ClashJudgment[] = [];
   const waves: JudgmentWave[] = [];
   let caseNumber = 0;
   for (const root of orderedInfo) {
     const info = caseInfo.get(root);
     if (!info) continue;
-    const depths = depthByCase.get(root) ?? new Map<string, number>([[root, 0]]);
-    const sorted = [...(caseVerdicts.get(root) ?? [])].sort((a, b) => {
-      const edgeA = edgeById.get(a.edgeId);
-      const edgeB = edgeById.get(b.edgeId);
-      const depthA =
-        edgeA?.to === debate.thesisId ? 0 : (depths.get(edgeA?.to ?? "") ?? 0) + 1;
-      const depthB =
-        edgeB?.to === debate.thesisId ? 0 : (depths.get(edgeB?.to ?? "") ?? 0) + 1;
-      return (
-        depthA - depthB ||
-        rankBySeed(a.edgeId, seed) - rankBySeed(b.edgeId, seed) ||
-        a.edgeId.localeCompare(b.edgeId)
+    const caseJudgments = [...(caseVerdicts.get(root) ?? [])];
+    const edgeFor = (item: ClashJudgment) => edgeById.get(item.edgeId);
+
+    // Direct clashes come first. Everything else is a reply edge, grouped by
+    // the argument it answers so we can walk one reply branch at a time.
+    const direct = caseJudgments
+      .filter((item) => edgeFor(item)?.to === debate.thesisId)
+      .sort(
+        (a, b) =>
+          rankBySeed(a.edgeId, seed) - rankBySeed(b.edgeId, seed) ||
+          a.edgeId.localeCompare(b.edgeId)
       );
-    });
+    const repliesByTarget = new Map<string, ClashJudgment[]>();
+    for (const item of caseJudgments) {
+      const edge = edgeFor(item);
+      if (!edge || edge.to === debate.thesisId) continue;
+      const list = repliesByTarget.get(edge.to) ?? [];
+      list.push(item);
+      repliesByTarget.set(edge.to, list);
+    }
+    for (const list of repliesByTarget.values()) {
+      list.sort(
+        (a, b) =>
+          rankBySeed(a.edgeId, seed) - rankBySeed(b.edgeId, seed) ||
+          a.edgeId.localeCompare(b.edgeId)
+      );
+    }
+
+    const branchOrder: ClashJudgment[] = [];
+    const played = new Set<string>();
+    const visit = (nodeId: string) => {
+      for (const reply of repliesByTarget.get(nodeId) ?? []) {
+        if (played.has(reply.edgeId)) continue;
+        played.add(reply.edgeId);
+        branchOrder.push(reply);
+        const edge = edgeFor(reply);
+        if (edge) visit(edge.from);
+      }
+    };
+
+    for (const item of direct) {
+      if (played.has(item.edgeId)) continue;
+      played.add(item.edgeId);
+      branchOrder.push(item);
+    }
+    // A clean support has no direct clash, so its first branch starts at the
+    // support itself and follows the replies that answer it.
+    visit(root);
+    // This should only matter for a malformed or externally edited graph; keep
+    // every entered ruling in the playback rather than silently dropping it.
+    for (const item of caseJudgments) {
+      if (played.has(item.edgeId)) continue;
+      played.add(item.edgeId);
+      branchOrder.push(item);
+    }
+
     const startStep = ordered.length;
-    for (const verdict of sorted) ordered.push(verdict);
+    for (const verdict of branchOrder) ordered.push(verdict);
     caseNumber += 1;
     waves.push({
       id: `case-${caseNumber}`,
       label: `Case ${caseNumber}`,
-      verdictIds: sorted.map((verdict) => verdict.edgeId),
+      verdictIds: branchOrder.map((verdict) => verdict.edgeId),
       rootId: root,
       rootEdgeId: info.rootEdgeId,
       rootKind: info.rootKind,

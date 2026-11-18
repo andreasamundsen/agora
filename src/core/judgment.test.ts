@@ -691,7 +691,7 @@ describe("judgment solver", () => {
     expect(ordered.waves.flatMap((wave) => wave.verdictIds)).toHaveLength(3);
   });
 
-  it("keeps each direct argument as a case and orders replies by depth", () => {
+  it("follows one reply branch to its leaf before returning to the fork", () => {
     const debate = reconcileDebate({
       id: "breadth-debate",
       motion: "Should the branches pass?",
@@ -727,11 +727,53 @@ describe("judgment solver", () => {
     const ids = ordered.verdicts.map((item) => item.edgeId);
     const position = (id: string) => ids.indexOf(id);
     expect(position("e_root_thesis")).toBe(0);
-    const firstDepth = ["e_left_root", "e_right_root"];
-    const secondDepth = ["e_left1_left", "e_left2_left", "e_right1_right"];
-    for (const parent of firstDepth) {
-      for (const reply of secondDepth) expect(position(parent)).toBeLessThan(position(reply));
+    const firstDepth = ["e_left_root", "e_right_root"].sort(
+      (a, b) => position(a) - position(b)
+    );
+    const firstParent = firstDepth[0]!;
+    const secondParent = firstDepth[1]!;
+    const firstChildren =
+      firstParent === "e_left_root"
+        ? ["e_left1_left", "e_left2_left"]
+        : ["e_right1_right"];
+    expect(firstChildren.length).toBeGreaterThan(0);
+    for (const child of firstChildren) {
+      expect(position(child)).toBeLessThan(position(secondParent));
     }
+  });
+
+  it("follows a reply to its own reply before the next reply at the fork", () => {
+    const debate = reconcileDebate({
+      id: "leaf-branch-debate",
+      motion: "Should the leaf branch play?",
+      thesisId: "thesis",
+      nodes: [
+        { id: "thesis", kind: "statement", title: "The leaf branch plays", text: "It plays." },
+        { id: "root", kind: "argument", title: "The root", text: "A root.", stance: "con" },
+        { id: "replyA", kind: "argument", title: "Reply A", text: "A reply.", stance: "pro" },
+        { id: "leaf", kind: "argument", title: "Leaf", text: "A reply to A.", stance: "con" },
+        { id: "replyB", kind: "argument", title: "Reply B", text: "Another reply.", stance: "pro" }
+      ],
+      edges: [
+        { id: "e_root_thesis", from: "root", to: "thesis", type: "attack" },
+        { id: "e_a_root", from: "replyA", to: "root", type: "attack" },
+        { id: "e_leaf_a", from: "leaf", to: "replyA", type: "attack" },
+        { id: "e_b_root", from: "replyB", to: "root", type: "attack" }
+      ]
+    });
+    const ordered = orderVerdicts(debate, [
+      verdict("e_root_thesis", "root", "thesis"),
+      verdict("e_a_root", "replyA", "root"),
+      verdict("e_leaf_a", "leaf", "replyA"),
+      verdict("e_b_root", "replyB", "root")
+    ]);
+    const ids = ordered.verdicts.map((item) => item.edgeId);
+    const aFirst = ids.indexOf("e_a_root") < ids.indexOf("e_b_root");
+    expect(ids).toEqual(
+      aFirst
+        ? ["e_root_thesis", "e_a_root", "e_leaf_a", "e_b_root"]
+        : ["e_root_thesis", "e_b_root", "e_a_root", "e_leaf_a"]
+    );
   });
 
   it("alternates sides for case roots when both sides are available", () => {
