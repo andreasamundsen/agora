@@ -400,6 +400,9 @@ export function JudgmentPanel({
             {run.waves.map((wave) => (
               <div className="judge-wave" key={wave.id}>
                 <span className="judge-wave-label">{wave.label}</span>
+                {wave.verdictIds.length === 0 && (
+                  <span className="judge-wave-note">direct support · no clash</span>
+                )}
                 <div className="judge-ticks">
                   {wave.verdictIds.map((edgeId) => {
                     const verdict = run.verdicts.find((item) => item.edgeId === edgeId);

@@ -64,20 +64,6 @@ function timeAgo(timestamp: number): string {
   return new Date(timestamp).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-/** Stable, replay-safe ordering for case-line cues. */
-function caseLineRank(id: string, seed: string): number {
-  let hash = 2166136261;
-  for (let index = 0; index < seed.length; index += 1) {
-    hash ^= seed.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  for (let index = 0; index < id.length; index += 1) {
-    hash ^= id.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
-
 export default function App() {
   const [summaries, setSummaries] = useState<DebateSummary[]>([]);
   const [debate, setDebate] = useState<Debate | null>(null);
@@ -192,27 +178,25 @@ export default function App() {
   );
 
   /**
-   * Direct supports are introduced before the first clash that targets their
-   * source argument. Supports with no incoming clash are introduced before the
-   * first ruling. This is visual only; it changes no verdict or status.
+   * A case opens with its direct support when that argument has a support
+   * edge, even when the case has no clash verdict. The cue is tied to the
+   * case's own start, not to the first attack anywhere in the run, so clean
+   * supports are selected in the same random case order as everything else.
+   * This is visual only; it changes no verdict or status.
    */
   const caseLineCues = useMemo(() => {
     const cues = new Map<number, string[]>();
-    if (!debate || !judgment) return cues;
-    for (const edge of debate.edges) {
-      if (edge.type !== "support" || edge.to !== debate.thesisId) continue;
-      const firstAttack = judgment.run.verdicts.findIndex((verdict) => verdict.to === edge.from);
-      const cueStep = firstAttack >= 0 ? firstAttack : 0;
+    if (!judgment) return cues;
+    const total = judgment.run.verdicts.length;
+    for (const wave of judgment.run.waves) {
+      if (wave.rootKind !== "support" || !wave.rootEdgeId) continue;
+      const cueStep = Math.max(0, Math.min(wave.startStep ?? 0, total));
       const list = cues.get(cueStep) ?? [];
-      list.push(edge.id);
+      list.push(wave.rootEdgeId);
       cues.set(cueStep, list);
     }
-    for (const [cueStep, ids] of cues) {
-      ids.sort((a, b) => caseLineRank(a, judgment.run.id) - caseLineRank(b, judgment.run.id));
-      cues.set(cueStep, ids);
-    }
     return cues;
-  }, [debate, judgment?.run]);
+  }, [judgment?.run.waves]);
 
   const judgmentSnapshot = useMemo(
     () => (debate && judgment ? solveJudgment(debate, appliedVerdicts, judgment.run.standard, judgment.run.assessments, judgment.run.strictness) : null),
@@ -436,10 +420,6 @@ export default function App() {
       return () => window.clearTimeout(timer);
     }
     const total = judgment.run.verdicts.length;
-    if (total === 0 || judgment.step >= total) {
-      setJudgment((current) => current ? { ...current, playing: false } : current);
-      return;
-    }
     const nextCaseLine = (caseLineCues.get(judgment.step) ?? [])
       .find((edgeId) => !judgment.caseLineSeen.includes(edgeId));
     if (nextCaseLine) {
@@ -447,6 +427,10 @@ export default function App() {
         if (!current || current.caseLineId || current.step !== judgment.step) return current;
         return { ...current, caseLineId: nextCaseLine };
       });
+      return;
+    }
+    if (total === 0 || judgment.step >= total) {
+      setJudgment((current) => current ? { ...current, playing: false } : current);
       return;
     }
     const delay = (judgment.step === 0 ? 2100 : 5200) / judgment.speed;

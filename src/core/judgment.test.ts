@@ -684,7 +684,83 @@ describe("judgment solver", () => {
       "e_rebuttal_objection",
       "e_support_rebuttal"
     ]);
-    expect(ordered.waves.map((wave) => wave.label)).toEqual(["Case 1"]);
+    expect(ordered.waves.map((wave) => wave.label)).toEqual(["Case 1", "Case 2"]);
+    const supportCase = ordered.waves.find((wave) => wave.rootId === "support");
+    expect(supportCase?.rootKind).toBe("support");
+    expect(supportCase?.verdictIds).toEqual([]);
+    expect(ordered.waves.flatMap((wave) => wave.verdictIds)).toHaveLength(3);
+  });
+
+  it("keeps each direct argument as a case and orders replies by depth", () => {
+    const debate = reconcileDebate({
+      id: "breadth-debate",
+      motion: "Should the branches pass?",
+      thesisId: "thesis",
+      nodes: [
+        { id: "thesis", kind: "statement", title: "The branches pass", text: "The branches pass." },
+        { id: "root", kind: "argument", title: "The root", text: "A root.", stance: "con" },
+        { id: "left", kind: "argument", title: "A left reply", text: "A left reply.", stance: "pro" },
+        { id: "right", kind: "argument", title: "A right reply", text: "A right reply.", stance: "con" },
+        { id: "left1", kind: "argument", title: "A reply to left", text: "A reply.", stance: "con" },
+        { id: "left2", kind: "argument", title: "Another reply to left", text: "A reply.", stance: "pro" },
+        { id: "right1", kind: "argument", title: "A reply to right", text: "A reply.", stance: "pro" }
+      ],
+      edges: [
+        { id: "e_root_thesis", from: "root", to: "thesis", type: "attack" },
+        { id: "e_left_root", from: "left", to: "root", type: "attack" },
+        { id: "e_right_root", from: "right", to: "root", type: "attack" },
+        { id: "e_left1_left", from: "left1", to: "left", type: "attack" },
+        { id: "e_left2_left", from: "left2", to: "left", type: "attack" },
+        { id: "e_right1_right", from: "right1", to: "right", type: "attack" }
+      ]
+    });
+    const ordered = orderVerdicts(debate, [
+      verdict("e_root_thesis", "root", "thesis"),
+      verdict("e_left_root", "left", "root"),
+      verdict("e_right_root", "right", "root"),
+      verdict("e_left1_left", "left1", "left"),
+      verdict("e_left2_left", "left2", "left"),
+      verdict("e_right1_right", "right1", "right")
+    ]);
+    expect(ordered.waves).toHaveLength(1);
+    expect(ordered.waves[0]?.rootId).toBe("root");
+    const ids = ordered.verdicts.map((item) => item.edgeId);
+    const position = (id: string) => ids.indexOf(id);
+    expect(position("e_root_thesis")).toBe(0);
+    const firstDepth = ["e_left_root", "e_right_root"];
+    const secondDepth = ["e_left1_left", "e_left2_left", "e_right1_right"];
+    for (const parent of firstDepth) {
+      for (const reply of secondDepth) expect(position(parent)).toBeLessThan(position(reply));
+    }
+  });
+
+  it("alternates sides for case roots when both sides are available", () => {
+    const debate = reconcileDebate({
+      id: "side-case-debate",
+      motion: "Should the sides alternate?",
+      thesisId: "thesis",
+      nodes: [
+        { id: "thesis", kind: "statement", title: "The sides alternate", text: "The sides alternate." },
+        { id: "pro1", kind: "argument", title: "A pro reason", text: "A reason.", stance: "pro" },
+        { id: "con1", kind: "argument", title: "A con reason", text: "A reason.", stance: "con" },
+        { id: "pro2", kind: "argument", title: "Another pro reason", text: "A reason.", stance: "pro" },
+        { id: "con2", kind: "argument", title: "Another con reason", text: "A reason.", stance: "con" }
+      ],
+      edges: [
+        { id: "e_pro1", from: "pro1", to: "thesis", type: "support" },
+        { id: "e_con1", from: "con1", to: "thesis", type: "attack" },
+        { id: "e_pro2", from: "pro2", to: "thesis", type: "support" },
+        { id: "e_con2", from: "con2", to: "thesis", type: "attack" }
+      ]
+    });
+    const ordered = orderVerdicts(debate, [
+      verdict("e_con1", "con1", "thesis"),
+      verdict("e_con2", "con2", "thesis")
+    ]);
+    expect(ordered.waves).toHaveLength(4);
+    expect(ordered.waves[0]?.side).not.toBe(ordered.waves[1]?.side);
+    expect(ordered.waves[1]?.side).not.toBe(ordered.waves[2]?.side);
+    expect(ordered.waves.every((wave) => wave.verdictIds.length === 0 || wave.side)).toBe(true);
   });
 
   it("keeps each primary's reply chain together and seeds the branch order", () => {
@@ -716,15 +792,12 @@ describe("judgment solver", () => {
     ];
     const ordered = orderVerdicts(debate, verdicts, "branch-seed");
     expect(ordered.verdicts).toHaveLength(4);
-    expect(ordered.waves).toHaveLength(2);
-    expect(ordered.waves.map((wave) => wave.label)).toEqual(["Case 1", "Case 2"]);
-    const branchPairs = ordered.waves
-      .map((wave) => [...wave.verdictIds].sort())
-      .sort((a, b) => a[0]!.localeCompare(b[0]!));
-    expect(branchPairs).toEqual([
-      ["e_objection_thesis", "e_rebuttal_objection"],
-      ["e_reply2_second", "e_second_thesis"]
-    ]);
+    expect(ordered.waves).toHaveLength(3);
+    expect(ordered.waves.map((wave) => wave.label)).toEqual(["Case 1", "Case 2", "Case 3"]);
+    const byRoot = new Map(ordered.waves.map((wave) => [wave.rootId, [...wave.verdictIds].sort()]));
+    expect(byRoot.get("support")).toEqual([]);
+    expect(byRoot.get("objection")).toEqual(["e_objection_thesis", "e_rebuttal_objection"]);
+    expect(byRoot.get("second")).toEqual(["e_reply2_second", "e_second_thesis"]);
     expect(orderVerdicts(debate, verdicts, "branch-seed")).toEqual(ordered);
   });
 

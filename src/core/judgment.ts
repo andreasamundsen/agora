@@ -77,10 +77,23 @@ export interface ClashJudgment {
   reasoning: string;
 }
 
+export type JudgmentCaseSide = "pro" | "con" | "neutral";
+export type JudgmentCaseKind = "support" | "attack";
+
 export interface JudgmentWave {
   id: string;
   label: string;
   verdictIds: string[];
+  /** The direct argument that owns this case. */
+  rootId?: string;
+  /** The direct edge from the root to the motion, used for a support cue. */
+  rootEdgeId?: string;
+  /** How the direct root reaches the motion. */
+  rootKind?: JudgmentCaseKind;
+  /** Side used for the stratified case order. */
+  side?: JudgmentCaseSide;
+  /** Number of rulings already entered when this case opens. */
+  startStep?: number;
 }
 
 export interface JudgmentSnapshot {
@@ -748,79 +761,199 @@ function rankBySeed(value: string, seed: string): number {
 }
 
 /**
- * Play the record as small case narratives instead of global depth waves.
+ * Play the record as case narratives instead of global depth waves.
  *
- * A primary argument is any argument with a direct support, attack, or
- * undercut edge to the motion. The primary order is seeded-random. For each
- * primary, its own direct clash is heard first, then the outward reply chain:
- * the arguments attacking it, then the arguments attacking those replies.
- * Shared replies are heard once, in the first branch that reaches them.
+ * A case root is any argument with a direct support, attack, or undercut edge
+ * to the motion. That includes a clean support with no response: it is still a
+ * direct argument and gets a case, even though it contributes no clash verdict.
+ *
+ * Replies belong to the case of the argument they answer. A shared reply has
+ * one owner — the branch nearest the motion, with a seeded tie-break — so the
+ * same card is not played twice. Inside a case the verdicts run breadth-first:
+ * the direct clash, then all depth-one replies, then their replies. Sibling
+ * order at a depth is seeded-random. Cases themselves alternate sides when
+ * possible, while the choice within each side is seeded-random.
  */
 export function orderVerdicts(
   debate: Debate,
   verdicts: ClashJudgment[],
   seed: string = debate.id
 ): { verdicts: ClashJudgment[]; waves: JudgmentWave[] } {
-  const byEdge = new Map(verdicts.map((verdict) => [verdict.edgeId, verdict]));
-  const incoming = new Map<string, ClashJudgment[]>();
+  const edgeById = new Map(debate.edges.map((edge) => [edge.id, edge]));
+  const nodeByIdMap = new Map(debate.nodes.map((node) => [node.id, node]));
+
+  const directEdges = new Map<string, DebateEdge[]>();
+  for (const edge of debate.edges) {
+    if (edge.to !== debate.thesisId) continue;
+    if (edge.type !== "support" && !isClashEdge(edge)) continue;
+    const list = directEdges.get(edge.from) ?? [];
+    list.push(edge);
+    directEdges.set(edge.from, list);
+  }
+  const directIds = [...directEdges.keys()];
+  const directSet = new Set(directIds);
+
+  // Incoming relation lists let us grow a reply forest from the direct roots.
+  // We include all relation types so a support chain cannot hide a reply, but
+  // direct roots always keep their own identity.
+  const incoming = new Map<string, string[]>();
+  for (const edge of debate.edges) {
+    if (edge.from === edge.to) continue;
+    const list = incoming.get(edge.to) ?? [];
+    list.push(edge.from);
+    incoming.set(edge.to, list);
+  }
+
+  const ownerByNode = new Map<string, string>();
+  const rootQueue = [...directIds].sort(
+    (a, b) => rankBySeed(a, seed) - rankBySeed(b, seed) || a.localeCompare(b)
+  );
+  for (const root of rootQueue) ownerByNode.set(root, root);
+  for (let index = 0; index < rootQueue.length; index += 1) {
+    const target = rootQueue[index]!;
+    const owner = ownerByNode.get(target);
+    if (!owner) continue;
+    const children = [...new Set(incoming.get(target) ?? [])]
+      .filter((child) => child !== debate.thesisId && !directSet.has(child))
+      .sort((a, b) => rankBySeed(a, seed) - rankBySeed(b, seed) || a.localeCompare(b));
+    for (const child of children) {
+      if (ownerByNode.has(child)) continue;
+      ownerByNode.set(child, owner);
+      rootQueue.push(child);
+    }
+  }
+
+  const caseVerdicts = new Map<string, ClashJudgment[]>();
+  for (const root of directIds) caseVerdicts.set(root, []);
+  const assigned = new Set<string>();
   for (const verdict of verdicts) {
-    const edge = debate.edges.find((candidate) => candidate.id === verdict.edgeId);
+    const edge = edgeById.get(verdict.edgeId);
     if (!edge || !isClashEdge(edge)) continue;
-    const list = incoming.get(verdict.to) ?? [];
-    list.push(verdict);
-    incoming.set(verdict.to, list);
-  }
-  for (const list of incoming.values()) {
-    list.sort((a, b) => rankBySeed(a.edgeId, seed) - rankBySeed(b.edgeId, seed) || a.edgeId.localeCompare(b.edgeId));
+    const root =
+      edge.to === debate.thesisId
+        ? (directSet.has(edge.from) ? edge.from : ownerByNode.get(edge.from))
+        : ownerByNode.get(edge.to);
+    if (!root || !caseVerdicts.has(root)) continue;
+    caseVerdicts.get(root)!.push(verdict);
+    assigned.add(verdict.edgeId);
   }
 
-  const primaryIds = [...new Set(
-    debate.edges
-      .filter((edge) => edge.to === debate.thesisId && (edge.type === "support" || isClashEdge(edge)))
-      .map((edge) => edge.from)
-  )].sort((a, b) => rankBySeed(a, seed) - rankBySeed(b, seed) || a.localeCompare(b));
+  const caseInfo = new Map<
+    string,
+    { rootEdgeId: string; rootKind: JudgmentCaseKind; side: JudgmentCaseSide }
+  >();
+  for (const root of directIds) {
+    const direct = directEdges.get(root) ?? [];
+    const supportEdge = direct
+      .filter((edge) => edge.type === "support")
+      .sort((a, b) => rankBySeed(a.id, seed) - rankBySeed(b.id, seed) || a.id.localeCompare(b.id))[0];
+    const attackEdge = direct
+      .filter((edge) => isClashEdge(edge))
+      .sort((a, b) => rankBySeed(a.id, seed) - rankBySeed(b.id, seed) || a.id.localeCompare(b.id))[0];
+    const rootEdge = supportEdge ?? attackEdge;
+    if (!rootEdge) continue;
+    const node = nodeByIdMap.get(root);
+    const side: JudgmentCaseSide =
+      node?.stance === "pro" || node?.stance === "con"
+        ? node.stance
+        : supportEdge
+          ? "pro"
+          : "con";
+    caseInfo.set(root, {
+      rootEdgeId: rootEdge.id,
+      rootKind: supportEdge ? "support" : "attack",
+      side
+    });
+  }
 
-  const visited = new Set<string>();
+  const bySide: Record<JudgmentCaseSide, string[]> = { pro: [], con: [], neutral: [] };
+  for (const root of directIds) {
+    const info = caseInfo.get(root);
+    if (!info) continue;
+    bySide[info.side].push(root);
+  }
+  for (const side of ["pro", "con", "neutral"] as const) {
+    bySide[side].sort(
+      (a, b) => rankBySeed(a, seed) - rankBySeed(b, seed) || a.localeCompare(b)
+    );
+  }
+
+  const orderedInfo: string[] = [];
+  const startSide = rankBySeed("case-order", seed) % 2 === 0 ? "pro" : "con";
+  let turn: "pro" | "con" = startSide;
+  while (bySide.pro.length || bySide.con.length) {
+    if (turn === "pro" && bySide.pro.length) orderedInfo.push(bySide.pro.shift()!);
+    else if (turn === "con" && bySide.con.length) orderedInfo.push(bySide.con.shift()!);
+    else if (bySide.pro.length) orderedInfo.push(bySide.pro.shift()!);
+    else if (bySide.con.length) orderedInfo.push(bySide.con.shift()!);
+    turn = turn === "pro" ? "con" : "pro";
+  }
+  orderedInfo.push(...bySide.neutral);
+
+  // Depth is measured from the case root through the same ownership tree. A
+  // direct clash sits at depth 0; a reply to the root at depth 1.
+  const depthByCase = new Map<string, Map<string, number>>();
+  for (const root of orderedInfo) {
+    const depths = new Map<string, number>([[root, 0]]);
+    const queue = [root];
+    for (let index = 0; index < queue.length; index += 1) {
+      const target = queue[index]!;
+      for (const source of incoming.get(target) ?? []) {
+        if (ownerByNode.get(source) !== root || depths.has(source)) continue;
+        depths.set(source, (depths.get(target) ?? 0) + 1);
+        queue.push(source);
+      }
+    }
+    depthByCase.set(root, depths);
+  }
+
   const ordered: ClashJudgment[] = [];
   const waves: JudgmentWave[] = [];
-
-  const push = (verdict: ClashJudgment, branch: string[]) => {
-    if (visited.has(verdict.edgeId)) return;
-    visited.add(verdict.edgeId);
-    ordered.push(verdict);
-    branch.push(verdict.edgeId);
-  };
-
-  const walk = (targetId: string, branch: string[]) => {
-    for (const reply of incoming.get(targetId) ?? []) {
-      if (visited.has(reply.edgeId)) continue;
-      push(reply, branch);
-      walk(reply.from, branch);
-    }
-  };
-
   let caseNumber = 0;
-  for (const primaryId of primaryIds) {
-    const branch: string[] = [];
-    const direct = debate.edges
-      .filter((edge) => edge.from === primaryId && edge.to === debate.thesisId && isClashEdge(edge))
-      .map((edge) => byEdge.get(edge.id))
-      .filter((verdict): verdict is ClashJudgment => Boolean(verdict))
-      .sort((a, b) => rankBySeed(a.edgeId, seed) - rankBySeed(b.edgeId, seed) || a.edgeId.localeCompare(b.edgeId));
-    for (const verdict of direct) push(verdict, branch);
-    walk(primaryId, branch);
-    if (!branch.length) continue;
+  for (const root of orderedInfo) {
+    const info = caseInfo.get(root);
+    if (!info) continue;
+    const depths = depthByCase.get(root) ?? new Map<string, number>([[root, 0]]);
+    const sorted = [...(caseVerdicts.get(root) ?? [])].sort((a, b) => {
+      const edgeA = edgeById.get(a.edgeId);
+      const edgeB = edgeById.get(b.edgeId);
+      const depthA =
+        edgeA?.to === debate.thesisId ? 0 : (depths.get(edgeA?.to ?? "") ?? 0) + 1;
+      const depthB =
+        edgeB?.to === debate.thesisId ? 0 : (depths.get(edgeB?.to ?? "") ?? 0) + 1;
+      return (
+        depthA - depthB ||
+        rankBySeed(a.edgeId, seed) - rankBySeed(b.edgeId, seed) ||
+        a.edgeId.localeCompare(b.edgeId)
+      );
+    });
+    const startStep = ordered.length;
+    for (const verdict of sorted) ordered.push(verdict);
     caseNumber += 1;
-    waves.push({ id: `case-${caseNumber}`, label: `Case ${caseNumber}`, verdictIds: branch });
+    waves.push({
+      id: `case-${caseNumber}`,
+      label: `Case ${caseNumber}`,
+      verdictIds: sorted.map((verdict) => verdict.edgeId),
+      rootId: root,
+      rootEdgeId: info.rootEdgeId,
+      rootKind: info.rootKind,
+      side: info.side,
+      startStep
+    });
   }
 
   const remaining = verdicts
-    .filter((verdict) => !visited.has(verdict.edgeId))
+    .filter((verdict) => !assigned.has(verdict.edgeId))
     .sort((a, b) => rankBySeed(a.edgeId, seed) - rankBySeed(b.edgeId, seed) || a.edgeId.localeCompare(b.edgeId));
   if (remaining.length) {
-    const branch: string[] = [];
-    for (const verdict of remaining) push(verdict, branch);
-    waves.push({ id: "the-record", label: "The record", verdictIds: branch });
+    const startStep = ordered.length;
+    for (const verdict of remaining) ordered.push(verdict);
+    waves.push({
+      id: "the-record",
+      label: "The record",
+      verdictIds: remaining.map((verdict) => verdict.edgeId),
+      startStep
+    });
   }
 
   return { verdicts: ordered, waves };
