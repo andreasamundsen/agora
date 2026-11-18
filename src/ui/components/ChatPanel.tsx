@@ -44,7 +44,7 @@ export function ChatPanel({ debate, settings, busy, draft, onDraftChange, onSend
       <div className="chamber-head">
         <div>
           <div className="eyebrow">The chamber</div>
-          <h2 className="chamber-title">Ask about the map</h2>
+          <h2 className="chamber-title">Ask the chamber</h2>
         </div>
         <button type="button" className={`engine-pill engine-pill--${engineDot}`} onClick={onOpenSettings} title="Model settings">
           <span className="engine-dot" />
@@ -66,8 +66,8 @@ export function ChatPanel({ debate, settings, busy, draft, onDraftChange, onSend
               This is the chamber. The map is not a verdict — it is the state of the argument.
             </p>
             <p>
-              Ask about the arguments on the table. The chamber answers in concise prose, usually one substantial
-              paragraph, and does not change the map.
+              Ask about the arguments on the table, or ask a general question. The chamber answers in concise
+              prose and does not change the map.
             </p>
             <ol>
               <li>State a position</li>
@@ -140,7 +140,7 @@ export function ChatPanel({ debate, settings, busy, draft, onDraftChange, onSend
             value={draft}
             rows={1}
             disabled={!debate || busy}
-            placeholder={debate ? "Ask a question about this map…" : "Open a debate first"}
+            placeholder={debate ? "Ask about the map or anything else…" : "Open a debate first"}
             onChange={(event) => onDraftChange(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {

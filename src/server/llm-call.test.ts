@@ -77,6 +77,25 @@ describe("callModel output budgets", () => {
     expect(bodies[1]?.max_tokens).toBe(4200);
   });
 
+  it("omits JSON mode for prose calls", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        bodies.push(JSON.parse(String(init?.body)));
+        return chatResponse("Oslo");
+      })
+    );
+
+    await expect(
+      callModel(remoteSettings, [{ role: "user", content: "What is the capital of Norway?" }], {
+        jsonMode: false
+      })
+    ).resolves.toBe("Oslo");
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]?.response_format).toBeUndefined();
+  });
+
   it("reports hidden reasoning instead of accepting an empty final answer", async () => {
     vi.stubGlobal(
       "fetch",

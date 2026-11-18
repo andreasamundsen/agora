@@ -93,14 +93,16 @@ Design rules:
 
 Return JSON only, with no markdown fences and no commentary outside the object.`;
 
-const ASK_RULES = `You are the chamber analyst inside AGORA, a debate harness. You answer questions about the argument map already on the table. You do not edit the map.
+const ASK_RULES = `You are the chamber analyst inside AGORA, a debate harness. You answer questions about the argument map and general questions the user asks. You do not edit the map.
 
 Answer rules:
-- Answer only from the map. Do not invent evidence, statistics, citations, or arguments the map does not contain.
+- For questions about the map, answer from the map. Do not invent map arguments, evidence, statistics, citations, or quotations that the map does not contain.
+- For general questions — definitions, facts, explanations, or questions about the world — answer directly from your general knowledge. Make clear when a claim is outside the map, and do not force a card citation. When the general answer bears on the debate, connect it to the map only when that connection is useful.
+- Do not invent citations or claim to have browsed the web. You cannot know live, current, or private facts; if the answer is uncertain or time-sensitive, say so rather than guessing.
 - Answer in one substantial paragraph, usually 4-7 sentences and roughly 120-200 words. If the question explicitly asks for several parts, you may use up to two paragraphs and roughly 250 words. A narrow question can be answered more briefly. Never pad.
-- Name the argument titles you are relying on in quotes so the user can find them.
+- Name the argument titles you are relying on in quotes, when the answer draws on the map.
 - Explain the relation between claims. Do not treat an argument merely being present as proof that it is sound.
-- If the map cannot answer the question, say what is missing or uncertain.
+- If the map cannot answer a map question, say what is missing or uncertain.
 - The chamber is read-only. If asked to add, remove, move, or relink a card, say that the chamber only answers questions about the map; do not pretend an edit happened.
 - Do not return JSON, a patch, or a heading. No praise, no filler.`;
 
@@ -201,7 +203,7 @@ const LOCAL_OUTPUT_TOKEN_FLOOR = 12_000;
 export async function callModel(
   settings: StoredSettings,
   messages: { role: "system" | "user"; content: string }[],
-  options: { temperature?: number; maxTokens?: number } = {}
+  options: { temperature?: number; maxTokens?: number; jsonMode?: boolean } = {}
 ): Promise<string> {
   const urlProblem = providerUrlProblem(settings.baseUrl, Boolean(settings.apiKey.trim()));
   if (urlProblem) throw new Error(urlProblem);
@@ -251,8 +253,9 @@ export async function callModel(
     }
   };
 
-  let response = await send(true);
-  if (response.status === 400 || response.status === 422) {
+  const useJsonMode = options.jsonMode !== false;
+  let response = await send(useJsonMode);
+  if (useJsonMode && (response.status === 400 || response.status === 422)) {
     response = await send(false);
   }
   if (!response.ok) {
@@ -531,7 +534,7 @@ export async function askDebate(debate: Debate, input: string): Promise<AskResul
         { role: "system", content: ASK_RULES },
         { role: "user", content: askPrompt(debate, input) }
       ],
-      { temperature: 0.2, maxTokens: 900 }
+      { temperature: 0.2, maxTokens: 900, jsonMode: false }
     );
     const reply = cleanAnswer(content);
     if (!reply) throw new Error("The model returned an empty answer.");
