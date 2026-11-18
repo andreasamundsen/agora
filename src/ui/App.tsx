@@ -186,8 +186,8 @@ export default function App() {
   /**
    * A branch opens by selecting the argument its first ruling answers. The
    * engine supplies these branch starts so a support argument is visible even
-   * when it is a fork or a nested support, not only when it owns a direct case.
-   * Clean supports with no replies still get a case cue; there is nothing to
+   * when it is a fork or a nested support, not only when it owns a direct stem.
+   * Clean supports with no replies still get a stem cue; there is nothing to
    * open.
    */
   const caseLineCues = useMemo(() => {
@@ -220,7 +220,7 @@ export default function App() {
   /**
    * Branch openings are manual steps too: Next, Previous, and seeking to the
    * first ruling must show the target before the ruling plays. Clean supports
-   * with no replies remain a case cue only.
+   * with no replies remain a stem cue only.
    */
   const caseOpenings = useMemo(() => {
     const cues = new Map<number, string[]>();
@@ -516,7 +516,16 @@ export default function App() {
       setJudgment((current) => current ? { ...current, playing: false } : current);
       return;
     }
-    const delay = (judgment.step === 0 ? 2100 : 5200) / judgment.speed;
+    // A stem cue is already a held beat of its own. Avoid adding a full ruling
+    // pause on both sides of it; otherwise a branch transition can feel twice
+    // as long as an ordinary ruling.
+    const openingSeenAtStep = (caseLineCues.get(judgment.step) ?? []).some((edgeId) =>
+      judgment.caseLineSeen.includes(caseLineKey(judgment.step, edgeId))
+    );
+    const openingAhead = (caseLineCues.get(judgment.step + 1) ?? []).length > 0;
+    const delay = (
+      judgment.step === 0 ? 2100 : openingSeenAtStep ? 2200 : openingAhead ? 2400 : 5200
+    ) / judgment.speed;
     const timer = window.setTimeout(() => {
       setJudgment((current) => {
         if (!current || !current.playing) return current;

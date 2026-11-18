@@ -667,7 +667,7 @@ describe("judgment solver", () => {
     expect(summary.decisive[0]?.kind).toBe("support");
   });
 
-  it("plays direct clashes and reply chains as seeded case branches", () => {
+  it("plays direct clashes and reply chains as seeded branches", () => {
     const debate = debateWith([
       { from: "support", to: "thesis", type: "support" },
       { from: "objection", to: "thesis", type: "attack" },
@@ -684,7 +684,7 @@ describe("judgment solver", () => {
       "e_rebuttal_objection",
       "e_support_rebuttal"
     ]);
-    expect(ordered.waves.map((wave) => wave.label)).toEqual(["Case 1", "Case 2"]);
+    expect(ordered.waves.map((wave) => wave.label)).toEqual(["Branch 1", "Branch 2"]);
     const supportCase = ordered.waves.find((wave) => wave.rootId === "support");
     expect(supportCase?.rootKind).toBe("support");
     expect(supportCase?.verdictIds).toEqual([]);
@@ -722,8 +722,9 @@ describe("judgment solver", () => {
       verdict("e_left2_left", "left2", "left"),
       verdict("e_right1_right", "right1", "right")
     ]);
-    expect(ordered.waves).toHaveLength(1);
-    expect(ordered.waves[0]?.rootId).toBe("root");
+    expect(ordered.waves).toHaveLength(3);
+    expect(ordered.waves.slice(0, 2).every((wave) => wave.rootId === "root")).toBe(true);
+    expect(ordered.waves[0]?.verdictIds[0]).toBe("e_root_thesis");
     const ids = ordered.verdicts.map((item) => item.edgeId);
     const position = (id: string) => ids.indexOf(id);
     expect(position("e_root_thesis")).toBe(0);
@@ -737,9 +738,8 @@ describe("judgment solver", () => {
         ? ["e_left1_left", "e_left2_left"]
         : ["e_right1_right"];
     expect(firstChildren.length).toBeGreaterThan(0);
-    for (const child of firstChildren) {
-      expect(position(child)).toBeLessThan(position(secondParent));
-    }
+    const chosenChild = firstChildren.find((child) => position(child) < position(secondParent));
+    expect(chosenChild).toBeDefined();
   });
 
   it("follows a reply to its own reply before the next reply at the fork", () => {
@@ -750,22 +750,22 @@ describe("judgment solver", () => {
       nodes: [
         { id: "thesis", kind: "statement", title: "The leaf branch plays", text: "It plays." },
         { id: "root", kind: "argument", title: "The root", text: "A root.", stance: "con" },
-        { id: "replyA", kind: "argument", title: "Reply A", text: "A reply.", stance: "pro" },
+        { id: "replya", kind: "argument", title: "Reply A", text: "A reply.", stance: "pro" },
         { id: "leaf", kind: "argument", title: "Leaf", text: "A reply to A.", stance: "con" },
-        { id: "replyB", kind: "argument", title: "Reply B", text: "Another reply.", stance: "pro" }
+        { id: "replyb", kind: "argument", title: "Reply B", text: "Another reply.", stance: "pro" }
       ],
       edges: [
         { id: "e_root_thesis", from: "root", to: "thesis", type: "attack" },
-        { id: "e_a_root", from: "replyA", to: "root", type: "attack" },
-        { id: "e_leaf_a", from: "leaf", to: "replyA", type: "attack" },
-        { id: "e_b_root", from: "replyB", to: "root", type: "attack" }
+        { id: "e_a_root", from: "replya", to: "root", type: "attack" },
+        { id: "e_leaf_a", from: "leaf", to: "replya", type: "attack" },
+        { id: "e_b_root", from: "replyb", to: "root", type: "attack" }
       ]
     });
     const ordered = orderVerdicts(debate, [
       verdict("e_root_thesis", "root", "thesis"),
-      verdict("e_a_root", "replyA", "root"),
-      verdict("e_leaf_a", "leaf", "replyA"),
-      verdict("e_b_root", "replyB", "root")
+      verdict("e_a_root", "replya", "root"),
+      verdict("e_leaf_a", "leaf", "replya"),
+      verdict("e_b_root", "replyb", "root")
     ]);
     const ids = ordered.verdicts.map((item) => item.edgeId);
     const aFirst = ids.indexOf("e_a_root") < ids.indexOf("e_b_root");
@@ -806,6 +806,40 @@ describe("judgment solver", () => {
       .find((opening) => opening.nodeId === "support");
     expect(supportOpening?.edgeId).toBe("e_support_root");
     expect(supportOpening?.step).toBe(1);
+  });
+
+  it("gives every direct stem one branch before returning for a fork", () => {
+    const debate = reconcileDebate({
+      id: "stem-pass-debate",
+      motion: "Should every stem get a branch?",
+      thesisId: "thesis",
+      nodes: [
+        { id: "thesis", kind: "statement", title: "Every stem gets a branch", text: "It does." },
+        { id: "roota", kind: "argument", title: "A con stem", text: "A con reason.", stance: "con" },
+        { id: "rootb", kind: "argument", title: "A pro stem", text: "A pro reason.", stance: "pro" },
+        { id: "a1", kind: "argument", title: "First reply to A", text: "A reply.", stance: "pro" },
+        { id: "a2", kind: "argument", title: "Second reply to A", text: "Another reply.", stance: "pro" },
+        { id: "b1", kind: "argument", title: "Reply to B", text: "A reply.", stance: "con" }
+      ],
+      edges: [
+        { id: "e_roota_thesis", from: "roota", to: "thesis", type: "attack" },
+        { id: "e_rootb_thesis", from: "rootb", to: "thesis", type: "support" },
+        { id: "e_a1_roota", from: "a1", to: "roota", type: "attack" },
+        { id: "e_a2_roota", from: "a2", to: "roota", type: "attack" },
+        { id: "e_b1_rootb", from: "b1", to: "rootb", type: "attack" }
+      ]
+    });
+    const ordered = orderVerdicts(debate, [
+      verdict("e_roota_thesis", "roota", "thesis"),
+      verdict("e_rootb_thesis", "rootb", "thesis"),
+      verdict("e_a1_roota", "a1", "roota"),
+      verdict("e_a2_roota", "a2", "roota"),
+      verdict("e_b1_rootb", "b1", "rootb")
+    ], "stem-pass");
+    const firstStems = ordered.waves.slice(0, 2).map((wave) => wave.rootId).sort();
+    expect(firstStems).toEqual(["roota", "rootb"]);
+    const ids = ordered.verdicts.map((item) => item.edgeId);
+    expect(ids[0]).toMatch(/e_roota_thesis|e_rootb_thesis/);
   });
 
   it("alternates sides for case roots when both sides are available", () => {
@@ -867,7 +901,7 @@ describe("judgment solver", () => {
     const ordered = orderVerdicts(debate, verdicts, "branch-seed");
     expect(ordered.verdicts).toHaveLength(4);
     expect(ordered.waves).toHaveLength(3);
-    expect(ordered.waves.map((wave) => wave.label)).toEqual(["Case 1", "Case 2", "Case 3"]);
+    expect(ordered.waves.map((wave) => wave.label)).toEqual(["Branch 1", "Branch 2", "Branch 3"]);
     const byRoot = new Map(ordered.waves.map((wave) => [wave.rootId, [...wave.verdictIds].sort()]));
     expect(byRoot.get("support")).toEqual([]);
     expect(byRoot.get("objection")).toEqual(["e_objection_thesis", "e_rebuttal_objection"]);
@@ -896,7 +930,7 @@ describe("judgment solver", () => {
     expect(run.outcome).toBe("falls");
     expect(run.summary).toContain("falls");
     expect(run.decisive[0]?.from).toBe("objection");
-    expect(run.waves[0]?.label).toBe("Case 1");
+    expect(run.waves[0]?.label).toBe("Branch 1");
     expect(run.assessments).toHaveLength(2);
     expect(run.balance).toMatchObject({ pro: 2, con: 3, assessed: true });
   });

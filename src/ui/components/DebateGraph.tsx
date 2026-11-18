@@ -72,7 +72,10 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
   ref
 ) {
   const [view, setView] = useState<LayoutMode>("case");
-  const layout = useMemo(() => computeLayout(debate, view), [debate, view]);
+  // Judgment reads as a branch walk, so it always uses Thread view. The
+  // reader's previous view returns when the bench closes.
+  const activeView: LayoutMode = judgment?.active ? "thread" : view;
+  const layout = useMemo(() => computeLayout(debate, activeView), [debate, activeView]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [zoom, setZoom] = useState(0.9);
@@ -341,7 +344,7 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
   return (
     <div
       ref={containerRef}
-      className={`graph ${view === "thread" ? "is-thread" : ""} ${dragging ? "is-dragging" : ""} ${stage?.active ? "is-staging" : ""} ${judgment?.active ? "is-judging" : ""}`}
+      className={`graph ${activeView === "thread" ? "is-thread" : ""} ${dragging ? "is-dragging" : ""} ${stage?.active ? "is-staging" : ""} ${judgment?.active ? "is-judging" : ""}`}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -392,8 +395,8 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
         <div className="graph-view-toggle" role="group" aria-label="Map layout">
           <button
             type="button"
-            className={view === "case" ? "is-active" : ""}
-            aria-pressed={view === "case"}
+            className={activeView === "case" ? "is-active" : ""}
+            aria-pressed={activeView === "case"}
             onClick={() => setView("case")}
             disabled={viewLocked}
             title="Case view: arguments grouped by side"
@@ -402,8 +405,8 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
           </button>
           <button
             type="button"
-            className={view === "thread" ? "is-active" : ""}
-            aria-pressed={view === "thread"}
+            className={activeView === "thread" ? "is-active" : ""}
+            aria-pressed={activeView === "thread"}
             onClick={() => setView("thread")}
             disabled={viewLocked}
             title="Thread view: responses attached to the argument they answer"
@@ -427,7 +430,7 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
             ? judgment.caseLineEdgeId
               ? "a case line is entered · select a node to inspect"
               : "the bench is following the record · select a node to inspect"
-            : view === "thread"
+            : activeView === "thread"
               ? <>responses follow the argument they answer <span>·</span> drag to pan <span>·</span> scroll to zoom</>
               : <>drag to pan <span>·</span> scroll to zoom <span>·</span> select a node to inspect</>}
         </div>

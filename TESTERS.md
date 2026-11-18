@@ -4,11 +4,18 @@ Agora is a local debate harness. You install it like a normal Windows app; no No
 
 ## Install
 
-1. Run `Agora-Setup-0.1.27.exe`.
+1. Run `Agora-Setup-0.1.28.exe`.
 2. Windows will warn that the publisher is unknown. This build is intentionally unsigned: choose **More info → Run anyway**.
 3. The installer is per-user and does not need administrator rights. Agora opens when it finishes.
 4. To upgrade, close Agora first, then run the newer installer over it. Your debates stay in `%APPDATA%\Agora\data`.
 5. The SHA-256 checksum should match the file supplied with the build. A matching hash is not a code signature; it only confirms the file has not changed.
+
+## What's new in 0.1.28
+
+- **Judgment playback is now branch-first.** Each branch begins at an argument directly tied to the motion — support or adversarial — and follows one response at each fork outward to the end. The stems are opened in alternating For/Against order, so every direct argument is selected before the playback returns for a second branch.
+- **Judgment uses Thread view.** The map switches to Thread view for the bench and returns to your previous view when judgment closes. This keeps a branch extending left or right from the argument it answers.
+- **Remaining sibling branches play in later passes**, so every ruling still appears exactly once. A clean support gets a stem beat even when it has no clash ruling.
+- The old case grouping and its within-case backtracking are gone; the verdict engine, weights, and record are unchanged.
 
 ## What's new in 0.1.27
 

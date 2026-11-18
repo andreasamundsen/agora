@@ -772,22 +772,15 @@ function rankBySeed(value: string, seed: string): number {
 }
 
 /**
- * Play the record as case narratives instead of global depth waves.
+ * Play the record as outward branches from the arguments directly tied to the
+ * motion.
  *
- * A case root is any argument with a direct support, attack, or undercut edge
- * to the motion. That includes a clean support with no response: it is still a
- * direct argument and gets a case, even though it contributes no clash verdict.
- *
- * Replies belong to the case of the argument they answer. A shared reply has
- * one owner — the branch nearest the motion, with a seeded tie-break — so the
- * same card is not played twice. Inside a case, the record is walked as one
- * branch at a time: play the direct clash, choose one reply, follow that reply
- * outward, then backtrack to the nearest fork and take the next unreplayed
- * reply. Sibling branches are seeded-random, and every verdict in the case is
- * still played exactly once.
- *
- * Cases themselves alternate sides when possible, while the choice within each
- * side is seeded-random.
+ * A direct root is any argument with a direct support, attack, or undercut edge
+ * to the motion. The first pass gives every root one branch: highlight the
+ * stem, then follow one response at each fork to the end of the path. A clean
+ * support still gets a stem wave even though it contributes no clash verdict.
+ * Later passes take the remaining sibling branches, so no ruling is silently
+ * dropped. Roots alternate sides when possible; choices at forks are seeded.
  */
 export function orderVerdicts(
   debate: Debate,
@@ -806,65 +799,29 @@ export function orderVerdicts(
     directEdges.set(edge.from, list);
   }
   const directIds = [...directEdges.keys()];
-  const directSet = new Set(directIds);
 
-  // Incoming relation lists let us grow a reply forest from the direct roots.
-  // We include all relation types so a support chain cannot hide a reply, but
-  // direct roots always keep their own identity.
-  const incoming = new Map<string, string[]>();
-  for (const edge of debate.edges) {
-    if (edge.from === edge.to) continue;
-    const list = incoming.get(edge.to) ?? [];
-    list.push(edge.from);
-    incoming.set(edge.to, list);
-  }
+  const sortVerdictsBySeed = <T extends { edgeId: string }>(list: T[]): T[] =>
+    [...list].sort(
+      (a, b) => rankBySeed(a.edgeId, seed) - rankBySeed(b.edgeId, seed) || a.edgeId.localeCompare(b.edgeId)
+    );
+  const sortEdgesBySeed = (list: DebateEdge[]): DebateEdge[] =>
+    [...list].sort(
+      (a, b) => rankBySeed(a.id, seed) - rankBySeed(b.id, seed) || a.id.localeCompare(b.id)
+    );
 
-  const ownerByNode = new Map<string, string>();
-  const rootQueue = [...directIds].sort(
-    (a, b) => rankBySeed(a, seed) - rankBySeed(b, seed) || a.localeCompare(b)
-  );
-  for (const root of rootQueue) ownerByNode.set(root, root);
-  for (let index = 0; index < rootQueue.length; index += 1) {
-    const target = rootQueue[index]!;
-    const owner = ownerByNode.get(target);
-    if (!owner) continue;
-    const children = [...new Set(incoming.get(target) ?? [])]
-      .filter((child) => child !== debate.thesisId && !directSet.has(child))
-      .sort((a, b) => rankBySeed(a, seed) - rankBySeed(b, seed) || a.localeCompare(b));
-    for (const child of children) {
-      if (ownerByNode.has(child)) continue;
-      ownerByNode.set(child, owner);
-      rootQueue.push(child);
-    }
-  }
-
-  const caseVerdicts = new Map<string, ClashJudgment[]>();
-  for (const root of directIds) caseVerdicts.set(root, []);
-  const assigned = new Set<string>();
-  for (const verdict of verdicts) {
-    const edge = edgeById.get(verdict.edgeId);
-    if (!edge || !isClashEdge(edge)) continue;
-    const root =
-      edge.to === debate.thesisId
-        ? (directSet.has(edge.from) ? edge.from : ownerByNode.get(edge.from))
-        : ownerByNode.get(edge.to);
-    if (!root || !caseVerdicts.has(root)) continue;
-    caseVerdicts.get(root)!.push(verdict);
-    assigned.add(verdict.edgeId);
-  }
-
-  const caseInfo = new Map<
+  const rootInfo = new Map<
     string,
-    { rootEdgeId: string; rootKind: JudgmentCaseKind; side: JudgmentCaseSide }
+    {
+      rootEdgeId: string;
+      rootKind: JudgmentCaseKind;
+      side: JudgmentCaseSide;
+      supportEdgeId?: string;
+    }
   >();
   for (const root of directIds) {
     const direct = directEdges.get(root) ?? [];
-    const supportEdge = direct
-      .filter((edge) => edge.type === "support")
-      .sort((a, b) => rankBySeed(a.id, seed) - rankBySeed(b.id, seed) || a.id.localeCompare(b.id))[0];
-    const attackEdge = direct
-      .filter((edge) => isClashEdge(edge))
-      .sort((a, b) => rankBySeed(a.id, seed) - rankBySeed(b.id, seed) || a.id.localeCompare(b.id))[0];
+    const supportEdge = sortEdgesBySeed(direct.filter((edge) => edge.type === "support"))[0];
+    const attackEdge = sortEdgesBySeed(direct.filter((edge) => isClashEdge(edge)))[0];
     const rootEdge = supportEdge ?? attackEdge;
     if (!rootEdge) continue;
     const node = nodeByIdMap.get(root);
@@ -874,16 +831,17 @@ export function orderVerdicts(
         : supportEdge
           ? "pro"
           : "con";
-    caseInfo.set(root, {
+    rootInfo.set(root, {
       rootEdgeId: rootEdge.id,
       rootKind: supportEdge ? "support" : "attack",
-      side
+      side,
+      supportEdgeId: supportEdge?.id
     });
   }
 
   const bySide: Record<JudgmentCaseSide, string[]> = { pro: [], con: [], neutral: [] };
   for (const root of directIds) {
-    const info = caseInfo.get(root);
+    const info = rootInfo.get(root);
     if (!info) continue;
     bySide[info.side].push(root);
   }
@@ -893,150 +851,127 @@ export function orderVerdicts(
     );
   }
 
-  // A branch starts at the argument its first ruling answers. When that
-  // argument is a support, the branch needs that support visible first, even
-  // when it is not the direct case root.
-  const supportEdgeByNode = new Map<string, string>();
-  for (const edge of debate.edges) {
-    if (edge.type !== "support" || edge.from === edge.to) continue;
-    const existing = supportEdgeByNode.get(edge.from);
-    if (!existing) {
-      supportEdgeByNode.set(edge.from, edge.id);
-      continue;
-    }
-    const existingEdge = edgeById.get(existing);
-    const existingIsDirect = existingEdge?.to === debate.thesisId;
-    const candidateIsDirect = edge.to === debate.thesisId;
-    if (candidateIsDirect && !existingIsDirect) supportEdgeByNode.set(edge.from, edge.id);
-  }
-
-  const orderedInfo: string[] = [];
+  const orderedRoots: string[] = [];
   const startSide = rankBySeed("case-order", seed) % 2 === 0 ? "pro" : "con";
   let turn: "pro" | "con" = startSide;
   while (bySide.pro.length || bySide.con.length) {
-    if (turn === "pro" && bySide.pro.length) orderedInfo.push(bySide.pro.shift()!);
-    else if (turn === "con" && bySide.con.length) orderedInfo.push(bySide.con.shift()!);
-    else if (bySide.pro.length) orderedInfo.push(bySide.pro.shift()!);
-    else if (bySide.con.length) orderedInfo.push(bySide.con.shift()!);
+    if (turn === "pro" && bySide.pro.length) orderedRoots.push(bySide.pro.shift()!);
+    else if (turn === "con" && bySide.con.length) orderedRoots.push(bySide.con.shift()!);
+    else if (bySide.pro.length) orderedRoots.push(bySide.pro.shift()!);
+    else if (bySide.con.length) orderedRoots.push(bySide.con.shift()!);
     turn = turn === "pro" ? "con" : "pro";
   }
-  orderedInfo.push(...bySide.neutral);
+  orderedRoots.push(...bySide.neutral);
+
+  const directByRoot = new Map<string, ClashJudgment[]>();
+  const repliesByTarget = new Map<string, ClashJudgment[]>();
+  for (const item of verdicts) {
+    const edge = edgeById.get(item.edgeId);
+    if (!edge || !isClashEdge(edge)) continue;
+    const bucket = edge.to === debate.thesisId ? directByRoot : repliesByTarget;
+    const key = edge.to === debate.thesisId ? edge.from : edge.to;
+    const list = bucket.get(key) ?? [];
+    list.push(item);
+    bucket.set(key, list);
+  }
+  for (const list of directByRoot.values()) list.splice(0, list.length, ...sortVerdictsBySeed(list));
+  for (const list of repliesByTarget.values()) list.splice(0, list.length, ...sortVerdictsBySeed(list));
+
+  const played = new Set<string>();
+  const takeDirect = (root: string): ClashJudgment[] => {
+    const list = sortVerdictsBySeed((directByRoot.get(root) ?? []).filter((item) => !played.has(item.edgeId)));
+    for (const item of list) played.add(item.edgeId);
+    return list;
+  };
+  const takeBranch = (nodeId: string): ClashJudgment[] => {
+    const candidates = (repliesByTarget.get(nodeId) ?? []).filter((item) => !played.has(item.edgeId));
+    const next = candidates[0];
+    if (!next) return [];
+    played.add(next.edgeId);
+    return [next, ...takeBranch(next.from)];
+  };
 
   const ordered: ClashJudgment[] = [];
   const waves: JudgmentWave[] = [];
-  let caseNumber = 0;
-  for (const root of orderedInfo) {
-    const info = caseInfo.get(root);
-    if (!info) continue;
-    const caseJudgments = [...(caseVerdicts.get(root) ?? [])];
-    const edgeFor = (item: ClashJudgment) => edgeById.get(item.edgeId);
+  const stemSeen = new Set<string>();
+  let branchNumber = 0;
 
-    // Direct clashes come first. Everything else is a reply edge, grouped by
-    // the argument it answers so we can walk one reply branch at a time.
-    const direct = caseJudgments
-      .filter((item) => edgeFor(item)?.to === debate.thesisId)
-      .sort(
-        (a, b) =>
-          rankBySeed(a.edgeId, seed) - rankBySeed(b.edgeId, seed) ||
-          a.edgeId.localeCompare(b.edgeId)
-      );
-    const repliesByTarget = new Map<string, ClashJudgment[]>();
-    for (const item of caseJudgments) {
-      const edge = edgeFor(item);
-      if (!edge || edge.to === debate.thesisId) continue;
-      const list = repliesByTarget.get(edge.to) ?? [];
-      list.push(item);
-      repliesByTarget.set(edge.to, list);
-    }
-    for (const list of repliesByTarget.values()) {
-      list.sort(
-        (a, b) =>
-          rankBySeed(a.edgeId, seed) - rankBySeed(b.edgeId, seed) ||
-          a.edgeId.localeCompare(b.edgeId)
-      );
-    }
-
-    const branchOrder: ClashJudgment[] = [];
-    const branchOpenings: JudgmentBranchOpening[] = [];
-    const startStep = ordered.length;
-    const played = new Set<string>();
-    const visit = (nodeId: string) => {
-      for (const reply of repliesByTarget.get(nodeId) ?? []) {
-        if (played.has(reply.edgeId)) continue;
-        const supportEdgeId = supportEdgeByNode.get(nodeId);
-        if (supportEdgeId) {
-          branchOpenings.push({
-            step: startStep + branchOrder.length,
-            nodeId,
-            edgeId: supportEdgeId
-          });
-        }
-        played.add(reply.edgeId);
-        branchOrder.push(reply);
-        const edge = edgeFor(reply);
-        if (edge) visit(edge.from);
+  // One pass gives every direct argument one branch. Later passes take the
+  // remaining sibling branches, so no ruling is silently dropped.
+  while (true) {
+    let madeAny = false;
+    for (const root of orderedRoots) {
+      const info = rootInfo.get(root);
+      if (!info) continue;
+      const first = !stemSeen.has(root);
+      const direct = first ? takeDirect(root) : [];
+      const branch = takeBranch(root);
+      if (!first && direct.length === 0 && branch.length === 0) continue;
+      if (first) stemSeen.add(root);
+      const branchVerdicts = [...direct, ...branch];
+      const startStep = ordered.length;
+      const openings: JudgmentBranchOpening[] = [];
+      if (info.rootKind === "support" && info.supportEdgeId) {
+        openings.push({ step: startStep, nodeId: root, edgeId: info.supportEdgeId });
       }
-    };
-
-    for (const item of direct) {
-      if (played.has(item.edgeId)) continue;
-      played.add(item.edgeId);
-      branchOrder.push(item);
+      for (const item of branchVerdicts) ordered.push(item);
+      branchNumber += 1;
+      waves.push({
+        id: `branch-${branchNumber}`,
+        label: `Branch ${branchNumber}`,
+        verdictIds: branchVerdicts.map((item) => item.edgeId),
+        rootId: root,
+        rootEdgeId: info.rootEdgeId,
+        rootKind: info.rootKind,
+        side: info.side,
+        startStep,
+        openings
+      });
+      madeAny = true;
     }
-    // A clean support has no direct clash, so its first branch starts at the
-    // support itself and follows the replies that answer it.
-    visit(root);
-    // This should only matter for a malformed or externally edited graph; keep
-    // every entered ruling in the playback rather than silently dropping it.
-    // A verdict that answers a nested support still opens that support first,
-    // even when the reply graph does not reach it from the direct root.
-    for (const item of caseJudgments) {
-      if (played.has(item.edgeId)) continue;
-      const edge = edgeFor(item);
-      const target = edge?.to;
-      const supportEdgeId = target ? supportEdgeByNode.get(target) : undefined;
-      if (supportEdgeId && target) {
-        branchOpenings.push({
-          step: startStep + branchOrder.length,
-          nodeId: target,
-          edgeId: supportEdgeId
-        });
-      }
-      played.add(item.edgeId);
-      branchOrder.push(item);
-    }
-
-    for (const verdict of branchOrder) ordered.push(verdict);
-    caseNumber += 1;
-    waves.push({
-      id: `case-${caseNumber}`,
-      label: `Case ${caseNumber}`,
-      verdictIds: branchOrder.map((verdict) => verdict.edgeId),
-      rootId: root,
-      rootEdgeId: info.rootEdgeId,
-      rootKind: info.rootKind,
-      side: info.side,
-      startStep,
-      openings: branchOpenings
-    });
+    if (!madeAny) break;
   }
 
-  const remaining = verdicts
-    .filter((verdict) => !assigned.has(verdict.edgeId))
-    .sort((a, b) => rankBySeed(a.edgeId, seed) - rankBySeed(b.edgeId, seed) || a.edgeId.localeCompare(b.edgeId));
-  if (remaining.length) {
-    const startStep = ordered.length;
-    for (const verdict of remaining) ordered.push(verdict);
-    waves.push({
-      id: "the-record",
-      label: "The record",
-      verdictIds: remaining.map((verdict) => verdict.edgeId),
-      startStep
-    });
+  // A branch can fork below its direct root. Once every direct argument has
+  // had its first branch, open the remaining branches at their fork targets so
+  // they are still shown as paths, not as a flat tail of rulings.
+  const supportEdgeByNode = new Map<string, string>();
+  for (const edge of debate.edges) {
+    if (edge.type === "support") supportEdgeByNode.set(edge.from, edge.id);
+  }
+  const remainingTargets = [...new Set(
+    verdicts
+      .filter((item) => !played.has(item.edgeId))
+      .map((item) => edgeById.get(item.edgeId)?.to)
+      .filter((to): to is string => Boolean(to))
+  )].sort((a, b) => rankBySeed(a, seed) - rankBySeed(b, seed) || a.localeCompare(b));
+
+  while (true) {
+    let madeAny = false;
+    for (const target of remainingTargets) {
+      const branch = takeBranch(target);
+      if (branch.length === 0) continue;
+      const startStep = ordered.length;
+      const openings: JudgmentBranchOpening[] = [];
+      const supportEdgeId = supportEdgeByNode.get(target);
+      if (supportEdgeId) openings.push({ step: startStep, nodeId: target, edgeId: supportEdgeId });
+      for (const item of branch) ordered.push(item);
+      branchNumber += 1;
+      waves.push({
+        id: `branch-${branchNumber}`,
+        label: `Branch ${branchNumber}`,
+        verdictIds: branch.map((item) => item.edgeId),
+        startStep,
+        openings
+      });
+      madeAny = true;
+    }
+    if (!madeAny) break;
   }
 
   return { verdicts: ordered, waves };
 }
+
 
 function confidenceRank(confidence: JudgmentConfidence): number {
   return confidence === "high" ? 3 : confidence === "medium" ? 2 : 1;
