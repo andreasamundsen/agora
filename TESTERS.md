@@ -4,11 +4,17 @@ Agora is a local debate harness. You install it like a normal Windows app; no No
 
 ## Install
 
-1. Run `Agora-Setup-0.1.26.exe`.
+1. Run `Agora-Setup-0.1.27.exe`.
 2. Windows will warn that the publisher is unknown. This build is intentionally unsigned: choose **More info → Run anyway**.
 3. The installer is per-user and does not need administrator rights. Agora opens when it finishes.
 4. To upgrade, close Agora first, then run the newer installer over it. Your debates stay in `%APPDATA%\Agora\data`.
 5. The SHA-256 checksum should match the file supplied with the build. A matching hash is not a code signature; it only confirms the file has not changed.
+
+## What's new in 0.1.27
+
+- **Branch targets are selected before their replies, not just direct support roots.** After one branch ends, the next branch opens by holding the argument it answers on the map first. This covers a support at a fork, a nested support, and a support whose reply is not reached from the direct case root.
+- **Each branch opening is a real playback beat.** It appears in the timeline, works through `Next`, and is honoured when you seek to the first ruling of a branch. The same support can be opened again for a second branch.
+- The verdict order, case ownership, and the written record are unchanged.
 
 ## What's new in 0.1.26
 
