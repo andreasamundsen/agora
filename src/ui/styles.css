@@ -1891,6 +1891,11 @@ button:disabled { cursor: not-allowed; }
 .status-swatch--standing { background: var(--pro); border-color: var(--pro); }
 .status-swatch--defeated { background: transparent; border-color: var(--con); }
 .status-swatch--contested { background: var(--gold); border-color: var(--gold); }
+.status-swatch--proved {
+  background: var(--pro);
+  border-color: var(--pro);
+  box-shadow: inset 0 0 0 2px var(--paper), inset 0 0 0 3px var(--pro);
+}
 .status-swatch--weakened {
   background: repeating-linear-gradient(135deg, var(--gold-deep) 0 1.5px, transparent 1.5px 3px);
   border-color: var(--gold-deep);
@@ -1971,6 +1976,36 @@ button:disabled { cursor: not-allowed; }
   border-style: dashed;
   border-color: var(--gold);
   box-shadow: 0 0 0 3px rgba(185, 138, 58, 0.07), var(--shadow-card);
+}
+.graph-node.is-proved,
+.graph-node.is-motion-proved {
+  border-color: var(--pro);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--pro) 10%, transparent), var(--shadow-card);
+}
+.node-proof-seal {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  border: 1px solid var(--pro-deep);
+  background: color-mix(in srgb, var(--pro) 8%, transparent);
+  color: var(--pro-deep);
+  font-size: 6px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  line-height: 1.4;
+  text-transform: uppercase;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--paper) 90%, transparent), inset 0 0 0 3px color-mix(in srgb, var(--pro) 38%, transparent);
+}
+.node-proof-motion {
+  padding: 1px 5px;
+  border: 1px solid var(--pro);
+  color: var(--pro);
+  background: color-mix(in srgb, var(--pro) 8%, transparent);
+  font-size: 6.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  line-height: 1.5;
+  text-transform: uppercase;
 }
 .graph-node.is-weakened {
   border-color: var(--gold);

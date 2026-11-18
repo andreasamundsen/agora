@@ -10,6 +10,8 @@ import {
   solveJudgment,
   STANDARD_LABEL,
   STANDARD_NOTE,
+  STRICTNESS_LABEL,
+  STRICTNESS_NOTE,
   type ArgumentQuality,
   type AttackImpact,
   type CaseLineAssessment,
@@ -93,16 +95,12 @@ A case line is either:
 Do not rate replies to other arguments as separate lines. A reply has already done its work by changing whether the line it answers survives or is under pressure.
 
 For a SUPPORT, rate its quality:
-- strong: relevant, adequately grounded, valid inference, and load-bearing for the motion.
+- strong: relevant, adequately grounded, valid inference, load-bearing for the motion, and sufficient on its own to establish the thesis under the standard of proof.
 - moderate: relevant and plausible, but with a real weakness, gap, or unresolved pressure.
 - weak: relevant but poorly grounded, overbroad, circular, or easily answered.
 - A contested support is still a live case line. Rate its quality on the argument itself; do not lower it merely because the source is contested. The engine discounts the line's survival separately.
 
-For a SUPPORT, also certify "proves":
-- proves: true only if this one line, on its own, is sufficient to establish the thesis under the standard of proof. It must be complete, load-bearing, and free of a real gap or unresolved pressure. A strong line is not automatically a proof.
-- A certified proof must have quality "strong" and confidence "high"; otherwise it will not count.
-- If there is any material weakness, unstated premise, or live pressure on the line, set proves to false.
-- For a direct ATTACK, proves is always false.
+The engine will certify a CLEAN, STRONG support as a proof when its confidence also meets the selected strictness bar. Do not return a separate proves field. If there is any material weakness, unstated premise, or live pressure on the line, rate it moderate or weak.
 
 For an ATTACK, rate its impact:
 - decisive: it defeats a load-bearing premise, inference, or the thesis itself.
@@ -111,7 +109,7 @@ For an ATTACK, rate its impact:
 
 Confidence is your confidence in the rating: high, medium, or low.
 
-Give every line a short cluster key. Lines that are variations of the same premise or mechanism must share the same cluster key; genuinely distinct lines get different keys. Quality and impact are intrinsic ratings; proof certification is the only judgment that is relative to the standard of proof below.
+Give every line a short cluster key. Lines that are variations of the same premise or mechanism must share the same cluster key; genuinely distinct lines get different keys. Quality and impact are intrinsic ratings; the engine derives a proof from a clean, strong support whose confidence meets the selected evidence bar.
 
 Return JSON only:
 {
@@ -121,21 +119,19 @@ Return JSON only:
       "side": "pro" | "con",
       "quality": "strong" | "moderate" | "weak",
       "impact": "decisive" | "material" | "marginal",
-      "proves": true | false,
       "confidence": "high" | "medium" | "low",
       "cluster": "short_shared_key",
       "reasoning": "1-2 sentences pointing to the decisive quality or weakness."
     }
   ]
 }
-For a pro line use quality and proves; for a con line use impact and proves false. Do not invent lines or ids.`;
+For a pro line use quality; for a con line use impact. Do not return a separate proves field. Do not invent lines or ids.`;
 
 const AssessmentLineSchema = z.object({
   edgeId: z.string(),
   side: z.enum(["pro", "con"]).catch("pro"),
   quality: z.enum(["strong", "moderate", "weak"]).optional(),
   impact: z.enum(["decisive", "material", "marginal"]).optional(),
-  proves: z.boolean().catch(false),
   confidence: z.enum(["high", "medium", "low"]).catch("medium"),
   cluster: z.string().catch(""),
   reasoning: z.string().catch("")
@@ -181,7 +177,8 @@ export function assessmentPrompt(
   debate: Debate,
   provisional: ReturnType<typeof solveJudgment>,
   verdicts: ClashJudgment[],
-  standard: StandardOfProof
+  standard: StandardOfProof,
+  strictness: JudgeStrictness = "balanced"
 ): string | null {
   const supportEdges = debate.edges.filter(
     (edge) =>
@@ -234,6 +231,9 @@ ${cleanText(debate.thesisText) || debate.motion}
 
 STANDARD OF PROOF
 ${STANDARD_LABEL[standard]}. ${STANDARD_NOTE[standard]}
+
+EVIDENCE BAR
+${STRICTNESS_LABEL[strictness]}. ${STRICTNESS_NOTE[strictness]}
 
 --- BEGIN UNTRUSTED ARGUMENT DATA ---
 
@@ -457,11 +457,12 @@ async function assessCaseLines(
   debate: Debate,
   verdicts: ClashJudgment[],
   standard: StandardOfProof,
+  strictness: JudgeStrictness,
   settings: StoredSettings,
   warnings: string[]
 ): Promise<CaseLineAssessment[]> {
-  const provisional = solveJudgment(debate, verdicts, standard);
-  const prompt = assessmentPrompt(debate, provisional, verdicts, standard);
+  const provisional = solveJudgment(debate, verdicts, standard, [], strictness);
+  const prompt = assessmentPrompt(debate, provisional, verdicts, standard, strictness);
   if (!prompt) return [];
 
   const sides = new Map<string, CaseSide>();
@@ -497,7 +498,6 @@ async function assessCaseLines(
         side,
         quality: side === "pro" ? record.quality ?? "moderate" : undefined,
         impact: side === "con" ? record.impact ?? "material" : undefined,
-        proves: side === "pro" ? record.proves === true : undefined,
         confidence: record.confidence,
         cluster: normalizeCluster(record.cluster, record.edgeId),
         reasoning: cleanReasoning(record.reasoning)
@@ -600,16 +600,20 @@ export async function judgeDebate(debate: Debate, options: JudgeOptions): Promis
 
   const assessments =
     engine === "llm"
-      ? await assessCaseLines(debate, verdicts, options.standard, judgeSettings, warnings)
+      ? await assessCaseLines(debate, verdicts, options.standard, options.strictness, judgeSettings, warnings)
       : [];
 
-  if (assessments.length) {
-    const corroborated = solveJudgment(debate, verdicts, options.standard, assessments);
-    if (corroborated.withheldHardDefeats.length) {
-      warnings.push(
-        "A hard fall was withheld: the direct defeat of the thesis was not corroborated by a decisive assessment, or its attacker was weakened. It remains a live attack, and the balance decided the motion."
-      );
-    }
+  const corroborated = solveJudgment(
+    debate,
+    verdicts,
+    options.standard,
+    assessments,
+    options.strictness
+  );
+  if (corroborated.withheldHardDefeats.length) {
+    warnings.push(
+      "A hard fall was withheld: the direct defeat of the thesis was not corroborated by a decisive assessment at the selected evidence bar, or its attacker was under pressure. The weighted balance decided the motion."
+    );
   }
 
   return buildJudgmentRun({

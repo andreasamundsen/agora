@@ -215,7 +215,7 @@ export default function App() {
   }, [debate, judgment?.run]);
 
   const judgmentSnapshot = useMemo(
-    () => (debate && judgment ? solveJudgment(debate, appliedVerdicts, judgment.run.standard, judgment.run.assessments) : null),
+    () => (debate && judgment ? solveJudgment(debate, appliedVerdicts, judgment.run.standard, judgment.run.assessments, judgment.run.strictness) : null),
     [debate, judgment, appliedVerdicts]
   );
 
@@ -225,7 +225,7 @@ export default function App() {
 
   const restoredNow = useMemo(() => {
     if (!judgment || !debate || judgment.step <= 0 || !judgmentSnapshot) return [] as string[];
-    const before = solveJudgment(debate, judgment.run.verdicts.slice(0, judgment.step - 1), judgment.run.standard, judgment.run.assessments).statuses;
+    const before = solveJudgment(debate, judgment.run.verdicts.slice(0, judgment.step - 1), judgment.run.standard, judgment.run.assessments, judgment.run.strictness).statuses;
     return Object.keys(judgmentSnapshot.statuses).filter(
       (id) => before[id] === "defeated" && judgmentSnapshot.statuses[id] !== "defeated"
     );
@@ -250,6 +250,12 @@ export default function App() {
     const caseLine = judgment.caseLineId
       ? debate.edges.find((edge) => edge.id === judgment.caseLineId)
       : undefined;
+    const proved = settled
+      ? judgmentSnapshot.proofs.flatMap((edgeId) => {
+          const edge = debate.edges.find((candidate) => candidate.id === edgeId);
+          return edge ? [edge.from] : [];
+        })
+      : [];
     return {
       active: true,
       statuses: judgment.step > 0 || settled ? judgmentSnapshot.statuses : {},
@@ -264,6 +270,8 @@ export default function App() {
       outcome: settled ? judgmentSnapshot.outcome : undefined,
       motionDisposition: motion.outcome,
       motionProvisional: motion.provisional,
+      proved,
+      motionProved: settled && judgmentSnapshot.proofs.length > 0 && !judgmentSnapshot.proofConflict,
       unsupportedThesis: settled && judgmentSnapshot.unsupportedThesis
     };
   }, [judgment, judgmentSnapshot, judgmentComplete, appliedVerdicts, restored]);

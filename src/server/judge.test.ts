@@ -145,5 +145,7 @@ describe("assessment prompt", () => {
     expect(provisional.statuses.support).toBe("contested");
     expect(prompt).toContain("LINE e_support_thesis — PRO SUPPORT");
     expect(prompt).toContain("Source status: contested");
+    expect(prompt).toContain("EVIDENCE BAR");
+    expect(prompt).not.toContain('"proves"');
   });
 });

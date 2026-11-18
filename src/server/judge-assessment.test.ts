@@ -63,7 +63,6 @@ describe("judgment assessment normalization", () => {
               side: "pro",
               quality: "strong",
               impact: null,
-              proves: false,
               confidence: "high",
               cluster: "night-workers",
               reasoning: "A relevant, grounded need."
@@ -73,7 +72,6 @@ describe("judgment assessment normalization", () => {
               side: "con",
               quality: null,
               impact: "decisive",
-              proves: false,
               confidence: "high",
               cluster: "cost-per-rider",
               reasoning: "The cost problem is load-bearing."

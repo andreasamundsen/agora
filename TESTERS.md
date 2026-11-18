@@ -4,11 +4,17 @@ Agora is a local debate harness. You install it like a normal Windows app; no No
 
 ## Install
 
-1. Run `Agora-Setup-0.1.22.exe`.
+1. Run `Agora-Setup-0.1.23.exe`.
 2. Windows will warn that the publisher is unknown. This build is intentionally unsigned: choose **More info → Run anyway**.
 3. The installer is per-user and does not need administrator rights. Agora opens when it finishes.
 4. To upgrade, close Agora first, then run the newer installer over it. Your debates stay in `%APPDATA%\Agora\data`.
 5. The SHA-256 checksum should match the file supplied with the build. A matching hash is not a code signature; it only confirms the file has not changed.
+
+## What's new in 0.1.23
+
+- **Proof and defeat now use the same evidence bar.** A clean direct support and a clean direct attacker are judged at the same Strictness setting: high confidence under Strict, medium under Balanced, low under Generous. The old extra high-confidence requirement for `proves` is gone.
+- **A failed weighing pass no longer gives either side an automatic result.** If the assessment cannot run, Agora does not invent a hit or a proof; the weighted balance decides and the warning is recorded.
+- **Proved supports are visible on the map.** A direct support that is proved gets an ink-seal treatment; the motion card gets a small proof marker. Defeated cards are still crossed out.
 
 ## What's new in 0.1.22
 
@@ -75,7 +81,7 @@ Agora is a local debate harness. You install it like a normal Windows app; no No
 ## What's new in 0.1.12
 
 - Judgment is now symmetric. A direct **defeats** ruling on the motion only makes it fall when the attacker is still standing and the ruling is decisive with at least medium confidence.
-- A clean, strong, high-confidence pro line can now be certified as **proves**. A certified proof alone can carry the motion; a certified proof and a corroborated defeat together are a procedural tie.
+- A clean, strong, high-confidence pro line could be certified as **proves** in 0.1.22; 0.1.23 replaces that separate flag with the shared evidence bar above. A proof alone can carry the motion; a proof and a corroborated defeat together are a procedural tie.
 - Contested direct case lines now count at **half weight on both sides**. A contested support no longer silently disappears from the pro balance.
 - The bench still uses one model for the whole run and no extra judge calls were added.
 - The selected standard of proof remains the only intentional asymmetry.
@@ -96,7 +102,7 @@ Provider calls go directly from your machine to the provider you choose. When yo
 ## What to try
 
 - Open a demo debate and explore the argument map. Use **Case** and **Thread** at the bottom right: Thread attaches each reply to the argument it answers, and both views stay at a similar height. The map refits when you resize the window; after you pan or zoom manually, it keeps your view until you press **Fit**.
-- Press **Judge**, choose a standard, and run a judgment. After the clashes, the bench weighs the surviving direct case lines. A contested case line carries half weight on either side; the selected burden is applied once, in the final threshold. A direct **defeats** ruling on the motion is not automatically final: the weighing pass must corroborate it as a **decisive** con line, and the defeating objection must not itself be weakened. Otherwise the ruling remains a live attack, the motion stays contested, and the weighted balance decides. The weighing pass can also certify a clean, strong, high-confidence direct support as a **proof**; that makes the motion stand unless a corroborated direct defeat also exists, in which case the two decisive claims cancel and the motion is undecided. The judge now receives each target's own relation and a short path to the motion, so rulings on replies are grounded in what the target was answering. The standard sets the threshold, not a veto: a lopsided record decides, and the burden decides the close ones. A **falls** outcome can come from a corroborated direct strike on the motion or from a weighted con case that dominates. A surviving argument can also show a **weakened** condition beside its status when a ruling says the attack had real force but did not strike it. `Save judgment report` downloads the balance and the rulings.
+- Press **Judge**, choose a standard, and run a judgment. After the clashes, the bench weighs the surviving direct case lines. A contested case line carries half weight on either side; the selected burden is applied once, in the final threshold. A direct **defeats** ruling on the motion is not automatically final: the weighing pass must corroborate it as a **decisive** con line at the selected Strictness, and the attacker must be clean. Otherwise the ruling remains a live attack, the motion stays contested, and the weighted balance decides. The weighing pass can also prove a clean, strong direct support at the same Strictness bar; that makes the motion stand unless a corroborated direct defeat also exists, in which case the two decisive claims cancel and the motion is undecided. The judge now receives each target's own relation and a short path to the motion, so rulings on replies are grounded in what the target was answering. The standard sets the threshold, not a veto: a lopsided record decides, and the burden decides the close ones. A **falls** outcome can come from a corroborated direct strike on the motion or from a weighted con case that dominates. A surviving argument can also show a **weakened** condition beside its status when a ruling says the attack had real force but did not strike it. `Save judgment report` downloads the balance and the rulings.
 - Press **Stage Debate** to watch the exchange.
 - Use **Import** / **Export** to move a debate as Argdown.
 - Ask the chamber about the map or anything else. Map questions cite the relevant cards; general questions are answered from the model's own knowledge. It answers only; it does not edit the map.

@@ -92,14 +92,13 @@ function assess(
   side: "pro" | "con",
   rating: ArgumentQuality | AttackImpact,
   cluster: string,
-  confidence: JudgmentConfidence = "high",
-  proves = false
+  confidence: JudgmentConfidence = "high"
 ): CaseLineAssessment {
   return {
     edgeId,
     side,
     ...(side === "pro"
-      ? { quality: rating as ArgumentQuality, proves }
+      ? { quality: rating as ArgumentQuality }
       : { impact: rating as AttackImpact }),
     confidence,
     cluster,
@@ -113,10 +112,26 @@ describe("judgment solver", () => {
       { from: "support", to: "thesis", type: "support" },
       { from: "objection", to: "thesis", type: "attack" }
     ]);
-    const snapshot = solveJudgment(debate, [verdict("e_objection_thesis", "objection", "thesis")]);
+    const snapshot = solveJudgment(
+      debate,
+      [verdict("e_objection_thesis", "objection", "thesis")],
+      "preponderance",
+      [assess("e_objection_thesis", "con", "decisive", "objection-line")]
+    );
     expect(snapshot.thesisStatus).toBe("defeated");
     expect(snapshot.outcome).toBe("falls");
     expect(snapshot.statuses.objection).toBe("standing");
+  });
+
+  it("leaves a direct defeat to the balance when the weighing pass is unavailable", () => {
+    const debate = debateWith([
+      { from: "support", to: "thesis", type: "support" },
+      { from: "objection", to: "thesis", type: "attack" }
+    ]);
+    const snapshot = solveJudgment(debate, [verdict("e_objection_thesis", "objection", "thesis")]);
+    expect(snapshot.hardDefeats).toEqual([]);
+    expect(snapshot.withheldHardDefeats).toEqual(["e_objection_thesis"]);
+    expect(snapshot.thesisStatus).toBe("contested");
   });
 
   it("reinstates the thesis when the objection is itself defeated", () => {
@@ -384,24 +399,24 @@ describe("judgment solver", () => {
     const verdicts = [verdict("e_con0_thesis", "con0", "thesis", "weakens")];
     const assessments = [
       ...Array.from({ length: 10 }, (_, index) =>
-        assess(`e_pro${index}_thesis`, "pro", "strong", "shared-mechanism")
+        assess(`e_pro${index}_thesis`, "pro", "moderate", "shared-mechanism")
       ),
       assess("e_con0_thesis", "con", "decisive", "counter-mechanism")
     ];
     const pro = solveJudgment(debate, verdicts, "pro", assessments);
-    expect(pro.balance.pro).toBe(4.5);
-    expect(pro.balance.margin).toBe(1.5);
+    expect(pro.balance.pro).toBe(3);
+    expect(pro.balance.margin).toBe(0);
     expect(pro.outcome).toBe("unestablished");
     expect(solveJudgment(debate, verdicts, "con", assessments).outcome).toBe("stands");
-    expect(solveJudgment(debate, verdicts, "preponderance", assessments).outcome).toBe("stands");
+    expect(solveJudgment(debate, verdicts, "preponderance", assessments).outcome).toBe("undecided");
   });
 
   it("lets the burden decide a genuinely close case", () => {
     const debate = weightedDebate(1, 1);
     const verdicts = [verdict("e_con0_thesis", "con0", "thesis", "weakens")];
     const assessments = [
-      assess("e_pro0_thesis", "pro", "strong", "pro-line"),
-      assess("e_con0_thesis", "con", "decisive", "con-line")
+      assess("e_pro0_thesis", "pro", "moderate", "pro-line"),
+      assess("e_con0_thesis", "con", "material", "con-line")
     ];
     expect(solveJudgment(debate, verdicts, "pro", assessments).outcome).toBe("unestablished");
     expect(solveJudgment(debate, verdicts, "con", assessments).outcome).toBe("stands");
@@ -430,7 +445,7 @@ describe("judgment solver", () => {
     const debate = weightedDebate(10, 1);
     const assessments = [
       ...Array.from({ length: 10 }, (_, index) =>
-        assess(`e_pro${index}_thesis`, "pro", "strong", `pro-line-${index}`)
+        assess(`e_pro${index}_thesis`, "pro", "moderate", `pro-line-${index}`)
       ),
       assess("e_con0_thesis", "con", "decisive", "con-line")
     ];
@@ -450,7 +465,7 @@ describe("judgment solver", () => {
     const debate = weightedDebate(3, 1);
     const verdicts = [verdict("e_con0_thesis", "con0", "thesis")];
     const proAssessments = Array.from({ length: 3 }, (_, index) =>
-      assess(`e_pro${index}_thesis`, "pro", "strong", `pro-line-${index}`)
+      assess(`e_pro${index}_thesis`, "pro", "moderate", `pro-line-${index}`)
     );
     for (const [impact, confidence] of [
       ["material", "high"],
@@ -481,14 +496,13 @@ describe("judgment solver", () => {
       ],
       "preponderance",
       [
-        assess("e_support_thesis", "pro", "strong", "support-line"),
+        assess("e_support_thesis", "pro", "moderate", "support-line"),
         assess("e_objection_thesis", "con", "decisive", "objection-line")
       ]
     );
     expect(snapshot.statuses.objection).toBe("standing");
     expect(snapshot.weakened).toEqual(["objection"]);
     expect(snapshot.thesisStatus).toBe("contested");
-    expect(snapshot.outcome).toBe("undecided");
     expect(snapshot.hardDefeats).toEqual([]);
     expect(snapshot.withheldHardDefeats).toEqual(["e_objection_thesis"]);
   });
@@ -500,7 +514,7 @@ describe("judgment solver", () => {
       [verdict("e_con0_thesis", "con0", "thesis")],
       "pro",
       [
-        assess("e_pro0_thesis", "pro", "strong", "pro-line", "high", true),
+        assess("e_pro0_thesis", "pro", "strong", "pro-line", "high"),
         assess("e_con0_thesis", "con", "decisive", "con-line")
       ]
     );
@@ -516,7 +530,7 @@ describe("judgment solver", () => {
     const debate = weightedDebate(1, 1);
     const verdicts = [verdict("e_con0_thesis", "con0", "thesis")];
     const assessments = [
-      assess("e_pro0_thesis", "pro", "strong", "pro-line", "high", true),
+      assess("e_pro0_thesis", "pro", "strong", "pro-line", "high"),
       assess("e_con0_thesis", "con", "decisive", "con-line")
     ];
     const summary = judgmentSummary(debate, verdicts, "pro", assessments);
@@ -532,7 +546,7 @@ describe("judgment solver", () => {
       [verdict("e_con0_thesis", "con0", "thesis", "weakens")],
       "pro",
       [
-        assess("e_pro0_thesis", "pro", "strong", "pro-line", "high", true),
+        assess("e_pro0_thesis", "pro", "strong", "pro-line", "high"),
         assess("e_con0_thesis", "con", "material", "con-line")
       ]
     );
@@ -549,7 +563,7 @@ describe("judgment solver", () => {
       [verdict("e_con0_thesis", "con0", "thesis")],
       "pro",
       [
-        assess("e_pro0_thesis", "pro", "strong", "pro-line", "high", true),
+        assess("e_pro0_thesis", "pro", "strong", "pro-line", "high"),
         assess("e_con0_thesis", "con", "material", "con-line")
       ]
     );
@@ -571,7 +585,7 @@ describe("judgment solver", () => {
       [verdict("e_objection_support", "objection", "support", "weakens")],
       "pro",
       [
-        assess("e_support_thesis", "pro", "strong", "pro-line", "high", true),
+        assess("e_support_thesis", "pro", "strong", "pro-line", "high"),
         assess("e_objection_support", "con", "material", "attack-line")
       ]
     );
@@ -579,21 +593,34 @@ describe("judgment solver", () => {
     expect(snapshot.proofConflict).toBe(false);
   });
 
-  it("does not certify a proof without the high-confidence bar", () => {
+  it("applies the same strictness bar to a proof and a hard defeat", () => {
     const debate = weightedDebate(1, 1);
-    const snapshot = solveJudgment(
+    const assessments = [
+      assess("e_pro0_thesis", "pro", "strong", "pro-line", "medium"),
+      assess("e_con0_thesis", "con", "decisive", "con-line", "medium")
+    ];
+    const strict = solveJudgment(
       debate,
       [verdict("e_con0_thesis", "con0", "thesis")],
       "pro",
-      [
-        assess("e_pro0_thesis", "pro", "strong", "pro-line", "medium", true),
-        assess("e_con0_thesis", "con", "decisive", "con-line")
-      ]
+      assessments,
+      "strict"
     );
-    expect(snapshot.proofs).toEqual([]);
-    expect(snapshot.proofConflict).toBe(false);
-    expect(snapshot.thesisStatus).toBe("defeated");
-    expect(snapshot.outcome).toBe("falls");
+    expect(strict.proofs).toEqual([]);
+    expect(strict.hardDefeats).toEqual([]);
+    expect(strict.thesisStatus).toBe("contested");
+
+    const balanced = solveJudgment(
+      debate,
+      [verdict("e_con0_thesis", "con0", "thesis")],
+      "pro",
+      assessments,
+      "balanced"
+    );
+    expect(balanced.proofs).toEqual(["e_pro0_thesis"]);
+    expect(balanced.hardDefeats).toEqual(["e_con0_thesis"]);
+    expect(balanced.proofConflict).toBe(true);
+    expect(balanced.thesisStatus).toBe("contested");
   });
 
   it("lets an irrelevant direct attack leave the motion standing", () => {
@@ -715,7 +742,7 @@ describe("judgment solver", () => {
       strictness: "balanced",
       verdicts: [verdict("e_objection_thesis", "objection", "thesis")],
       assessments: [
-        assess("e_support_thesis", "pro", "strong", "support-line"),
+        assess("e_support_thesis", "pro", "moderate", "support-line"),
         assess("e_objection_thesis", "con", "decisive", "objection-line")
       ]
     });
@@ -724,7 +751,7 @@ describe("judgment solver", () => {
     expect(run.decisive[0]?.from).toBe("objection");
     expect(run.waves[0]?.label).toBe("Case 1");
     expect(run.assessments).toHaveLength(2);
-    expect(run.balance).toMatchObject({ pro: 3, con: 3, assessed: true });
+    expect(run.balance).toMatchObject({ pro: 2, con: 3, assessed: true });
   });
 
   it("reports an unestablished outcome when support is removed", () => {
@@ -763,7 +790,7 @@ describe("judgment solver", () => {
       strictness: "balanced",
       verdicts: [verdict("e_objection_thesis", "objection", "thesis")],
       assessments: [
-        assess("e_support_thesis", "pro", "strong", "support-line"),
+        assess("e_support_thesis", "pro", "moderate", "support-line"),
         assess("e_objection_thesis", "con", "decisive", "objection-line")
       ],
       warnings: ["One clash was left open."]

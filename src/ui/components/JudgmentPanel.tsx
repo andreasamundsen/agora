@@ -64,11 +64,11 @@ function effectLine(judgment: ClashJudgment, snapshot: JudgmentSnapshot, thesisI
     if (source === "contested") return "The ruling is recorded, but the attacker is itself contested; it cannot carry.";
     if (!source) return "The ruling is recorded, but the attacker is no longer standing; it cannot carry.";
     if (isThesis && snapshot.proofConflict && target === "contested") {
-      return "The target remains contested: a certified proof and a corroborated defeat cancel each other.";
+      return "The target remains contested: a proof and a corroborated defeat cancel each other.";
     }
     if (isThesis && snapshot.withheldHardDefeats.includes(judgment.edgeId) && target !== "defeated") {
       if (snapshot.proofs.length && !snapshot.proofConflict) {
-        return "The direct defeat is not corroborated; the target stands on a certified proof.";
+        return "The direct defeat is not corroborated; the target stands on a proved support.";
       }
       if (snapshot.weakened.includes(judgment.from)) {
         return "The ruling is recorded, but the attacker is itself weakened; it cannot deliver a hard fall.";
@@ -146,7 +146,7 @@ function BalanceCard({
           <ul>
             {lines.map((line) => {
               const rating = line.proves
-                ? "Proves"
+                ? "Proved"
                 : line.side === "pro"
                   ? line.quality ? QUALITY_LABEL[line.quality] : "Moderate"
                   : line.impact ? IMPACT_LABEL[line.impact] : "Material";
@@ -174,7 +174,7 @@ function BalanceCard({
                   </div>
                   <div className="balance-line-meta">
                     <span>{line.confidenceLabel} confidence</span>
-                    {line.proves && <span>certified proof</span>}
+                    {line.proves && <span>proved</span>}
                     <span>
                       {line.side === "pro"
                         ? line.survival === 0.5

@@ -30,8 +30,6 @@ export interface CaseLineAssessment {
   impact?: AttackImpact;
   confidence: JudgmentConfidence;
   cluster: string;
-  /** A direct pro line explicitly certified as sufficient to establish the thesis. */
-  proves?: boolean;
   reasoning?: string;
 }
 
@@ -235,6 +233,21 @@ export const RATING_CONFIDENCE_FACTOR: Record<JudgmentConfidence, number> = {
   low: 0.5
 };
 
+const CONFIDENCE_RANK: Record<JudgmentConfidence, number> = {
+  low: 0,
+  medium: 1,
+  high: 2
+};
+
+/** The same evidence bar applies to a certified proof and a hard defeat. */
+export function meetsEvidenceBar(
+  confidence: JudgmentConfidence,
+  strictness: JudgeStrictness
+): boolean {
+  const required = strictness === "strict" ? "high" : strictness === "balanced" ? "medium" : "low";
+  return CONFIDENCE_RANK[confidence] >= CONFIDENCE_RANK[required];
+}
+
 /** Initial burden calibration. These are points, not probabilities. */
 export const BURDEN_THRESHOLDS: Record<StandardOfProof, number> = {
   pro: 2,
@@ -294,7 +307,8 @@ export function solveJudgment(
   debate: Debate,
   verdicts: ClashJudgment[],
   standard: StandardOfProof = "preponderance",
-  assessments: CaseLineAssessment[] = []
+  assessments: CaseLineAssessment[] = [],
+  strictness: JudgeStrictness = "balanced"
 ): JudgmentSnapshot {
   const nodeIds = new Set(debate.nodes.map((node) => node.id));
   const attackers = new Map<string, string[]>();
@@ -377,20 +391,22 @@ export function solveJudgment(
     .filter((edge) => statuses[edge.from] === "standing")
     .map((edge) => edge.id);
 
-  // A support only carries the pro burden cleanly if no live attack remains
-  // against its source. A weakened or unresolved support is still on the
-  // record, but it is not an untouched part of the case.
+  // A source is clean when no live attack remains against it. This is the
+  // same pressure test for a pro support and for a con attacker; it prevents
+  // a defeated thesis from resting on an attack that is itself under fire.
+  const cleanNodes = new Set<string>();
+  for (const node of debate.nodes) {
+    const incoming = debate.edges.filter(
+      (candidate) => candidate.to === node.id && isClashEdge(candidate)
+    );
+    const clean = incoming.every((candidate) => {
+      const ruling = verdictByEdge.get(candidate.id);
+      return !ruling || ruling.verdict === "irrelevant" || statuses[candidate.from] === "defeated";
+    });
+    if (clean) cleanNodes.add(node.id);
+  }
   const cleanSupports = supportEdges
-    .filter((edge) => statuses[edge.from] === "standing")
-    .filter((edge) => {
-      const incoming = debate.edges.filter(
-        (candidate) => candidate.to === edge.from && isClashEdge(candidate)
-      );
-      return incoming.every((candidate) => {
-        const ruling = verdictByEdge.get(candidate.id);
-        return !ruling || ruling.verdict === "irrelevant" || statuses[candidate.from] === "defeated";
-      });
-    })
+    .filter((edge) => statuses[edge.from] === "standing" && cleanNodes.has(edge.from))
     .map((edge) => edge.id);
 
   // Weakens and undecided are not strikes, but they are still live pressure.
@@ -428,9 +444,9 @@ export function solveJudgment(
 
   // A direct `defeats` ruling is not automatically a hard fall. Once the
   // weighing pass has rated the case, a thesis defeat must be corroborated by
-  // a decisive con-line assessment, and the defeating attacker must not itself
-  // be weakened. Without assessments (local structural review or a failed
-  // weighing pass), retain the structural fallback.
+  // a decisive con-line assessment at the same evidence bar as a proof, and
+  // the defeating attacker must be clean. Without a usable assessment, neither
+  // side gets a decisive override; the weighted balance decides.
   const directDefeatEdges = debate.edges.filter(
     (edge) =>
       edge.to === debate.thesisId &&
@@ -438,37 +454,32 @@ export function solveJudgment(
       statuses[edge.from] === "standing" &&
       verdictByEdge.get(edge.id)?.verdict === "defeats"
   );
-  const hardDefeatEdges =
-    assessments.length === 0
-      ? directDefeatEdges
-      : directDefeatEdges.filter((edge) => {
-          if (weakened.has(edge.from)) return false;
-          const assessment = assessmentByEdge.get(edge.id);
-          return (
-            assessment?.side === "con" &&
-            assessment.impact === "decisive" &&
-            assessment.confidence !== "low"
-          );
-        });
+  const hardDefeatEdges = directDefeatEdges.filter((edge) => {
+    if (!cleanNodes.has(edge.from)) return false;
+    const assessment = assessmentByEdge.get(edge.id);
+    return (
+      assessment?.side === "con" &&
+      assessment.impact === "decisive" &&
+      meetsEvidenceBar(assessment.confidence, strictness)
+    );
+  });
   const hardDefeatIds = new Set(hardDefeatEdges.map((edge) => edge.id));
   const withheldHardDefeats = directDefeatEdges
     .filter((edge) => !hardDefeatIds.has(edge.id))
     .map((edge) => edge.id);
 
-  // A proof is a higher bar than a strong support: it must be clean, strong,
-  // high-confidence, and explicitly certified by the weighing pass as carrying
-  // the thesis. A proof and a corroborated direct defeat are opposing decisive
-  // claims; they leave the thesis contested rather than letting either side's
-  // binary rule decide the motion alone.
+  // A proof is the pro-side counterpart of a hard defeat. It uses the same
+  // clean-source rule and the same strictness-derived confidence bar; the
+  // semantic difference is that this line must be sufficient to establish the
+  // thesis. A proof and a corroborated direct defeat cancel each other.
   const proofEdges = supportEdges.filter((edge) => {
     if (statuses[edge.from] !== "standing") return false;
-    if (!cleanSupports.includes(edge.id)) return false;
+    if (!cleanNodes.has(edge.from)) return false;
     const assessment = assessmentByEdge.get(edge.id);
     return (
       assessment?.side === "pro" &&
-      assessment.proves === true &&
       assessment.quality === "strong" &&
-      assessment.confidence === "high"
+      meetsEvidenceBar(assessment.confidence, strictness)
     );
   });
   const proofIds = new Set(proofEdges.map((edge) => edge.id));
@@ -478,7 +489,7 @@ export function solveJudgment(
     setThesisStatus("contested");
   } else if (proofIds.size > 0) {
     setThesisStatus("standing");
-  } else if (assessments.length > 0 && thesisStatus === "defeated" && hardDefeatEdges.length === 0) {
+  } else if (thesisStatus === "defeated" && hardDefeatEdges.length === 0) {
     setThesisStatus("contested");
   }
 
@@ -490,7 +501,8 @@ export function solveJudgment(
     liveSupports,
     liveAttacks,
     cleanSupports,
-    standard
+    standard,
+    strictness
   });
   const unsupportedThesis = Boolean(thesis) && thesisStatus === "standing" && balance.pro <= 0;
 
@@ -587,6 +599,7 @@ export function buildCaseBalance(input: {
   liveAttacks: string[];
   cleanSupports: string[];
   standard: StandardOfProof;
+  strictness: JudgeStrictness;
 }): CaseBalance {
   const assessmentByEdge = new Map(input.assessments.map((item) => [item.edgeId, item]));
   const rulingByEdge = new Map(input.verdicts.map((item) => [item.edgeId, item]));
@@ -624,12 +637,12 @@ export function buildCaseBalance(input: {
       independence: 1,
       weight: base * confidence * pressure * survival,
       quality,
-      proves:
-        assessment?.side === "pro" &&
-        assessment.proves === true &&
-        assessment.quality === "strong" &&
-        assessment.confidence === "high" &&
-        clean.has(edge.id),
+      proves: assessment
+        ? assessment.side === "pro" &&
+          assessment.quality === "strong" &&
+          clean.has(edge.id) &&
+          meetsEvidenceBar(assessment.confidence, input.strictness)
+        : false,
       reasoning: assessment?.side === "pro" ? assessment.reasoning : undefined
     });
   }
@@ -861,14 +874,15 @@ export function judgmentSummary(
   debate: Debate,
   verdicts: ClashJudgment[],
   standard: StandardOfProof = "preponderance",
-  assessments: CaseLineAssessment[] = []
+  assessments: CaseLineAssessment[] = [],
+  strictness: JudgeStrictness = "balanced"
 ): {
   summary: string;
   outcome: JudgmentOutcome;
   decisive: DecisiveStep[];
   balance: CaseBalance;
 } {
-  const snapshot = solveJudgment(debate, verdicts, standard, assessments);
+  const snapshot = solveJudgment(debate, verdicts, standard, assessments, strictness);
   const burden = standard === "pro" ? "pro burden" : standard === "con" ? "con burden" : "preponderance";
   const standingById = new Set(snapshot.standing);
   const directAttacks = debate.edges.filter(
@@ -920,7 +934,7 @@ export function judgmentSummary(
       outcome: "undecided",
       balance: snapshot.balance,
       summary:
-        "The motion remains contested. A clean direct support is certified as a proof, while a direct objection is a live defeat; neither can displace the other on this record.",
+        "The motion remains contested. A clean direct support is proved, while a direct objection is a live defeat; neither can displace the other on this record.",
       decisive: [...proofSteps, ...conflictSteps].slice(0, 6)
     };
   }
@@ -960,7 +974,7 @@ export function judgmentSummary(
         outcome: snapshot.outcome,
         balance: snapshot.balance,
         summary:
-          "The motion stands. A clean direct support is certified as a proof of the thesis; no corroborated direct defeat survives against it.",
+          "The motion stands. A clean direct support is proved; no corroborated direct defeat survives against it.",
         decisive: proofSteps
       };
     }
@@ -1054,7 +1068,7 @@ export function buildJudgmentRun(input: {
 }): JudgmentRun {
   const assessments = input.assessments ?? [];
   const ordered = orderVerdicts(input.debate, input.verdicts, input.id);
-  const summary = judgmentSummary(input.debate, ordered.verdicts, input.standard, assessments);
+  const summary = judgmentSummary(input.debate, ordered.verdicts, input.standard, assessments, input.strictness);
   return {
     id: input.id,
     debateId: input.debate.id,
@@ -1098,7 +1112,7 @@ export function judgmentMarkdown(debate: Debate, run: JudgmentRun): string {
     lines.push("");
     for (const line of run.balance.lines) {
       const rating = line.proves
-        ? "Proves"
+        ? "Proved"
         : line.side === "pro"
           ? line.quality ? QUALITY_LABEL[line.quality] : "Moderate"
           : line.impact ? IMPACT_LABEL[line.impact] : "Material";
