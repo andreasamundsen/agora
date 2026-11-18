@@ -35,6 +35,12 @@ export interface AuthorResult {
   warning?: string;
 }
 
+export interface AskResult {
+  reply: string;
+  engine: "llm" | "local";
+  warning?: string;
+}
+
 const RawNodeSchema = z.object({
   id: z.string().optional(),
   kind: z.enum(["statement", "argument"]).default("argument"),
@@ -86,6 +92,17 @@ Design rules:
 12. Do not repeat the same point in different words, and do not pad the map with generic filler.
 
 Return JSON only, with no markdown fences and no commentary outside the object.`;
+
+const ASK_RULES = `You are the chamber analyst inside AGORA, a debate harness. You answer questions about the argument map already on the table. You do not edit the map.
+
+Answer rules:
+- Answer only from the map. Do not invent evidence, statistics, citations, or arguments the map does not contain.
+- Keep the answer to 2-4 sentences and under 120 words, unless the user explicitly asks for more detail.
+- Name the argument titles you are relying on in quotes so the user can find them.
+- Explain the relation between claims. Do not treat an argument merely being present as proof that it is sound.
+- If the map cannot answer the question, say what is missing or uncertain.
+- The chamber is read-only. If asked to add, remove, move, or relink a card, say that the chamber only answers questions about the map; do not pretend an edit happened.
+- Do not return JSON, a patch, or a heading. No praise, no filler.`;
 
 function intakePrompt(input: string): string {
   return `${BASE_RULES}
@@ -441,6 +458,89 @@ export async function extendDebate(debate: Debate, input: string): Promise<Autho
     const reason = `Model unavailable (${error instanceof Error ? error.message : String(error)}). Added a local scaffold instead.`;
     fallback.warning = [fallback.warning, reason].filter(Boolean).join(" ");
     return fallback;
+  }
+}
+
+function askPrompt(debate: Debate, input: string): string {
+  return `THE MAP
+${debateContext(debate)}
+
+THE USER'S QUESTION
+"""
+${input.slice(0, 3000)}
+"""`;
+}
+
+function cleanAnswer(content: string): string {
+  const fenced = content.trim().match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  const text = (fenced?.[1] ?? content).trim();
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (parsed && typeof parsed === "object") {
+      const record = parsed as Record<string, unknown>;
+      for (const key of ["answer", "reply", "text", "response"]) {
+        if (typeof record[key] === "string" && record[key].trim()) {
+          return record[key].trim();
+        }
+      }
+      if ("nodes" in record || "edges" in record) {
+        throw new Error("The model returned a map patch instead of an answer.");
+      }
+    }
+  } catch (error) {
+    if (error instanceof SyntaxError) return text;
+    throw error;
+  }
+  return text;
+}
+
+function localAskDebate(debate: Debate, warning?: string): AskResult {
+  const argumentsCount = debate.nodes.filter((node) => node.kind === "argument").length;
+  const directPro = debate.edges.filter(
+    (edge) => edge.to === debate.thesisId && edge.type === "support"
+  ).length;
+  const directCon = debate.edges.filter(
+    (edge) => edge.to === debate.thesisId && (edge.type === "attack" || edge.type === "undercut")
+  ).length;
+  const clashes = debate.edges.filter((edge) => edge.type === "attack" || edge.type === "undercut").length;
+  const opening = warning
+    ? "The connected model could not answer, so I can only describe the map's structure."
+    : "No model is connected, so I can only describe the map's structure.";
+  const closing = warning
+    ? "Check the provider in Settings and try again."
+    : "Connect a model in Settings for a substantive answer about the argument itself.";
+  return {
+    reply: `${opening} It contains ${argumentsCount} arguments: ${directPro} direct pro line${directPro === 1 ? "" : "s"}, ${directCon} direct con line${directCon === 1 ? "" : "s"}, and ${clashes} clash${clashes === 1 ? "" : "es"}. ${closing}`,
+    engine: "local",
+    warning: warning ?? "No model is connected; this is a structural summary, not an analytical answer."
+  };
+}
+
+/**
+ * Answer a question about the map without changing it. The chamber is
+ * deliberately read-only: map edits belong to a separate, previewed flow.
+ */
+export async function askDebate(debate: Debate, input: string): Promise<AskResult> {
+  const settings = getSettings();
+  if (!isReady(settings)) return localAskDebate(debate);
+
+  try {
+    const content = await callModel(
+      settings,
+      [
+        { role: "system", content: ASK_RULES },
+        { role: "user", content: askPrompt(debate, input) }
+      ],
+      { temperature: 0.2, maxTokens: 900 }
+    );
+    const reply = cleanAnswer(content);
+    if (!reply) throw new Error("The model returned an empty answer.");
+    return { reply, engine: "llm" };
+  } catch (error) {
+    return localAskDebate(
+      debate,
+      `Model unavailable (${error instanceof Error ? error.message : String(error)}). This is a structural summary.`
+    );
   }
 }
 

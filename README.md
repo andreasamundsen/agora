@@ -2,7 +2,7 @@
 
 > Every argument has a shape. Find it, then argue with it.
 
-Agora turns a position into a map of arguments, lets you interrogate and extend that map, exports it as **Argdown**, stages the debate as a sequence of turns with a live camera on the graph, and then **convenes a bench** to judge it: a model rules on each clash, and the map shows arguments falling, surviving, or returning until the motion stands or falls.
+Agora turns a position into a map of arguments, lets you interrogate that map, exports it as **Argdown**, stages the debate as a sequence of turns with a live camera on the graph, and then **convenes a bench** to judge it: a model rules on each clash, and the map shows arguments falling, surviving, or returning until the motion stands or falls.
 
 It is built in the spirit of a learning harness: the model is not there to agree with you. It builds the strongest case for your position, the strongest case against it, and the places where the two actually collide.
 
@@ -38,7 +38,7 @@ This produces `release/Agora-Setup-0.1.20.exe`, a per-user Windows NSIS installe
 
 The packaged app stores its data under `%APPDATA%\Agora\data`, not in the project's `data/` directory. This tester build keeps the existing settings format, so the API key is plain JSON inside `settings.json`; use a test key you can rotate. `TESTERS.md` contains the tester instructions.
 
-The app works **before you connect a model**. Two reference debates are seeded on first run, and the local scaffolder can still author and extend maps (labelled honestly as a scaffold). A connected model makes the arguments topic-specific.
+The app works **before you connect a model**. Two reference debates are seeded on first run, and the local scaffolder can still author maps (labelled honestly as a scaffold). A connected model makes the arguments topic-specific.
 
 **Appearance** — Settings → Appearance switches between **System**, **Light**, and **Dark**. System follows the Windows appearance setting. The choice is remembered on this machine and applied before the interface paints, so the dark reading room does not flash paper-white at launch. The desktop window background follows the saved theme on the next launch.
 
@@ -46,9 +46,9 @@ The app works **before you connect a model**. Two reference debates are seeded o
 
 **The library** — every debate is stored as plain JSON under `data/debates/`. Click a card to open it, `×` to remove it.
 
-**The map** — a pan/zoom argument graph. The thesis sits in the centre. The default **Case view** groups direct pro arguments on the left and direct con arguments on the right; **Thread view** keeps those two direct cases in place but attaches each response to the argument it answers, extending the response chain outward on that argument's side. Each response is anchored to its target's vertical centre; sibling responses fan around it, and a card only moves when it would collide with another card. Replies share vertical space in each outward lane, so Thread view stays close to the Case view's height. Stance remains on the card's For/Against badge and colour, so a con reply can sit on the pro side where its target lives. Dense maps open as a complete overview; small maps open at a readable scale. Drag to pan, scroll to zoom, use `Fit` to recover the whole shape. The static map refits when the window changes size; after a manual pan or zoom it preserves your view until you press `Fit`. Select any card for the inspector: full text, premises, conclusion, relations, and two actions that send a targeted request to the chamber.
+**The map** — a pan/zoom argument graph. The thesis sits in the centre. The default **Case view** groups direct pro arguments on the left and direct con arguments on the right; **Thread view** keeps those two direct cases in place but attaches each response to the argument it answers, extending the response chain outward on that argument's side. Each response is anchored to its target's vertical centre; sibling responses fan around it, and a card only moves when it would collide with another card. Replies share vertical space in each outward lane, so Thread view stays close to the Case view's height. Stance remains on the card's For/Against badge and colour, so a con reply can sit on the pro side where its target lives. Dense maps open as a complete overview; small maps open at a readable scale. Drag to pan, scroll to zoom, use `Fit` to recover the whole shape. The static map refits when the window changes size; after a manual pan or zoom it preserves your view until you press `Fit`. Select any card for the inspector: full text, premises, conclusion, relations, and two questions you can send to the chamber.
 
-**The chamber** — a conversation with the cartographer. Ask for the strongest counterargument, attack a weak premise, steel-man the other side, or request a specific missing branch. With a model connected, the reply extends the graph and updates the map. Without one, the local scaffolder adds a structural node and says so.
+**The chamber** — a conversation with the cartographer about the map. Ask what the crux is, where the weakest premise lies, which branch is doing the most work, or what would change the conclusion. Answers are short prose. The chamber is read-only: it does not add, remove, move, or relink arguments. Without a model, it gives a structural summary and says so.
 
 **The stage** — `Stage Debate` turns the map into a performance. The order is a **seeded random walk** through the graph: the motion opens, you state your position, advocates and challengers take turns, rebuttals surface where they connect, and the moderator closes. Each run samples a new sequence; `Cut a new sequence` resamples without leaving the stage. The graph camera follows the argument being made.
 
@@ -147,7 +147,7 @@ The theme is applied before paint by `public/theme-init.js`. Production builds s
 | `GET` | `/api/debates/:id` | full debate |
 | `DELETE` | `/api/debates/:id` | remove |
 | `GET` | `/api/debates/:id/argdown` | download source |
-| `POST` | `/api/debates/:id/chat` | extend from `{ message }` |
+| `POST` | `/api/debates/:id/chat` | answer a question about the map from `{ text }`; no map edits |
 | `POST` | `/api/debates/:id/judge` | `{ standard, strictness, model? }` → judgment run |
 | `POST` | `/api/import` | `{ source, motion? }` |
 | `GET`/`PUT` | `/api/settings` | provider settings (key never returned) |
@@ -179,7 +179,7 @@ npm run build     # vite production build
 - The **local bench** is a structural demonstration, not a substantive judgment. Connect a model for real rulings.
 - Judgment is **one model call per clash plus one weighing call** and is not cached; a large map can take a while and cost accordingly.
 - A judgment run lives in the browser session as a sidecar. Export the report if you want the record to survive a reload.
-- The model path is non-streaming: creating or extending a map can take up to a minute and the UI shows progress.
+- The model path is non-streaming: authoring a map or asking a chamber question can take a minute and the UI shows progress.
 - Staging is a textual performance with optional browser speech, not audio mixing or avatars.
 - Single-user, stored locally. Model calls go to the provider you configure; there is no authentication, collaboration, or cloud sync.
 - Argdown import is graph-first. Formatting details that have no graph meaning are not preserved.

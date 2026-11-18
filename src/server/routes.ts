@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { DebateStore, DebateReadError } from "./store";
-import { authorDebate, extendDebate } from "./llm";
+import { askDebate, authorDebate } from "./llm";
 import { judgeDebate, MAX_CLASHES } from "./judge";
 import { ArgdownImportError, importArgdown } from "./argdown-import";
 import { toArgdown } from "../core/argdown";
@@ -81,13 +81,15 @@ export function createApi(store: DebateStore): Router {
         updatedAt: Date.now()
       });
 
-      const result = await extendDebate(withUser, text);
-      const chat = [...result.debate.chat, message("assistant", result.reply, "expand")];
-      if (result.warning) chat.push(message("system", result.warning, "error"));
+      const result = await askDebate(withUser, text);
+      const chat = [...withUser.chat, message("assistant", result.reply, "note")];
+      // A local structural summary already explains its own limits; the
+      // response warning still reaches the UI as a transient notice.
+      if (result.warning && result.engine !== "local") chat.push(message("system", result.warning, "error"));
       if (chat.length > 80) {
         warnings.add("Chat history was capped at 80 messages; older messages were dropped.");
       }
-      const saved = await store.save({ ...result.debate, chat, updatedAt: Date.now() });
+      const saved = await store.save({ ...withUser, chat, updatedAt: Date.now() });
       if (result.warning) warnings.add(result.warning);
       res.json({ debate: saved, engine: result.engine, warning: warnings.size ? [...warnings].join(" ") : undefined });
     } catch (error) {
@@ -157,7 +159,7 @@ export function createApi(store: DebateStore): Router {
       const motion = typeof req.body?.motion === "string" ? req.body.motion.trim() : undefined;
       if (!source.trim()) return res.status(400).json({ error: "Paste or upload an Argdown file first." });
       const { debate, warnings } = await importArgdown(source, { motion });
-      const saved = await store.save({ ...debate, chat: [message("assistant", "Imported from Argdown. Inspect a node, ask for a missing argument, or stage the debate.", "note")] });
+      const saved = await store.save({ ...debate, chat: [message("assistant", "Imported from Argdown. Inspect a node, ask a question about the map, or stage the debate.", "note")] });
       res.status(201).json({ debate: saved, warnings });
     } catch (error) {
       if (error instanceof ArgdownImportError) {

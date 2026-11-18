@@ -303,7 +303,7 @@ export async function importArgdown(source: string, options: ImportOptions = {})
     edges,
     origin: "imported",
     chat: [],
-    authorNote: "Imported from Argdown. Inspect a node, ask for a missing argument, or stage the debate."
+    authorNote: "Imported from Argdown. Inspect a node, ask a question about the map, or stage the debate.",
   }, (warning) => warnings.push(warning));
 
   return { debate, warnings };

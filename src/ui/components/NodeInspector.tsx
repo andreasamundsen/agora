@@ -84,19 +84,20 @@ export function NodeInspector({ debate, node, onClose, onAsk }: Props) {
       </div>
 
       <div className="inspector-actions">
+        <span className="inspector-actions-label">Ask about this card</span>
         <button
           type="button"
           className="inspector-action"
-          onClick={() => onAsk(`Challenge “${promptTitle}”: what is the weakest premise here, and what would defeat it?`)}
+          onClick={() => onAsk(`What is the weakest premise in “${promptTitle}”, and what would defeat it?`)}
         >
-          Challenge this
+          Weakest premise
         </button>
         <button
           type="button"
           className="inspector-action inspector-action--ghost"
-          onClick={() => onAsk(`Strengthen “${promptTitle}” with the strongest available evidence or mechanism.`)}
+          onClick={() => onAsk(`What is the strongest evidence or mechanism that could support “${promptTitle}”?`)}
         >
-          Strengthen it
+          Strongest support
         </button>
       </div>
     </aside>

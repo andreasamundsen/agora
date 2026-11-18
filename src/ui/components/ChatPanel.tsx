@@ -13,10 +13,10 @@ interface Props {
 }
 
 const SUGGESTIONS = [
-  "Add the strongest counterargument",
-  "Attack the weakest premise",
-  "Steel-man the other side",
-  "What is the real crux here?"
+  "What is the crux here?",
+  "Where is the weakest premise?",
+  "What would change the conclusion?",
+  "Which branch is doing the most work?"
 ];
 
 export function ChatPanel({ debate, settings, busy, draft, onDraftChange, onSend, onOpenSettings }: Props) {
@@ -44,7 +44,7 @@ export function ChatPanel({ debate, settings, busy, draft, onDraftChange, onSend
       <div className="chamber-head">
         <div>
           <div className="eyebrow">The chamber</div>
-          <h2 className="chamber-title">Pressure-test the map</h2>
+          <h2 className="chamber-title">Ask about the map</h2>
         </div>
         <button type="button" className={`engine-pill engine-pill--${engineDot}`} onClick={onOpenSettings} title="Model settings">
           <span className="engine-dot" />
@@ -66,12 +66,12 @@ export function ChatPanel({ debate, settings, busy, draft, onDraftChange, onSend
               This is the chamber. The map is not a verdict — it is the state of the argument.
             </p>
             <p>
-              Ask for an objection you have missed, a stronger version of the other side, or a rebuttal to any
-              node. Every request can extend the map.
+              Ask about the arguments on the table. The chamber answers in short prose and does not change the
+              map.
             </p>
             <ol>
               <li>State a position</li>
-              <li>Inspect the branches</li>
+              <li>Ask about the map</li>
               <li>Stage the debate</li>
             </ol>
           </div>
@@ -109,14 +109,14 @@ export function ChatPanel({ debate, settings, busy, draft, onDraftChange, onSend
           <div className="chat-message chat-message--assistant chat-thinking" aria-live="polite">
             <div className="chat-message-meta">Cartographer</div>
             <div className="thinking-dots"><span /><span /><span /></div>
-            <p className="thinking-label">{settings?.ready ? "Extending the map" : "Adding a scaffold"}</p>
+            <p className="thinking-label">{settings?.ready ? "Reading the map" : "Summarising the map"}</p>
           </div>
         )}
       </div>
 
       <div className="chamber-composer">
         {debate && (
-          <div className="suggestions" aria-label="Suggested requests">
+          <div className="suggestions" aria-label="Suggested questions">
             {SUGGESTIONS.map((suggestion) => (
               <button
                 type="button"
@@ -140,7 +140,7 @@ export function ChatPanel({ debate, settings, busy, draft, onDraftChange, onSend
             value={draft}
             rows={1}
             disabled={!debate || busy}
-            placeholder={debate ? "Challenge this map, ask for a missing argument…" : "Open a debate first"}
+            placeholder={debate ? "Ask a question about this map…" : "Open a debate first"}
             onChange={(event) => onDraftChange(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {

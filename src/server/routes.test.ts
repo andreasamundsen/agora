@@ -1,10 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import express from "express";
 import fsp from "node:fs/promises";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { once } from "node:events";
+import { reconcileDebate } from "../core/model";
 import { createApi } from "./routes";
 import { DebateStore } from "./store";
 
@@ -34,9 +35,12 @@ async function stop(): Promise<void> {
 
 beforeEach(async () => {
   dir = await fsp.mkdtemp(path.join(os.tmpdir(), "agora-routes-"));
+  vi.stubEnv("AGORA_DATA_DIR", dir);
+  vi.stubEnv("AGORA_PACKAGED", "1");
 });
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await stop();
   await fsp.rm(dir, { recursive: true, force: true });
 });
@@ -75,10 +79,62 @@ describe("debate routes", () => {
     const response = await fetch(`${base}/api/debates/broken/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: "Add a counterargument." })
+      body: JSON.stringify({ text: "What is the crux here?" })
     });
     expect(response.status).toBe(422);
     const body = (await response.json()) as { code: string };
     expect(body.code).toBe("unreadable-debate");
+  });
+
+  it("answers a chamber question without changing the map", async () => {
+    const store = new DebateStore(dir);
+    const debate = reconcileDebate({
+      id: "night-buses",
+      motion: "Should cities fund night buses?",
+      thesisId: "thesis",
+      nodes: [
+        { id: "thesis", kind: "statement", title: "Night buses", text: "Cities should fund night buses." },
+        {
+          id: "support",
+          kind: "argument",
+          title: "Night workers need it",
+          text: "Night workers finish after the last regular bus.",
+          stance: "pro",
+          premises: ["Those workers finish after midnight."],
+          conclusion: "There is an unmet transport need."
+        },
+        {
+          id: "attack",
+          kind: "argument",
+          title: "Demand is too thin",
+          text: "Late routes would carry too few passengers to justify the cost.",
+          stance: "con",
+          premises: ["The cost of a route is fixed."],
+          conclusion: "The network would waste money."
+        }
+      ],
+      edges: [
+        { id: "edge-support", from: "support", to: "thesis", type: "support" },
+        { id: "edge-attack", from: "attack", to: "thesis", type: "attack" }
+      ]
+    });
+    await store.save(debate);
+    await start(store);
+
+    const response = await fetch(`${base}/api/debates/night-buses/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: "What is the crux here?" })
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      debate: typeof debate;
+      engine: string;
+      warning?: string;
+    };
+    expect(body.engine).toBe("local");
+    expect(body.debate.nodes).toHaveLength(debate.nodes.length);
+    expect(body.debate.edges).toHaveLength(debate.edges.length);
+    expect(body.debate.chat.some((entry) => entry.text.includes("2 arguments"))).toBe(true);
   });
 });
