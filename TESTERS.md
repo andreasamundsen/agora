@@ -4,11 +4,18 @@ Agora is a local debate harness. You install it like a normal Windows app; no No
 
 ## Install
 
-1. Run `Agora-Setup-0.1.20.exe`.
+1. Run `Agora-Setup-0.1.21.exe`.
 2. Windows will warn that the publisher is unknown. This build is intentionally unsigned: choose **More info → Run anyway**.
 3. The installer is per-user and does not need administrator rights. Agora opens when it finishes.
 4. To upgrade, close Agora first, then run the newer installer over it. Your debates stay in `%APPDATA%\Agora\data`.
 5. The SHA-256 checksum should match the file supplied with the build. A matching hash is not a code signature; it only confirms the file has not changed.
+
+## What's new in 0.1.21
+
+- **The chamber is now read-only.** It answers questions about the map in concise prose and never adds, removes, moves, or relinks cards. The old extension suggestions are gone.
+- Answers can be a substantial paragraph (usually 4–7 sentences, roughly 120–200 words), with up to two paragraphs for multi-part questions. Narrow questions stay shorter.
+- JSON-wrapped model answers are unwrapped. If a model returns a map patch, Agora refuses to apply or display it.
+- The node inspector is now purely informational; the two question shortcut buttons were removed.
 
 ## What's new in 0.1.20
 
