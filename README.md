@@ -32,7 +32,7 @@ npm start
 npm run dist
 ```
 
-This produces `release/Agora-Setup-0.1.21.exe`, a per-user Windows NSIS installer. The installer is intentionally **unsigned** and does not auto-update. It bundles Electron and the compiled server, so testers do not need Node.
+This produces `release/Agora-Setup-0.1.22.exe`, a per-user Windows NSIS installer. The installer is intentionally **unsigned** and does not auto-update. It bundles Electron and the compiled server, so testers do not need Node.
 
 `npm run electron` runs the desktop shell directly; `npm run pack` produces an unpacked build for inspection.
 
@@ -181,6 +181,7 @@ npm run build     # vite production build
 - A judgment run lives in the browser session as a sidecar. Export the report if you want the record to survive a reload.
 - The model path is non-streaming: authoring a map or asking a chamber question can take a minute and the UI shows progress.
 - Staging is a textual performance with optional browser speech, not audio mixing or avatars.
+- The chamber can answer general questions from the selected model's training knowledge, but it does not browse or retrieve live web data.
 - Single-user, stored locally. Model calls go to the provider you configure; there is no authentication, collaboration, or cloud sync.
 - Argdown import is graph-first. Formatting details that have no graph meaning are not preserved.
 

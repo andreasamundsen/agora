@@ -4,11 +4,17 @@ Agora is a local debate harness. You install it like a normal Windows app; no No
 
 ## Install
 
-1. Run `Agora-Setup-0.1.21.exe`.
+1. Run `Agora-Setup-0.1.22.exe`.
 2. Windows will warn that the publisher is unknown. This build is intentionally unsigned: choose **More info → Run anyway**.
 3. The installer is per-user and does not need administrator rights. Agora opens when it finishes.
 4. To upgrade, close Agora first, then run the newer installer over it. Your debates stay in `%APPDATA%\Agora\data`.
 5. The SHA-256 checksum should match the file supplied with the build. A matching hash is not a code signature; it only confirms the file has not changed.
+
+## What's new in 0.1.22
+
+- The chamber now answers general questions — definitions, facts, explanations — as well as questions about the map. General answers are identified as outside the map; map answers still cite the relevant cards.
+- Prose questions no longer use the provider's JSON mode. Simple questions that previously fell back to a structural summary (for example “What is the capital of Norway?”) now get a normal answer.
+- General answers use the model's existing knowledge; Agora still does not browse the web or retrieve live data.
 
 ## What's new in 0.1.21
 
@@ -93,7 +99,7 @@ Provider calls go directly from your machine to the provider you choose. When yo
 - Press **Judge**, choose a standard, and run a judgment. After the clashes, the bench weighs the surviving direct case lines. A contested case line carries half weight on either side; the selected burden is applied once, in the final threshold. A direct **defeats** ruling on the motion is not automatically final: the weighing pass must corroborate it as a **decisive** con line, and the defeating objection must not itself be weakened. Otherwise the ruling remains a live attack, the motion stays contested, and the weighted balance decides. The weighing pass can also certify a clean, strong, high-confidence direct support as a **proof**; that makes the motion stand unless a corroborated direct defeat also exists, in which case the two decisive claims cancel and the motion is undecided. The judge now receives each target's own relation and a short path to the motion, so rulings on replies are grounded in what the target was answering. The standard sets the threshold, not a veto: a lopsided record decides, and the burden decides the close ones. A **falls** outcome can come from a corroborated direct strike on the motion or from a weighted con case that dominates. A surviving argument can also show a **weakened** condition beside its status when a ruling says the attack had real force but did not strike it. `Save judgment report` downloads the balance and the rulings.
 - Press **Stage Debate** to watch the exchange.
 - Use **Import** / **Export** to move a debate as Argdown.
-- Ask the chamber a short question about the map: what the crux is, where the weakest premise lies, or which branch is doing the most work. It answers only; it does not edit the map.
+- Ask the chamber about the map or anything else. Map questions cite the relevant cards; general questions are answered from the model's own knowledge. It answers only; it does not edit the map.
 
 ## Where things live
 
