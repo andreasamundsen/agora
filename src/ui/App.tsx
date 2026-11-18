@@ -623,12 +623,6 @@ export default function App() {
     showToast("Debate removed.");
   }, [deleteTarget, summaries, activeId, loadDebate, showToast]);
 
-  const askAbout = useCallback((prompt: string) => {
-    setSelectedId(null);
-    setDraft(prompt);
-    requestAnimationFrame(() => document.getElementById("chamber-input")?.focus());
-  }, []);
-
   if (initializing) {
     return (
       <div className="splash">
@@ -829,7 +823,6 @@ export default function App() {
                     debate={debate}
                     node={selectedNode}
                     onClose={() => setSelectedId(null)}
-                    onAsk={askAbout}
                   />
                 )}
               </>

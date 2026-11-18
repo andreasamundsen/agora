@@ -4,19 +4,17 @@ interface Props {
   debate: Debate;
   node: DebateNode;
   onClose: () => void;
-  onAsk: (prompt: string) => void;
 }
 
 const STANCE_LABEL = { pro: "For the motion", con: "Against the motion", neutral: "Context" } as const;
 const SPEAKER_LABEL = { advocate: "Advocate", challenger: "Challenger", moderator: "Moderator", you: "You" } as const;
 const RELATION_LABEL = { support: "is supported by", attack: "is attacked by", undercut: "is undercut by" } as const;
 
-export function NodeInspector({ debate, node, onClose, onAsk }: Props) {
+export function NodeInspector({ debate, node, onClose }: Props) {
   const byId = new Map(debate.nodes.map((n) => [n.id, n]));
   const incoming = debate.edges.filter((edge) => edge.to === node.id);
   const outgoing = debate.edges.filter((edge) => edge.from === node.id);
   const isThesis = node.id === debate.thesisId;
-  const promptTitle = node.title.length > 62 ? `${node.title.slice(0, 61)}…` : node.title;
 
   return (
     <aside className="graph-inspector" aria-label="Node inspector">
@@ -81,24 +79,6 @@ export function NodeInspector({ debate, node, onClose, onAsk }: Props) {
             <span key={tag} className="inspector-tag">#{tag}</span>
           ))}
         </div>
-      </div>
-
-      <div className="inspector-actions">
-        <span className="inspector-actions-label">Ask about this card</span>
-        <button
-          type="button"
-          className="inspector-action"
-          onClick={() => onAsk(`What is the weakest premise in “${promptTitle}”, and what would defeat it?`)}
-        >
-          Weakest premise
-        </button>
-        <button
-          type="button"
-          className="inspector-action inspector-action--ghost"
-          onClick={() => onAsk(`What is the strongest evidence or mechanism that could support “${promptTitle}”?`)}
-        >
-          Strongest support
-        </button>
       </div>
     </aside>
   );
