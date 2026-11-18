@@ -776,11 +776,11 @@ function rankBySeed(value: string, seed: string): number {
  * motion.
  *
  * A direct root is any argument with a direct support, attack, or undercut edge
- * to the motion. The first pass gives every root one branch: highlight the
- * stem, then follow one response at each fork to the end of the path. A clean
- * support still gets a stem wave even though it contributes no clash verdict.
- * Later passes take the remaining sibling branches, so no ruling is silently
- * dropped. Roots alternate sides when possible; choices at forks are seeded.
+ * to the motion. Each root is drained before the next root starts: highlight
+ * the stem, follow one response at each fork to the end of that branch, then
+ * backtrack to the nearest unplayed fork under the same root and continue. A
+ * clean support still gets a stem wave even though it contributes no clash
+ * verdict. Roots alternate sides when possible; choices at forks are seeded.
  */
 export function orderVerdicts(
   debate: Debate,
@@ -891,82 +891,135 @@ export function orderVerdicts(
     return [next, ...takeBranch(next.from)];
   };
 
+  // A support target needs to be visible before the reply that answers it.
+  // Prefer a direct support edge when a node has more than one support.
+  const supportEdgeByNode = new Map<string, string>();
+  for (const edge of debate.edges) {
+    if (edge.type !== "support" || edge.from === edge.to) continue;
+    const existing = supportEdgeByNode.get(edge.from);
+    if (!existing) {
+      supportEdgeByNode.set(edge.from, edge.id);
+      continue;
+    }
+    const existingEdge = edgeById.get(existing);
+    const existingIsDirect = existingEdge?.to === debate.thesisId;
+    const candidateIsDirect = edge.to === debate.thesisId;
+    if (candidateIsDirect && !existingIsDirect) supportEdgeByNode.set(edge.from, edge.id);
+  }
+
+  // A stem is drained before the next stem starts. Reachability comes from the
+  // map itself, including support edges that do not have their own clash
+  // ruling; otherwise a reply below a nested support looks disconnected.
+  const childrenByTarget = new Map<string, string[]>();
+  for (const edge of debate.edges) {
+    if (edge.from === edge.to) continue;
+    const list = childrenByTarget.get(edge.to) ?? [];
+    if (!list.includes(edge.from)) list.push(edge.from);
+    childrenByTarget.set(edge.to, list);
+  }
+
+  const findBranchStart = (root: string): string | undefined => {
+    const queue = [root];
+    const seen = new Set<string>([root]);
+    while (queue.length) {
+      const node = queue.shift()!;
+      const unplayed = (repliesByTarget.get(node) ?? []).some((item) => !played.has(item.edgeId));
+      if (unplayed) return node;
+      for (const child of childrenByTarget.get(node) ?? []) {
+        if (seen.has(child)) continue;
+        seen.add(child);
+        queue.push(child);
+      }
+    }
+    return undefined;
+  };
+
   const ordered: ClashJudgment[] = [];
   const waves: JudgmentWave[] = [];
-  const stemSeen = new Set<string>();
   let branchNumber = 0;
 
-  // One pass gives every direct argument one branch. Later passes take the
-  // remaining sibling branches, so no ruling is silently dropped.
-  while (true) {
-    let madeAny = false;
-    for (const root of orderedRoots) {
-      const info = rootInfo.get(root);
-      if (!info) continue;
-      const first = !stemSeen.has(root);
-      const direct = first ? takeDirect(root) : [];
-      const branch = takeBranch(root);
-      if (!first && direct.length === 0 && branch.length === 0) continue;
-      if (first) stemSeen.add(root);
-      const branchVerdicts = [...direct, ...branch];
+  const pushBranchWave = (
+    root: string,
+    info: NonNullable<ReturnType<typeof rootInfo.get>>,
+    verdictsForWave: ClashJudgment[],
+    firstWave: boolean,
+    openings: JudgmentBranchOpening[]
+  ) => {
+    const startStep = ordered.length;
+    for (const item of verdictsForWave) ordered.push(item);
+    branchNumber += 1;
+    waves.push({
+      id: `branch-${branchNumber}`,
+      label: `Branch ${branchNumber}`,
+      verdictIds: verdictsForWave.map((item) => item.edgeId),
+      rootId: root,
+      rootEdgeId: firstWave ? info.rootEdgeId : undefined,
+      rootKind: firstWave ? info.rootKind : undefined,
+      side: info.side,
+      startStep,
+      openings
+    });
+  };
+
+  for (const root of orderedRoots) {
+    const info = rootInfo.get(root);
+    if (!info) continue;
+    const direct = takeDirect(root);
+    let firstWave = true;
+
+    while (true) {
+      const start = findBranchStart(root);
+      if (!start) break;
+      const branch = takeBranch(start);
+      if (branch.length === 0) break;
+
+      const verdictsForWave = firstWave ? [...direct, ...branch] : branch;
+      const startStep = ordered.length;
+      const openings: JudgmentBranchOpening[] = [];
+      if (firstWave && info.rootKind === "support" && info.supportEdgeId) {
+        openings.push({ step: startStep, nodeId: root, edgeId: info.supportEdgeId });
+      }
+      if (start !== root) {
+        const supportEdgeId = supportEdgeByNode.get(start);
+        if (supportEdgeId) {
+          openings.push({
+            step: startStep + (firstWave ? direct.length : 0),
+            nodeId: start,
+            edgeId: supportEdgeId
+          });
+        }
+      }
+      pushBranchWave(root, info, verdictsForWave, firstWave, openings);
+      firstWave = false;
+    }
+
+    if (firstWave) {
+      // A clean support still gets a stem; an attack with no ruling keeps a
+      // timeline row but has nothing to select.
       const startStep = ordered.length;
       const openings: JudgmentBranchOpening[] = [];
       if (info.rootKind === "support" && info.supportEdgeId) {
         openings.push({ step: startStep, nodeId: root, edgeId: info.supportEdgeId });
       }
-      for (const item of branchVerdicts) ordered.push(item);
-      branchNumber += 1;
-      waves.push({
-        id: `branch-${branchNumber}`,
-        label: `Branch ${branchNumber}`,
-        verdictIds: branchVerdicts.map((item) => item.edgeId),
-        rootId: root,
-        rootEdgeId: info.rootEdgeId,
-        rootKind: info.rootKind,
-        side: info.side,
-        startStep,
-        openings
-      });
-      madeAny = true;
+      pushBranchWave(root, info, direct, true, openings);
     }
-    if (!madeAny) break;
   }
 
-  // A branch can fork below its direct root. Once every direct argument has
-  // had its first branch, open the remaining branches at their fork targets so
-  // they are still shown as paths, not as a flat tail of rulings.
-  const supportEdgeByNode = new Map<string, string>();
-  for (const edge of debate.edges) {
-    if (edge.type === "support") supportEdgeByNode.set(edge.from, edge.id);
-  }
-  const remainingTargets = [...new Set(
-    verdicts
-      .filter((item) => !played.has(item.edgeId))
-      .map((item) => edgeById.get(item.edgeId)?.to)
-      .filter((to): to is string => Boolean(to))
-  )].sort((a, b) => rankBySeed(a, seed) - rankBySeed(b, seed) || a.localeCompare(b));
-
-  while (true) {
-    let madeAny = false;
-    for (const target of remainingTargets) {
-      const branch = takeBranch(target);
-      if (branch.length === 0) continue;
-      const startStep = ordered.length;
-      const openings: JudgmentBranchOpening[] = [];
-      const supportEdgeId = supportEdgeByNode.get(target);
-      if (supportEdgeId) openings.push({ step: startStep, nodeId: target, edgeId: supportEdgeId });
-      for (const item of branch) ordered.push(item);
-      branchNumber += 1;
-      waves.push({
-        id: `branch-${branchNumber}`,
-        label: `Branch ${branchNumber}`,
-        verdictIds: branch.map((item) => item.edgeId),
-        startStep,
-        openings
-      });
-      madeAny = true;
-    }
-    if (!madeAny) break;
+  // Only disconnected leftovers should reach this fallback. Normal branches
+  // are already drained under their stem, so this cannot put a response to the
+  // first stem after the second stem.
+  const leftover = verdicts
+    .filter((item) => !played.has(item.edgeId))
+    .sort((a, b) => rankBySeed(a.edgeId, seed) - rankBySeed(b.edgeId, seed) || a.edgeId.localeCompare(b.edgeId));
+  if (leftover.length) {
+    const startStep = ordered.length;
+    for (const item of leftover) ordered.push(item);
+    waves.push({
+      id: "remaining-record",
+      label: "Remaining record",
+      verdictIds: leftover.map((item) => item.edgeId),
+      startStep
+    });
   }
 
   return { verdicts: ordered, waves };

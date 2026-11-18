@@ -808,7 +808,7 @@ describe("judgment solver", () => {
     expect(supportOpening?.step).toBe(1);
   });
 
-  it("gives every direct stem one branch before returning for a fork", () => {
+  it("drains one direct stem before starting the next", () => {
     const debate = reconcileDebate({
       id: "stem-pass-debate",
       motion: "Should every stem get a branch?",
@@ -818,6 +818,7 @@ describe("judgment solver", () => {
         { id: "roota", kind: "argument", title: "A con stem", text: "A con reason.", stance: "con" },
         { id: "rootb", kind: "argument", title: "A pro stem", text: "A pro reason.", stance: "pro" },
         { id: "a1", kind: "argument", title: "First reply to A", text: "A reply.", stance: "pro" },
+        { id: "a1c", kind: "argument", title: "A reply under A1", text: "A deeper reply.", stance: "con" },
         { id: "a2", kind: "argument", title: "Second reply to A", text: "Another reply.", stance: "pro" },
         { id: "b1", kind: "argument", title: "Reply to B", text: "A reply.", stance: "con" }
       ],
@@ -825,6 +826,7 @@ describe("judgment solver", () => {
         { id: "e_roota_thesis", from: "roota", to: "thesis", type: "attack" },
         { id: "e_rootb_thesis", from: "rootb", to: "thesis", type: "support" },
         { id: "e_a1_roota", from: "a1", to: "roota", type: "attack" },
+        { id: "e_a1c_a1", from: "a1c", to: "a1", type: "attack" },
         { id: "e_a2_roota", from: "a2", to: "roota", type: "attack" },
         { id: "e_b1_rootb", from: "b1", to: "rootb", type: "attack" }
       ]
@@ -833,13 +835,19 @@ describe("judgment solver", () => {
       verdict("e_roota_thesis", "roota", "thesis"),
       verdict("e_rootb_thesis", "rootb", "thesis"),
       verdict("e_a1_roota", "a1", "roota"),
+      verdict("e_a1c_a1", "a1c", "a1"),
       verdict("e_a2_roota", "a2", "roota"),
       verdict("e_b1_rootb", "b1", "rootb")
     ], "stem-pass");
-    const firstStems = ordered.waves.slice(0, 2).map((wave) => wave.rootId).sort();
-    expect(firstStems).toEqual(["roota", "rootb"]);
+    // Stem A must finish all of its replies before stem B begins. The seed
+    // puts roota first in this fixture.
+    expect(ordered.waves.slice(0, 2).map((wave) => wave.rootId)).toEqual(["roota", "roota"]);
     const ids = ordered.verdicts.map((item) => item.edgeId);
-    expect(ids[0]).toMatch(/e_roota_thesis|e_rootb_thesis/);
+    const rootbStart = ids.indexOf("e_rootb_thesis");
+    expect(rootbStart).toBeGreaterThan(0);
+    expect(ids.indexOf("e_a1_roota")).toBeLessThan(rootbStart);
+    expect(ids.indexOf("e_a1c_a1")).toBeLessThan(rootbStart);
+    expect(ids.indexOf("e_a2_roota")).toBeLessThan(rootbStart);
   });
 
   it("alternates sides for case roots when both sides are available", () => {
@@ -871,7 +879,7 @@ describe("judgment solver", () => {
     expect(ordered.waves.every((wave) => wave.verdictIds.length === 0 || wave.side)).toBe(true);
   });
 
-  it("keeps each primary's reply chain together and seeds the branch order", () => {
+  it("keeps each stem's reply chain together and seeds the branch order", () => {
     const debate = reconcileDebate({
       id: "branch-debate",
       motion: "Should the branches pass?",
