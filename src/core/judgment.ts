@@ -280,25 +280,23 @@ export const BURDEN_THRESHOLDS: Record<StandardOfProof, number> = {
 };
 
 /**
- * The motion card speaks in outcomes, not in argument statuses. Before a run
- * is complete, show a standard-aware provisional disposition: under a con
+ * The motion card speaks in outcomes, not in argument statuses. Until the run
+ * is complete, keep the standard-aware provisional disposition: under a con
  * burden the motion may stand until displaced, but under a pro burden or
- * preponderance it is not yet established.
+ * preponderance it is not yet established. Do not surface the prefix's
+ * computed outcome before completion; the case-line assessment belongs to the
+ * finished record and would otherwise leak the final result during playback.
  */
 export function motionOutcomeForDisplay(input: {
   standard: StandardOfProof;
-  step: number;
   complete: boolean;
   outcome: JudgmentOutcome;
 }): { outcome: JudgmentOutcome; provisional: boolean } {
   if (input.complete) return { outcome: input.outcome, provisional: false };
-  if (input.step === 0) {
-    return {
-      outcome: input.standard === "con" ? "stands" : "undecided",
-      provisional: true
-    };
-  }
-  return { outcome: input.outcome, provisional: true };
+  return {
+    outcome: input.standard === "con" ? "stands" : "undecided",
+    provisional: true
+  };
 }
 
 export function isClashEdge(edge: DebateEdge): edge is ClashEdge {

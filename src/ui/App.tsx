@@ -311,7 +311,6 @@ export default function App() {
     const settled = judgmentComplete;
     const motion = motionOutcomeForDisplay({
       standard: judgment.run.standard,
-      step: effectRevealed ? judgment.step : Math.max(0, judgment.step - 1),
       complete: settled && effectRevealed,
       outcome: effectRevealed ? judgmentSnapshot.outcome : priorJudgmentSnapshot?.outcome ?? judgmentSnapshot.outcome
     });

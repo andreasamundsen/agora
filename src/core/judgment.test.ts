@@ -995,22 +995,22 @@ describe("judgment solver", () => {
 
   it("gives the motion card a standard-aware provisional disposition", () => {
     expect(
-      motionOutcomeForDisplay({ standard: "pro", step: 0, complete: false, outcome: "stands" })
+      motionOutcomeForDisplay({ standard: "pro", complete: false, outcome: "stands" })
     ).toEqual({ outcome: "undecided", provisional: true });
     expect(
-      motionOutcomeForDisplay({ standard: "preponderance", step: 0, complete: false, outcome: "stands" })
+      motionOutcomeForDisplay({ standard: "preponderance", complete: false, outcome: "stands" })
     ).toEqual({ outcome: "undecided", provisional: true });
     expect(
-      motionOutcomeForDisplay({ standard: "con", step: 0, complete: false, outcome: "undecided" })
+      motionOutcomeForDisplay({ standard: "con", complete: false, outcome: "undecided" })
     ).toEqual({ outcome: "stands", provisional: true });
   });
 
-  it("uses the live outcome after the first ruling and the final outcome when complete", () => {
+  it("keeps the provisional disposition until completion and then uses the final outcome", () => {
     expect(
-      motionOutcomeForDisplay({ standard: "pro", step: 1, complete: false, outcome: "falls" })
-    ).toEqual({ outcome: "falls", provisional: true });
+      motionOutcomeForDisplay({ standard: "pro", complete: true, outcome: "falls" })
+    ).toEqual({ outcome: "falls", provisional: false });
     expect(
-      motionOutcomeForDisplay({ standard: "pro", step: 2, complete: true, outcome: "undecided" })
+      motionOutcomeForDisplay({ standard: "preponderance", complete: true, outcome: "undecided" })
     ).toEqual({ outcome: "undecided", provisional: false });
   });
 });
