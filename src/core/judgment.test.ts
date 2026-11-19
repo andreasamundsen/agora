@@ -721,6 +721,43 @@ describe("judgment solver", () => {
     expect(summary.decisive[0]?.kind).toBe("support");
   });
 
+  it("keeps a direct support opening when the branch's first ruling answers it", () => {
+    const debate = debateWith([
+      { from: "support", to: "thesis", type: "support" },
+      { from: "objection", to: "support", type: "attack" }
+    ]);
+    const ordered = orderVerdicts(debate, [
+      verdict("e_objection_support", "objection", "support")
+    ]);
+    const supportCase = ordered.waves.find((wave) => wave.rootId === "support");
+    expect(supportCase).toMatchObject({
+      rootKind: "support",
+      rootEdgeId: "e_support_thesis",
+      startStep: 0,
+      verdictIds: ["e_objection_support"]
+    });
+    expect(supportCase?.openings).toEqual([
+      { step: 0, nodeId: "support", edgeId: "e_support_thesis" }
+    ]);
+  });
+
+  it("still gives a clean direct support its opening and an empty case shell", () => {
+    const debate = debateWith([
+      { from: "support", to: "thesis", type: "support" }
+    ]);
+    const ordered = orderVerdicts(debate, []);
+    const supportCase = ordered.waves.find((wave) => wave.rootId === "support");
+    expect(supportCase).toMatchObject({
+      rootKind: "support",
+      rootEdgeId: "e_support_thesis",
+      startStep: 0,
+      verdictIds: []
+    });
+    expect(supportCase?.openings).toEqual([
+      { step: 0, nodeId: "support", edgeId: "e_support_thesis" }
+    ]);
+  });
+
   it("plays direct clashes and reply chains as seeded branches", () => {
     const debate = debateWith([
       { from: "support", to: "thesis", type: "support" },

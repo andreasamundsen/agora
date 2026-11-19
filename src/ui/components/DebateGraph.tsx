@@ -27,8 +27,6 @@ export interface GraphJudgment {
   caseLineEdgeId?: string;
   caseLineNodeId?: string;
   reinstated: string[];
-  /** Direct supports certified as proved after the assessment completes. */
-  proved: string[];
   /** The motion itself carries a proof marker. */
   motionProved: boolean;
   verdictByEdge: Record<string, ClashVerdict>;

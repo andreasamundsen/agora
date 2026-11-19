@@ -330,12 +330,6 @@ export default function App() {
     const caseLine = judgment.caseLineId
       ? debate.edges.find((edge) => edge.id === judgment.caseLineId)
       : undefined;
-    const proved = settled && effectRevealed
-      ? judgmentSnapshot.proofs.flatMap((edgeId) => {
-          const edge = debate.edges.find((candidate) => candidate.id === edgeId);
-          return edge ? [edge.from] : [];
-        })
-      : [];
     const visibleStatuses = effectRevealed
       ? judgmentSnapshot.statuses
       : judgment.step > 1 && priorJudgmentSnapshot
@@ -366,7 +360,6 @@ export default function App() {
       outcome: settled && effectRevealed ? judgmentSnapshot.outcome : undefined,
       motionDisposition: motion.outcome,
       motionProvisional: motion.provisional,
-      proved,
       motionProved: settled && effectRevealed && judgmentSnapshot.proofs.length > 0 && !judgmentSnapshot.proofConflict,
       unsupportedThesis: settled && effectRevealed && judgmentSnapshot.unsupportedThesis
     };
