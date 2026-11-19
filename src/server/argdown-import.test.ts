@@ -37,6 +37,13 @@ describe("Argdown import", () => {
     expect(result.debate.edges.length).toBe(debate.edges.length);
     expect(result.debate.nodes.filter((node) => node.stance === "pro").length).toBeGreaterThan(0);
     expect(result.debate.nodes.filter((node) => node.stance === "con").length).toBeGreaterThan(0);
+    const original = debate.nodes.find((node) => node.premises.length > 0 && node.conclusion);
+    expect(original).toBeDefined();
+    const restored = result.debate.nodes.find((node) => node.title === original?.title);
+    expect(restored?.premises).toEqual(original?.premises);
+    expect(restored?.conclusion).toBe(original?.conclusion);
+    expect(source).not.toContain("## For the motion");
+    expect(source).not.toContain("## Against the motion");
   });
 
   it("preserves premise-conclusion structures", async () => {

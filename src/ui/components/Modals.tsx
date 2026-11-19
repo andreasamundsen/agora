@@ -434,8 +434,8 @@ export function ExportModal({ debate, onClose }: { debate: Debate; onClose: () =
             the Argdown sandbox, VS Code extension or CLI.
           </p>
           <p>
-            Premises and conclusions travel alongside each argument as Argdown comments — visible to readers,
-            ignored by the map.
+            Arguments carry native premise–conclusion structures, so their reasoning survives a round trip and is
+            visible to the Argdown parser — not buried in comments.
           </p>
           <p className="export-tip">
             Tip: in the Argdown sandbox, click <b>Map</b> to render the official argument map. Our stage is a

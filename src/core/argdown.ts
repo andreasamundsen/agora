@@ -8,9 +8,10 @@ import { Debate, DebateEdge, DebateNode } from "./model";
  *   [The motion]
  *     - <A reason against>
  *
- * means the argument attacks the motion. We therefore emit each node's
- * definition once, then list every source acting on it. This survives the
- * official @argdown parser and keeps a clean pros/cons reading in the map.
+ * means the argument attacks the motion. We emit each node's definition once
+ * in branch-first order, then list every source acting on it. Argument
+ * reasoning is written as a native premise-conclusion structure so it is
+ * available to the parser rather than hidden in comments.
  */
 
 const RELATION_SYMBOL = {
@@ -54,33 +55,28 @@ function tagLine(node: DebateNode): string {
   return `  ${[...tags].map((t) => `#${t}`).join(" ")}`;
 }
 
-function premiseComments(node: DebateNode): string[] {
-  if (node.kind !== "argument" || !node.premises.length) return [];
-  const lines: string[] = ["  // The reasoning behind this argument:"];
-  node.premises.forEach((premise, index) => {
-    lines.push(`  //   (${index + 1}) ${oneLine(premise)}`);
-  });
-  if (node.conclusion) lines.push(`  //   ∴ ${oneLine(node.conclusion)}`);
-  return lines;
+function pcsLines(node: DebateNode): string[] {
+  if (node.kind !== "argument" || !node.premises.length || !node.conclusion) return [];
+  const premises = node.premises.map((premise, index) => `(${index + 1}) ${oneLine(premise)}`);
+  const conclusion = `(${premises.length + 1}) ${oneLine(node.conclusion)}`;
+  return ["", ...premises, "----", conclusion];
 }
 
-function sortNodes(debate: Debate): DebateNode[] {
-  const root = debate.nodes.find((n) => n.id === debate.thesisId);
-  const others = debate.nodes.filter((n) => n.id !== debate.thesisId);
-  const order = new Map<string, number>([
-    ["For the motion", 0],
-    ["Against the motion", 1],
-    ["Crossfire", 2]
-  ]);
-  others.sort((a, b) => {
-    const ga = order.get(a.group) ?? 3;
-    const gb = order.get(b.group) ?? 3;
-    if (ga !== gb) return ga - gb;
-    if (a.group !== b.group) return a.group.localeCompare(b.group);
-    if (a.stance !== b.stance) return a.stance.localeCompare(b.stance);
-    return a.title.localeCompare(b.title);
-  });
-  return root ? [root, ...others] : others;
+function structuralOrder(debate: Debate, incoming: Map<string, DebateEdge[]>): DebateNode[] {
+  const byId = new Map(debate.nodes.map((node) => [node.id, node]));
+  const visited = new Set<string>();
+  const order: DebateNode[] = [];
+  const visit = (node: DebateNode | undefined) => {
+    if (!node || visited.has(node.id)) return;
+    visited.add(node.id);
+    order.push(node);
+    for (const edge of sortEdges(incoming.get(node.id) ?? [])) {
+      visit(byId.get(edge.from));
+    }
+  };
+  visit(byId.get(debate.thesisId));
+  for (const node of debate.nodes) visit(node);
+  return order;
 }
 
 export function toArgdown(debate: Debate): string {
@@ -108,14 +104,7 @@ export function toArgdown(debate: Debate): string {
     lines.push("");
   }
 
-  let currentGroup = "";
-  for (const node of sortNodes(debate).filter((n) => n.id !== debate.thesisId)) {
-    const group = node.group || "Crossfire";
-    if (group !== currentGroup) {
-      currentGroup = group;
-      lines.push(`## ${oneLine(group) || "Crossfire"}`);
-      lines.push("");
-    }
+  for (const node of structuralOrder(debate, incoming).filter((n) => n.id !== debate.thesisId)) {
     lines.push(definitionFor(node));
     const tags = tagLine(node);
     if (tags) lines.push(tags);
@@ -124,7 +113,7 @@ export function toArgdown(debate: Debate): string {
       if (!source) continue;
       lines.push(`  ${RELATION_SYMBOL[edge.type]} ${referenceFor(source)}`);
     }
-    lines.push(...premiseComments(node));
+    lines.push(...pcsLines(node));
     lines.push("");
   }
 

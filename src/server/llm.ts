@@ -84,7 +84,7 @@ Design rules:
 4. Map the arguments that are genuinely load-bearing for this motion. Include the strongest direct reasons for and against the thesis, and the specific replies those arguments provoke. Treat the case as a structure of claims and answers, not two separate lists: every major direct argument should normally have at least one serious reply attached to it, unless no honest reply exists. A map that leaves its strongest direct lines unanswered is incomplete even if it has many direct arguments. Where a reply is itself seriously contested, include the further response that changes the balance. Most maps will land around 14–20 argument nodes, but that is a guideline, not a quota: use fewer for a narrow question, and more only when the additional arguments are distinct, relevant, and change the shape of the case. Do not pad with generic filler, do not repeat a point in different words, and do not invent a weak reply just to give every objection an answer. Where a serious objection genuinely has no strong answer, leave it unanswered and preserve that pressure.
 5. An argument node may bear directly on the thesis or respond to another argument. When it responds to another argument, attach it to that argument with attack or undercut; do not route every objection through the thesis. Stance remains relative to the thesis, not to the target. Use cross-links where there is a genuine clash, but do not invent relations merely to connect the graph.
 6. If one side is materially weaker, show that asymmetry rather than manufacturing balance. Do not invent evidence, statistics, citations, or quotations.
-7. Argument nodes need 2–3 premises and one conclusion. Each node should make one inferential move; split compound claims into separate nodes. The text is a compact explanation (max 45 words) that makes the inference explicit. Prefer concrete mechanisms, evidence and trade-offs over slogans.
+7. Argument nodes need 2–3 premises and one conclusion. Each node should make one inferential move; split compound claims into separate nodes. The text is a compact explanation (max 60 words) that makes the inference explicit: state the mechanism or scope that connects the premises to the conclusion. State premises as distinct declarative claims (usually 10–20 words each). The conclusion should be one complete sentence (usually 12–25 words) stating what the premises establish, not a restatement of the title. Prefer concrete mechanisms, evidence and trade-offs over slogans.
 8. Edge semantics: support = source is a reason for target; attack = source is a reason against target; undercut = source challenges the target's premise, evidence or inference without directly denying its conclusion.
 9. Every non-thesis node must connect to the map. Prefer a connected tree with cross-links only where they mark a genuine clash.
 10. Stance is relative to the thesis. Speakers: advocate (pro), challenger (con), you (the user's own case), moderator (framing).
@@ -119,7 +119,7 @@ Return exactly this shape:
       "id": "lower_snake_case_unique",
       "kind": "argument",
       "title": "short label",
-      "text": "compact explanation, max 45 words",
+      "text": "compact explanation, max 60 words",
       "stance": "pro",
       "speaker": "advocate",
       "tags": ["mobility"],
@@ -149,7 +149,7 @@ You are extending an existing map. Return a JSON patch only:
       "id": "new_unique_snake_case",
       "kind": "argument",
       "title": "short label",
-      "text": "compact explanation, max 45 words",
+      "text": "compact explanation, max 60 words",
       "stance": "pro",
       "speaker": "advocate",
       "tags": ["..."],

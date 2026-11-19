@@ -7,13 +7,8 @@ interface Props {
 }
 
 const STANCE_LABEL = { pro: "For the motion", con: "Against the motion", neutral: "Context" } as const;
-const SPEAKER_LABEL = { advocate: "Advocate", challenger: "Challenger", moderator: "Moderator", you: "You" } as const;
-const RELATION_LABEL = { support: "is supported by", attack: "is attacked by", undercut: "is undercut by" } as const;
 
 export function NodeInspector({ debate, node, onClose }: Props) {
-  const byId = new Map(debate.nodes.map((n) => [n.id, n]));
-  const incoming = debate.edges.filter((edge) => edge.to === node.id);
-  const outgoing = debate.edges.filter((edge) => edge.from === node.id);
   const isThesis = node.id === debate.thesisId;
 
   return (
@@ -42,43 +37,6 @@ export function NodeInspector({ debate, node, onClose }: Props) {
             )}
           </div>
         )}
-
-        <div className="inspector-section">
-          <div className="inspector-label">In the map</div>
-          <ul className="connection-list">
-            {incoming.slice(0, 4).map((edge) => {
-              const other = byId.get(edge.from);
-              if (!other) return null;
-              return (
-                <li key={edge.id}>
-                  <span className={`connection-mark connection-mark--${edge.type}`} />
-                  <span className="connection-text">
-                    {RELATION_LABEL[edge.type]} <em>{other.title}</em>
-                  </span>
-                </li>
-              );
-            })}
-            {outgoing.slice(0, 4).map((edge) => {
-              const other = byId.get(edge.to);
-              if (!other) return null;
-              const verb = edge.type === "support" ? "supports" : edge.type === "undercut" ? "undercuts" : "attacks";
-              return (
-                <li key={edge.id}>
-                  <span className={`connection-mark connection-mark--${edge.type}`} />
-                  <span className="connection-text">{verb} <em>{other.title}</em></span>
-                </li>
-              );
-            })}
-            {!incoming.length && !outgoing.length && <li className="connection-empty">No relations yet.</li>}
-          </ul>
-        </div>
-
-        <div className="inspector-meta">
-          <span>{SPEAKER_LABEL[node.speaker]}</span>
-          {node.tags.filter((tag) => !["motion", "thesis", "pro", "con", "neutral", "advocate", "challenger", "moderator", "you", "user"].includes(tag)).slice(0, 3).map((tag) => (
-            <span key={tag} className="inspector-tag">#{tag}</span>
-          ))}
-        </div>
       </div>
     </aside>
   );

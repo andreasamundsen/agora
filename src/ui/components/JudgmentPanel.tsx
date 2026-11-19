@@ -209,6 +209,7 @@ export function JudgmentPanel({
   speed,
   snapshot,
   restored,
+  counts,
   onTogglePlay,
   onNext,
   onPrevious,
@@ -227,6 +228,7 @@ export function JudgmentPanel({
   speed: number;
   snapshot: JudgmentSnapshot;
   restored: string[];
+  counts: JudgmentSnapshot["counts"];
   onTogglePlay: () => void;
   onNext: () => void;
   onPrevious: () => void;
@@ -247,7 +249,6 @@ export function JudgmentPanel({
     return map;
   }, [run.waves]);
   const currentWave = current ? waveFor.get(current.edgeId) : undefined;
-  const applied = run.verdicts.slice(0, step);
   const restoredTitles = restored.slice(0, 2).map((id) => titleFor(debate, id));
 
   return (
@@ -276,9 +277,9 @@ export function JudgmentPanel({
           <div className="judgment-session-line">
             <span><b>{step}</b> of {total} rulings</span>
             <span className="judgment-session-sep" />
-            <span>{snapshot.counts.standing} standing</span>
-            <span>{snapshot.counts.defeated} struck</span>
-            <span>{snapshot.counts.contested} contested</span>
+            <span>{counts.standing} standing</span>
+            <span>{counts.defeated} struck</span>
+            <span>{counts.contested} contested</span>
           </div>
         )}
 
@@ -392,94 +393,37 @@ export function JudgmentPanel({
         )}
 
         {total > 0 && (
-          <div className="judgment-timeline">
-            <div className="timeline-head">
-              <span>Record</span>
-              <span>{step} / {total}</span>
-            </div>
-            {run.waves.map((wave) => {
-              const openings = wave.openings ?? [];
-              return (
-              <div className="judge-wave" key={wave.id}>
-                <span className="judge-wave-label">{wave.label}</span>
-                {openings.map((opening) => (
-                  <button
-                    key={`${wave.id}-opening-${opening.step}-${opening.nodeId}`}
-                    type="button"
-                    className="judge-wave-opening"
-                    onClick={() => onSeek(opening.step)}
-                    title={`Open this branch at: ${titleFor(debate, opening.nodeId)}`}
-                  >
-                    <span>{opening.nodeId === wave.rootId ? "Direct support opens" : "Branch opens"}</span>
-                    <b>{titleFor(debate, opening.nodeId)}</b>
-                  </button>
-                ))}
-                {openings.length === 0 && wave.rootKind === "support" && wave.rootId && wave.verdictIds.length > 0 && (
-                  <button
-                    type="button"
-                    className="judge-wave-opening"
-                    onClick={() => onSeek(wave.startStep ?? 0)}
-                    title={`Open this branch at its direct support: ${titleFor(debate, wave.rootId)}`}
-                  >
-                    <span>Direct support opens</span>
-                    <b>{titleFor(debate, wave.rootId)}</b>
-                  </button>
-                )}
-                {wave.verdictIds.length === 0 && (
-                  <span className="judge-wave-note">direct support · no clash</span>
-                )}
-                <div className="judge-ticks">
-                  {wave.verdictIds.map((edgeId) => {
-                    const verdict = run.verdicts.find((item) => item.edgeId === edgeId);
-                    if (!verdict) return null;
-                    const index = run.verdicts.findIndex((item) => item.edgeId === edgeId);
-                    const appliedTick = index < step;
-                    const currentTick = index === step - 1;
-                    return (
-                      <button
-                        key={edgeId}
-                        type="button"
-                        className={`judge-tick judge-tick--${verdict.verdict} ${appliedTick ? "is-applied" : ""} ${currentTick ? "is-current" : ""}`}
-                        onClick={() => onSeek(index + 1)}
-                        title={`${titleFor(debate, verdict.from)} → ${titleFor(debate, verdict.to)}: ${VERDICT_LABEL[verdict.verdict]}`}
-                        aria-label={`Go to ruling ${index + 1}`}
-                      >
-                        <span />
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              );
-            })}
-          </div>
-        )}
-
-        {applied.length > 0 && (
           <div className="judgment-record">
             <div className="record-head">
               <span>Rulings</span>
-              <span>{applied.length} entered</span>
+              <span>{step} / {total} entered</span>
             </div>
             <ol>
-              {applied.map((verdict, index) => (
-                <li key={verdict.edgeId}>
-                  <button
-                    type="button"
-                    className={`record-row ${index === step - 1 ? "is-current" : ""}`}
-                    onClick={() => onSeek(index + 1)}
-                  >
-                    <span className={`record-dot record-dot--${verdict.verdict}`} />
-                    <span className="record-number">{String(index + 1).padStart(2, "0")}</span>
-                    <span className="record-clash">
-                      <b>{titleFor(debate, verdict.from)}</b>
-                      <i>→</i>
-                      {titleFor(debate, verdict.to)}
-                    </span>
-                    <span className={`record-verdict record-verdict--${verdict.verdict}`}>{VERDICT_LABEL[verdict.verdict]}</span>
-                  </button>
-                </li>
-              ))}
+              {run.verdicts.map((verdict, index) => {
+                const isCurrent = index === step - 1;
+                const isFuture = index >= step;
+                return (
+                  <li key={verdict.edgeId}>
+                    <button
+                      type="button"
+                      className={`record-row ${isCurrent ? "is-current" : ""} ${isFuture ? "is-future" : ""}`}
+                      onClick={() => onSeek(index + 1)}
+                      aria-label={isFuture ? `Ruling ${index + 1}, not yet entered` : undefined}
+                    >
+                      <span className={`record-dot ${isFuture ? "" : `record-dot--${verdict.verdict}`}`} />
+                      <span className="record-number">{String(index + 1).padStart(2, "0")}</span>
+                      <span className="record-clash">
+                        <b>{titleFor(debate, verdict.from)}</b>
+                        <i>→</i>
+                        {titleFor(debate, verdict.to)}
+                      </span>
+                      <span className={`record-verdict ${isFuture ? "" : `record-verdict--${verdict.verdict}`}`}>
+                        {isFuture ? "—" : VERDICT_LABEL[verdict.verdict]}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
             </ol>
           </div>
         )}

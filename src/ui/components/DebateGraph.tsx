@@ -67,14 +67,30 @@ const STATUS_LABEL: Record<ArgumentStatus | "unsupported", string> = {
   unsupported: "Unsupported"
 };
 
+const GRAPH_VIEW_COOKIE = "agora_graph_view";
+const GRAPH_VIEW_MAX_AGE = 60 * 60 * 24 * 365;
+
+function readGraphView(): LayoutMode {
+  if (typeof document === "undefined") return "case";
+  const entry = document.cookie
+    .split("; ")
+    .find((cookie) => cookie.startsWith(`${GRAPH_VIEW_COOKIE}=`));
+  const value = entry?.slice(GRAPH_VIEW_COOKIE.length + 1);
+  return value === "thread" ? "thread" : "case";
+}
+
 export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
   { debate, selectedId, onSelect, stage, judgment },
   ref
 ) {
-  const [view, setView] = useState<LayoutMode>("case");
-  // Judgment reads as a branch walk, so it always uses Thread view. The
-  // reader's previous view returns when the bench closes.
-  const activeView: LayoutMode = judgment?.active ? "thread" : view;
+  const [view, setView] = useState<LayoutMode>(readGraphView);
+  const setGraphView = useCallback((next: LayoutMode) => {
+    setView(next);
+    document.cookie = `${GRAPH_VIEW_COOKIE}=${next}; path=/; max-age=${GRAPH_VIEW_MAX_AGE}; SameSite=Lax`;
+  }, []);
+  // Judgment can run in either layout. Thread is the default reading of a
+  // branch walk, but the reader keeps control of the view they prefer.
+  const activeView: LayoutMode = view;
   const layout = useMemo(() => computeLayout(debate, activeView), [debate, activeView]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -93,10 +109,6 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
   zoomRef.current = zoom;
   panRef.current = pan;
   sizeRef.current = size;
-
-  useEffect(() => {
-    setView("case");
-  }, [debate.id]);
 
   const fit = useCallback(() => {
     const el = containerRef.current;
@@ -277,6 +289,17 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
     return () => window.clearTimeout(timer);
   }, [judgment?.active, fit, smartView]);
 
+  // Changing layout during judgment changes every card's coordinates; refit
+  // the camera so the new view arrives in a readable position.
+  const previousViewRef = useRef(activeView);
+  useEffect(() => {
+    const previous = previousViewRef.current;
+    previousViewRef.current = activeView;
+    if (previous === activeView || !judgment?.active) return;
+    const timer = window.setTimeout(() => fit(), 80);
+    return () => window.clearTimeout(timer);
+  }, [activeView, judgment?.active, fit]);
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -339,7 +362,15 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
     if (!revealed) return true;
     return revealed.has(edge.from) && revealed.has(edge.to);
   });
-  const viewLocked = Boolean(stage?.active || judgment?.active);
+  const viewLocked = Boolean(stage?.active);
+  // A case-line opening has no clash endpoints. Spotlight the support stem and
+  // the argument it answers so the map still dims like every other step.
+  const caseLineEdge = judgment?.caseLineEdgeId
+    ? debate.edges.find((edge) => edge.id === judgment.caseLineEdgeId)
+    : undefined;
+  const judgmentSpotlightIds = caseLineEdge
+    ? [caseLineEdge.from, caseLineEdge.to]
+    : judgment?.activeNodeIds ?? [];
 
   return (
     <div
@@ -397,7 +428,7 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
             type="button"
             className={activeView === "case" ? "is-active" : ""}
             aria-pressed={activeView === "case"}
-            onClick={() => setView("case")}
+            onClick={() => setGraphView("case")}
             disabled={viewLocked}
             title="Case view: arguments grouped by side"
           >
@@ -407,7 +438,7 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
             type="button"
             className={activeView === "thread" ? "is-active" : ""}
             aria-pressed={activeView === "thread"}
-            onClick={() => setView("thread")}
+            onClick={() => setGraphView("thread")}
             disabled={viewLocked}
             title="Thread view: responses attached to the argument they answer"
           >
@@ -430,9 +461,7 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
             ? judgment.caseLineEdgeId
               ? "a case line is entered · select a node to inspect"
               : "the bench is following the record · select a node to inspect"
-            : activeView === "thread"
-              ? <>responses follow the argument they answer <span>·</span> drag to pan <span>·</span> scroll to zoom</>
-              : <>drag to pan <span>·</span> scroll to zoom <span>·</span> select a node to inspect</>}
+            : <>drag to pan <span>·</span> scroll to zoom <span>·</span> select a node to inspect</>}
         </div>
       )}
 
@@ -454,20 +483,9 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
                   <path d="M 1 1 L 10 6 L 1 11 z" style={{ fill: EDGE_COLORS[type] }} />
                 </marker>
               ))}
-              <marker
-                id="arrow-judge"
-                viewBox="0 0 12 12"
-                refX="9"
-                refY="6"
-                markerWidth="7"
-                markerHeight="7"
-                orient="auto-start-reverse"
-              >
-                <path d="M 1 1 L 10 6 L 1 11 z" style={{ fill: "var(--gold)" }} />
-              </marker>
             </defs>
             <g transform={`translate(${pan.x} ${pan.y}) scale(${zoom})`} className={smooth ? "edge-layer smooth" : "edge-layer"}>
-              {edgesVisible.map(({ edge, path, labelX, labelY, secondary }) => {
+              {edgesVisible.map(({ edge, path, secondary, laneRoute }) => {
                 const active = stage?.active && stage.litEdges.has(edge.id);
                 const clash = Boolean(judgment?.active && judgment.activeEdgeId === edge.id);
                 const caseLine = Boolean(judgment?.active && judgment.caseLineEdgeId === edge.id);
@@ -479,13 +497,13 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
                 return (
                   <g
                     key={edge.id}
-                    className={`graph-edge ${active ? "is-active" : ""} ${clash ? "is-clash" : ""} ${caseLine ? "is-case-line" : ""} ${judged ? `is-judged is-judged--${judged}` : ""} ${dim ? "is-dim" : ""} ${connected ? "is-connected" : ""} ${secondary ? "is-secondary" : ""}`}
+                    className={`graph-edge ${active ? "is-active" : ""} ${clash ? "is-clash" : ""} ${caseLine ? "is-case-line" : ""} ${judged ? `is-judged is-judged--${judged}` : ""} ${dim ? "is-dim" : ""} ${connected ? "is-connected" : ""} ${secondary ? "is-secondary" : ""} ${laneRoute ? "is-lane-route" : ""}`}
                     style={{ ["--edge-color" as string]: color }}
                   >
                     <path
                       d={path}
                       className={`edge-path edge-path--${edge.type} ${edge.type === "undercut" ? "is-dashed" : ""}`}
-                      markerEnd={clash ? "url(#arrow-judge)" : `url(#arrow-${edge.type})`}
+                      markerEnd={`url(#arrow-${edge.type})`}
                     />
                     {lit && (
                       <>
@@ -497,9 +515,6 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
                         </circle>
                       </>
                     )}
-                    <text x={labelX} y={labelY - 7} className="edge-glyph">
-                      {edge.type === "support" ? "+" : edge.type === "attack" ? "−" : "⌁"}
-                    </text>
                   </g>
                 );
               })}
@@ -517,8 +532,8 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
               const judgmentRole = roleIndex === 0 ? "source" : roleIndex === 1 ? "target" : undefined;
               const judgmentDim = Boolean(
                 judgment?.active &&
-                judgment.activeNodeIds.length > 0 &&
-                roleIndex < 0 &&
+                judgmentSpotlightIds.length > 0 &&
+                !judgmentSpotlightIds.includes(card.node.id) &&
                 !judgment.complete
               );
               return (
@@ -606,16 +621,19 @@ function NodeCard({
 }: NodeCardProps) {
   const node = card.node;
   const motion = isThesis && judging ? motionDisposition : undefined;
+  const motionProof = Boolean(isThesis && motionProved);
   const displayStatus = !motion && unsupported && judgmentStatus === "standing" ? "unsupported" : judgmentStatus;
   const showWeakened = weakened && !isThesis && !motion && displayStatus === "standing";
   const statusKey = motion ? undefined : showWeakened ? "weakened" : displayStatus;
-  const statusLabel = motion
-    ? OUTCOME_SHORT[motion]
-    : showWeakened
-      ? "Weakened"
-      : displayStatus
-        ? STATUS_LABEL[displayStatus]
-        : null;
+  const statusLabel = motionProof
+    ? "Proved"
+    : motion
+      ? OUTCOME_SHORT[motion]
+      : showWeakened
+        ? "Weakened"
+        : displayStatus
+          ? STATUS_LABEL[displayStatus]
+          : null;
   return (
     <button
       type="button"
@@ -647,7 +665,7 @@ function NodeCard({
       }}
       onPointerEnter={() => onHover(node.id)}
       onPointerLeave={() => onHover(null)}
-      aria-label={`${node.kind === "argument" ? "Argument" : "Statement"}: ${node.title}. ${node.stance === "pro" ? "For the motion" : node.stance === "con" ? "Against the motion" : "Neutral"}.${statusLabel ? ` ${motion ? "Motion status" : "Status"}: ${statusLabel}${motion && motionProvisional ? " (in session)" : ""}.` : ""}${proved ? " Proved." : ""}${motionProved ? " The motion is proved." : ""}`}
+      aria-label={`${node.kind === "argument" ? "Argument" : "Statement"}: ${node.title}. ${node.stance === "pro" ? "For the motion" : node.stance === "con" ? "Against the motion" : "Neutral"}.${statusLabel ? ` ${motion ? "Motion status" : "Status"}: ${statusLabel}${motion && motionProvisional ? " (in session)" : ""}.` : ""}${proved ? " Proved." : ""}`}
     >
       <div className="node-top">
         <span className={`node-kind ${isThesis ? "node-kind--motion" : ""}`}>
@@ -656,8 +674,8 @@ function NodeCard({
         <div className="node-badges">
           {statusLabel ? (
             <span
-              className={`node-judgment ${motion ? `node-judgment--motion node-judgment--${motion}` : `node-judgment--${statusKey}`}`}
-              title={motion && motionProvisional ? "Provisional while the bench is in session" : showWeakened ? "Survives, but a ruling says the argument was weakened." : undefined}
+              className={`node-judgment ${motionProof ? "node-judgment--proved" : motion ? `node-judgment--motion node-judgment--${motion}` : `node-judgment--${statusKey}`}`}
+              title={motionProof ? "Proved by a clean direct support." : motion && motionProvisional ? "Provisional while the bench is in session" : showWeakened ? "Survives, but a ruling says the argument was weakened." : undefined}
             >
               {statusLabel}
               {motion && motionProvisional && <i className="node-judgment-provisional">in session</i>}
@@ -669,11 +687,6 @@ function NodeCard({
           ) : null}
           {proved && !isThesis && (
             <span className="node-proof-seal" title="Clean, strong direct support proved.">
-              Proved
-            </span>
-          )}
-          {motionProved && (
-            <span className="node-proof-motion" title="A clean direct support is proved.">
               Proved
             </span>
           )}

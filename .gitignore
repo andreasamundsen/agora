@@ -9,3 +9,5 @@ electron/server.cjs
 *.log
 .DS_Store
 *.tsbuildinfo
+scratch/
+scratch-*.ts

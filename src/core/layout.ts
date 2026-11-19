@@ -22,6 +22,8 @@ export interface LayoutEdge {
   labelY: number;
   cross: boolean;
   secondary?: boolean;
+  /** Short same-lane link routed around the outside of its column. */
+  laneRoute?: boolean;
 }
 
 export interface GraphLayout {
@@ -467,15 +469,24 @@ function computeThreadLayout(debate: Debate): GraphLayout {
       targetBranch !== "neutral" &&
       sourceBranch !== targetBranch
     );
+    const span = Math.hypot(a.x - b.x, a.y - b.y);
+    // A large bow on a short diagonal link makes the path turn back at the
+    // target, so the arrowhead can point away from the card. Keep short
+    // secondary links straight; reserve the decorative bow for longer links.
+    const secondaryBow = span < 90
+      ? 0
+      : (a.y + b.y >= 0 ? 1 : -1) * Math.min(150, 44 + Math.abs(a.x - b.x) * 0.09);
     const bow = secondary
-      ? (a.y + b.y >= 0 ? 1 : -1) * Math.min(150, 44 + Math.abs(a.x - b.x) * 0.09)
+      ? secondaryBow
       : sameBranch
         ? 12
         : 10;
     const mx = (a.x + b.x) / 2;
     const my = (a.y + b.y) / 2 + bow;
-    const path = `M ${round(a.x)} ${round(a.y)} Q ${round(mx)} ${round(my)} ${round(b.x)} ${round(b.y)}`;
-    edges.push({ edge, path, labelX: mx, labelY: my, cross: crossesBranches, secondary });
+    const lanePath = shortLanePath(source, target, secondary);
+    const path = lanePath
+      ?? `M ${round(a.x)} ${round(a.y)} Q ${round(mx)} ${round(my)} ${round(b.x)} ${round(b.y)}`;
+    edges.push({ edge, path, labelX: mx, labelY: my, cross: crossesBranches, secondary, laneRoute: Boolean(lanePath) });
   }
 
   const allX = cards.flatMap((card) => [card.x, card.x + card.width]);
@@ -494,6 +505,51 @@ function computeThreadLayout(debate: Debate): GraphLayout {
 
 function round(value: number): number {
   return Math.round(value * 10) / 10;
+}
+
+/**
+ * Short same-lane links have almost no room for a normal top/bottom edge:
+ * the cards are only a sibling gap apart, and the secondary bow used for
+ * longer links dives behind the lower card. Route these links around the
+ * outside of their lane instead, so the line and arrowhead stay visible.
+ */
+const SHORT_LANE_GAP = 64;
+const SHORT_LANE_MARGIN = 12;
+const SHORT_LANE_BOW = 26;
+
+function shortLanePath(
+  source: LayoutCard,
+  target: LayoutCard,
+  secondary?: boolean
+): string | undefined {
+  if (!secondary) return undefined;
+  if (Math.abs(source.x - target.x) > 0.5) return undefined;
+
+  const sourceAbove = source.y + source.height <= target.y;
+  const targetAbove = target.y + target.height <= source.y;
+  const gap = sourceAbove
+    ? target.y - (source.y + source.height)
+    : targetAbove
+      ? source.y - (target.y + target.height)
+      : -1;
+  if (gap < 0 || gap > SHORT_LANE_GAP) return undefined;
+
+  const wing = source.column !== 0
+    ? Math.sign(source.column)
+    : target.column !== 0
+      ? Math.sign(target.column)
+      : source.x + source.width / 2 >= 0
+        ? 1
+        : -1;
+  const sideX = wing > 0
+    ? Math.max(source.x + source.width, target.x + target.width) + SHORT_LANE_MARGIN
+    : Math.min(source.x, target.x) - SHORT_LANE_MARGIN;
+  const controlX = sideX + wing * SHORT_LANE_BOW;
+  const startY = sourceAbove ? source.y + source.height - 10 : source.y + 10;
+  const endY = sourceAbove ? target.y + 10 : target.y + target.height - 10;
+  const controlY = (startY + endY) / 2;
+
+  return `M ${round(sideX)} ${round(startY)} Q ${round(controlX)} ${round(controlY)} ${round(sideX)} ${round(endY)}`;
 }
 
 /** Point where the line between two card centres crosses the card border. */

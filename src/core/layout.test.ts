@@ -178,6 +178,73 @@ describe("computeLayout", () => {
     }
   });
 
+  it("routes short same-lane secondary links around the outside of the lane", () => {
+    const debate = makeDebate();
+    debate.nodes.push(
+      makeNode("short-a", "pro", "Short A"),
+      makeNode("short-b", "pro", "Short B")
+    );
+    debate.edges.push(
+      makeEdge("e-short-a", "short-a", "con1", "attack"),
+      makeEdge("e-short-b", "short-b", "con1", "attack"),
+      makeEdge("e-short", "short-a", "short-b", "attack")
+    );
+
+    const layout = computeLayout(debate, "thread");
+    const source = card(layout, "short-a");
+    const target = card(layout, "short-b");
+    const edge = layout.edges.find(({ edge: candidate }) => candidate.id === "e-short");
+
+    expect(source.x).toBeCloseTo(target.x, 5);
+    expect(edge?.secondary).toBe(true);
+    expect(edge?.laneRoute).toBe(true);
+
+    const numbers = edge?.path.match(/-?\d+(?:\.\d+)?/g)?.map(Number);
+    expect(numbers).toHaveLength(6);
+    const [startX, , controlX, , endX] = numbers as number[];
+    const outsideEdge = source.x + source.width;
+
+    expect(startX!).toBeGreaterThan(outsideEdge);
+    expect(controlX!).toBeGreaterThan(startX!);
+    expect(endX!).toBeGreaterThan(outsideEdge);
+  });
+
+  it("straightens short diagonal secondary links so their heads face the target", () => {
+    const debate = makeDebate();
+    debate.nodes.push(
+      makeNode("target", "con", "A target"),
+      makeNode("mid", "con", "B mid"),
+      makeNode("source", "con", "C source")
+    );
+    debate.edges.push(
+      makeEdge("e-target", "target", "con1", "attack"),
+      makeEdge("e-mid", "mid", "con1", "attack"),
+      makeEdge("e-source-mid", "source", "mid", "attack"),
+      makeEdge("e-source-target", "source", "target", "attack")
+    );
+
+    const layout = computeLayout(debate, "thread");
+    const target = card(layout, "target");
+    const edge = layout.edges.find(({ edge: candidate }) => candidate.id === "e-source-target");
+
+    expect(edge?.secondary).toBe(true);
+    expect(edge?.laneRoute).toBeFalsy();
+    const numbers = edge?.path.match(/-?\d+(?:\.\d+)?/g)?.map(Number);
+    expect(numbers).toHaveLength(6);
+    const [startX, startY, controlX, controlY, endX, endY] = numbers as number[];
+
+    expect(controlX!).toBeCloseTo((startX! + endX!) / 2, 1);
+    expect(controlY!).toBeCloseTo((startY! + endY!) / 2, 1);
+
+    const targetCenterX = target.x + target.width / 2;
+    const targetCenterY = target.y + target.height / 2;
+    const tangentX = endX! - controlX!;
+    const tangentY = endY! - controlY!;
+    const towardTargetX = targetCenterX - endX!;
+    const towardTargetY = targetCenterY - endY!;
+    expect(tangentX * towardTargetX + tangentY * towardTargetY).toBeGreaterThan(0);
+  });
+
   it("places every node exactly once", () => {
     const debate = makeDebate();
     const layout = computeLayout(debate, "thread");

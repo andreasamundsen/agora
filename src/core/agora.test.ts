@@ -56,6 +56,7 @@ describe("Argdown serialization", () => {
     const source = toArgdown(debate);
     expect(source).toContain("# The motion");
     expect((source.match(/^ {2}[+_-] </gm) ?? []).length).toBe(debate.edges.length);
-    expect(source).toContain("// The reasoning behind this argument:");
+    expect(source).toContain("----");
+    expect(source).not.toContain("// The reasoning behind this argument:");
   });
 });
