@@ -4,11 +4,17 @@ Agora is a local debate harness. You install it like a normal Windows app; no No
 
 ## Install
 
-1. Run `Agora-Setup-0.1.52.exe`.
+1. Run `Agora-Setup-0.1.53.exe`.
 2. Windows will warn that the publisher is unknown. This build is intentionally unsigned: choose **More info → Run anyway**.
 3. The installer is per-user and does not need administrator rights. Agora opens when it finishes.
 4. To upgrade, close Agora first, then run the newer installer over it. Your debates stay in `%APPDATA%\Agora\data`.
 5. The SHA-256 checksum should match the file supplied with the build. A matching hash is not a code signature; it only confirms the file has not changed.
+
+## What's new in 0.1.53
+
+- **Supporting arguments keep their turn in the playback, including when they have replies.** The previous attempt suppressed a support cue whenever its first response targeted the same card; that removed the support turn entirely for responding arguments. Support stems are restored, with duplicate cues removed instead.
+- **The motion card follows the trial in sequence.** It starts undecided under a pro or preponderance standard, changes to **Falls** when the thesis is defeated, returns to its opening label if that defeat is reversed, and shows **✓ Proved** only when a direct support is proved. Non-motion cards no longer carry a proof badge.
+- **Arguments whose every outgoing clash was ruled irrelevant are marked in gray.** The **Irrelevant** badge is display-only and takes precedence over Defeated or Contested while it applies.
 
 ## What's new in 0.1.52
 
