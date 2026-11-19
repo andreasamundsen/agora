@@ -28,6 +28,7 @@ import { NodeInspector } from "./components/NodeInspector";
 import { JudgmentPanel } from "./components/JudgmentPanel";
 import { JudgmentModal, type JudgeRunInput } from "./components/JudgmentModal";
 import { ConfirmModal, ExportModal, ImportModal, NewDebateModal, SettingsModal } from "./components/Modals";
+import { openingIsRedundant } from "./judgment-playback";
 
 type ModalKind = "new" | "import" | "export" | "settings" | "judge" | null;
 
@@ -207,6 +208,7 @@ export default function App() {
       for (const opening of openings) {
         if (!opening.edgeId) continue;
         const cueStep = Math.max(0, Math.min(opening.step, total));
+        if (openingIsRedundant(judgment.run, cueStep, opening.nodeId)) continue;
         const list = cues.get(cueStep) ?? [];
         list.push(opening.edgeId);
         cues.set(cueStep, list);
@@ -214,16 +216,19 @@ export default function App() {
       if (
         wave.rootKind === "support" &&
         wave.rootEdgeId &&
+        wave.rootId &&
         (wave.verdictIds.length === 0 || openings.length === 0)
       ) {
         const cueStep = Math.max(0, Math.min(wave.startStep ?? 0, total));
-        const list = cues.get(cueStep) ?? [];
-        list.push(wave.rootEdgeId);
-        cues.set(cueStep, list);
+        if (!openingIsRedundant(judgment.run, cueStep, wave.rootId)) {
+          const list = cues.get(cueStep) ?? [];
+          list.push(wave.rootEdgeId);
+          cues.set(cueStep, list);
+        }
       }
     }
     return cues;
-  }, [judgment?.run.waves]);
+  }, [judgment?.run.verdicts, judgment?.run.waves]);
 
   /**
    * Branch openings are manual steps too: Next, Previous, and seeking to the
@@ -239,6 +244,7 @@ export default function App() {
       for (const opening of openings) {
         if (!opening.edgeId) continue;
         const cueStep = Math.max(0, Math.min(opening.step, total));
+        if (openingIsRedundant(judgment.run, cueStep, opening.nodeId)) continue;
         const list = cues.get(cueStep) ?? [];
         if (!list.includes(opening.edgeId)) list.push(opening.edgeId);
         cues.set(cueStep, list);
@@ -246,17 +252,20 @@ export default function App() {
       if (
         wave.rootKind === "support" &&
         wave.rootEdgeId &&
+        wave.rootId &&
         wave.verdictIds.length > 0 &&
         openings.length === 0
       ) {
         const cueStep = Math.max(0, Math.min(wave.startStep ?? 0, total));
-        const list = cues.get(cueStep) ?? [];
-        if (!list.includes(wave.rootEdgeId)) list.push(wave.rootEdgeId);
-        cues.set(cueStep, list);
+        if (!openingIsRedundant(judgment.run, cueStep, wave.rootId)) {
+          const list = cues.get(cueStep) ?? [];
+          if (!list.includes(wave.rootEdgeId)) list.push(wave.rootEdgeId);
+          cues.set(cueStep, list);
+        }
       }
     }
     return cues;
-  }, [judgment?.run.waves]);
+  }, [judgment?.run.verdicts, judgment?.run.waves]);
 
   const judgmentSnapshot = useMemo(
     () => (debate && judgment ? solveJudgment(debate, appliedVerdicts, judgment.run.standard, judgment.run.assessments, judgment.run.strictness) : null),
