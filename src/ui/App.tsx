@@ -309,10 +309,15 @@ export default function App() {
     const visibleVerdicts = effectRevealed ? appliedVerdicts : appliedVerdicts.slice(0, -1);
     for (const verdict of visibleVerdicts) verdictByEdge[verdict.edgeId] = verdict.verdict;
     const settled = judgmentComplete;
+    const motionSnapshot = effectRevealed
+      ? judgmentSnapshot
+      : priorJudgmentSnapshot ?? judgmentSnapshot;
     const motion = motionOutcomeForDisplay({
       standard: judgment.run.standard,
       complete: settled && effectRevealed,
-      outcome: effectRevealed ? judgmentSnapshot.outcome : priorJudgmentSnapshot?.outcome ?? judgmentSnapshot.outcome
+      outcome: motionSnapshot.outcome,
+      thesisStatus: motionSnapshot.thesisStatus,
+      proofConflict: motionSnapshot.proofConflict
     });
     const caseLine = judgment.caseLineId
       ? debate.edges.find((edge) => edge.id === judgment.caseLineId)

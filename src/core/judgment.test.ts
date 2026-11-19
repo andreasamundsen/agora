@@ -995,22 +995,91 @@ describe("judgment solver", () => {
 
   it("gives the motion card a standard-aware provisional disposition", () => {
     expect(
-      motionOutcomeForDisplay({ standard: "pro", complete: false, outcome: "stands" })
+      motionOutcomeForDisplay({
+        standard: "pro",
+        complete: false,
+        outcome: "stands",
+        thesisStatus: "standing",
+        proofConflict: false
+      })
     ).toEqual({ outcome: "undecided", provisional: true });
     expect(
-      motionOutcomeForDisplay({ standard: "preponderance", complete: false, outcome: "stands" })
+      motionOutcomeForDisplay({
+        standard: "preponderance",
+        complete: false,
+        outcome: "stands",
+        thesisStatus: "standing",
+        proofConflict: false
+      })
     ).toEqual({ outcome: "undecided", provisional: true });
     expect(
-      motionOutcomeForDisplay({ standard: "con", complete: false, outcome: "undecided" })
+      motionOutcomeForDisplay({
+        standard: "con",
+        complete: false,
+        outcome: "undecided",
+        thesisStatus: "standing",
+        proofConflict: false
+      })
     ).toEqual({ outcome: "stands", provisional: true });
   });
 
-  it("keeps the provisional disposition until completion and then uses the final outcome", () => {
+  it("follows a defeat, contest, or proof conflict as the trial reaches it", () => {
     expect(
-      motionOutcomeForDisplay({ standard: "pro", complete: true, outcome: "falls" })
+      motionOutcomeForDisplay({
+        standard: "pro",
+        complete: false,
+        outcome: "stands",
+        thesisStatus: "defeated",
+        proofConflict: false
+      })
+    ).toEqual({ outcome: "falls", provisional: true });
+    expect(
+      motionOutcomeForDisplay({
+        standard: "pro",
+        complete: false,
+        outcome: "stands",
+        thesisStatus: "contested",
+        proofConflict: false
+      })
+    ).toEqual({ outcome: "undecided", provisional: true });
+    expect(
+      motionOutcomeForDisplay({
+        standard: "pro",
+        complete: false,
+        outcome: "stands",
+        thesisStatus: "standing",
+        proofConflict: true
+      })
+    ).toEqual({ outcome: "undecided", provisional: true });
+  });
+
+  it("returns to the opening disposition when a defeat is reversed, and uses the final outcome when complete", () => {
+    expect(
+      motionOutcomeForDisplay({
+        standard: "pro",
+        complete: false,
+        outcome: "stands",
+        thesisStatus: "standing",
+        proofConflict: false
+      })
+    ).toEqual({ outcome: "undecided", provisional: true });
+    expect(
+      motionOutcomeForDisplay({
+        standard: "con",
+        complete: false,
+        outcome: "falls",
+        thesisStatus: "standing",
+        proofConflict: false
+      })
+    ).toEqual({ outcome: "stands", provisional: true });
+    expect(
+      motionOutcomeForDisplay({
+        standard: "pro",
+        complete: true,
+        outcome: "falls",
+        thesisStatus: "defeated",
+        proofConflict: false
+      })
     ).toEqual({ outcome: "falls", provisional: false });
-    expect(
-      motionOutcomeForDisplay({ standard: "preponderance", complete: true, outcome: "undecided" })
-    ).toEqual({ outcome: "undecided", provisional: false });
   });
 });

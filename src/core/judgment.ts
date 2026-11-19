@@ -280,19 +280,24 @@ export const BURDEN_THRESHOLDS: Record<StandardOfProof, number> = {
 };
 
 /**
- * The motion card speaks in outcomes, not in argument statuses. Until the run
- * is complete, keep the standard-aware provisional disposition: under a con
- * burden the motion may stand until displaced, but under a pro burden or
- * preponderance it is not yet established. Do not surface the prefix's
- * computed outcome before completion; the case-line assessment belongs to the
- * finished record and would otherwise leak the final result during playback.
+ * The motion card speaks in outcomes, not in ordinary argument statuses. It
+ * follows the trial in sequence: hold the standard-aware opening until the
+ * thesis itself is defeated, reinstated, contested, or proved. Do not use the
+ * prefix's weighted outcome here; that balance contains the finished
+ * case-line assessment and can jump to the final-looking result while the
+ * bench is still hearing an attack.
  */
 export function motionOutcomeForDisplay(input: {
   standard: StandardOfProof;
   complete: boolean;
   outcome: JudgmentOutcome;
+  thesisStatus: ArgumentStatus;
+  proofConflict: boolean;
 }): { outcome: JudgmentOutcome; provisional: boolean } {
   if (input.complete) return { outcome: input.outcome, provisional: false };
+  if (input.proofConflict) return { outcome: "undecided", provisional: true };
+  if (input.thesisStatus === "defeated") return { outcome: "falls", provisional: true };
+  if (input.thesisStatus === "contested") return { outcome: "undecided", provisional: true };
   return {
     outcome: input.standard === "con" ? "stands" : "undecided",
     provisional: true
