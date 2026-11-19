@@ -1,6 +1,6 @@
 # Agora — private beta notes
 
-Agora is a local debate harness. You install it like a normal Windows app; no Node, npm, or terminal is needed. This is a binary-only private beta: source files are not included. See `PRIVATE-BETA.txt` for the handoff note and `BETA-TERMS.txt` for the evaluation terms.
+Agora is a local debate harness. You install it like a normal Windows app; no Node, npm, or terminal is needed. This is a binary-only private beta: Agora's source files are not included. See `PRIVATE-BETA.txt` for the handoff note and `BETA-TERMS.txt` for the evaluation terms.
 
 ## Install
 

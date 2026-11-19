@@ -5,7 +5,7 @@ Copyright © 2026 Andreas Amundsen. All rights reserved.
 This is a limited private-beta evaluation, not an open-source or source-available release. Please read these terms before installing or using the software.
 
 1. WHAT YOU RECEIVE
-Agora is provided as a compiled Windows installer and application. No source code, build scripts, or repository history are included in this package. No license to the source code is granted by these terms.
+Agora is provided as a compiled Windows installer and application. No Agora source code, build scripts, or repository history are included in this package. No license to the Agora source code is granted by these terms.
 
 2. LIMITED EVALUATION LICENSE
 Subject to these terms, you are granted a limited, non-exclusive, non-transferable, revocable license to install and use this build on machines you control, solely to evaluate the software and provide feedback.

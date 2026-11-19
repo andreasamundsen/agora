@@ -6,7 +6,7 @@ Thank you for trying this private beta. This note explains what you are receivin
 WHAT THIS BUILD IS
 Agora is a local debate harness for Windows x64. It turns a position into an argument map, supports reading and staging that map, exports it as Argdown, and can run a model-judged session.
 
-This is a compiled, binary-only beta. Source files and build scripts are not included. It is not an open-source or source-available release. The installed app contains compiled assets and a bundled server, but no source repository.
+This is a compiled, binary-only beta. Agora's source files and build scripts are not included. It is not an open-source or source-available release. The installed app contains compiled assets, a bundled server, and third-party dependency files, but no Agora source repository.
 
 INSTALL
 1. Verify the SHA-256 checksum supplied with the installer before running it.
@@ -53,4 +53,4 @@ When reporting a problem, include:
 Do not send API keys, passwords, or confidential debate content.
 
 SOURCE STATUS
-No source code is included in this beta. This is not an open-source release, and these files do not grant any source license. A future source release, if any, will use a separate license.
+No Agora source code is included in this beta. This is not an open-source release, and these files do not grant any source license. A future source release, if any, will use a separate license.
