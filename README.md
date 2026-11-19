@@ -26,17 +26,17 @@ npm start
 
 `npm start` serves the built app and the API from the same Node process. The server binds to `127.0.0.1` by default. Set `HOST=0.0.0.0` only if you deliberately want to expose it on your network. There is no authentication, and the loopback Host check blocks ordinary LAN clients; do not treat this as a secure multi-user server.
 
-### Desktop tester build
+### Desktop private beta build
 
 ```bash
 npm run dist
 ```
 
-This produces `release/Agora-Setup-0.1.29.exe`, a per-user Windows NSIS installer. The installer is intentionally **unsigned** and does not auto-update. It bundles Electron and the compiled server, so testers do not need Node.
+This produces `release/Agora-Setup-0.1.50.exe`, a per-user Windows NSIS installer for the private beta. The installer is intentionally **unsigned** and does not auto-update. It bundles Electron and the compiled server, so testers do not need Node. This is a binary-only build: source files are not included in the installer.
 
 `npm run electron` runs the desktop shell directly; `npm run pack` produces an unpacked build for inspection.
 
-The packaged app stores its data under `%APPDATA%\Agora\data`, not in the project's `data/` directory. This tester build keeps the existing settings format, so the API key is plain JSON inside `settings.json`; use a test key you can rotate. `TESTERS.md` contains the tester instructions.
+The packaged app stores its data under `%APPDATA%\Agora\data`, not in the project's `data/` directory. This private beta keeps the existing settings format, so the API key is plain JSON inside `settings.json`; use a dedicated key you can rotate. `PRIVATE-BETA.txt` is the tester handoff, and `BETA-TERMS.txt` contains the evaluation terms.
 
 The app works **before you connect a model**. Two reference debates are seeded on first run, and the local scaffolder can still author maps (labelled honestly as a scaffold). A connected model makes the arguments topic-specific.
 

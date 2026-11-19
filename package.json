@@ -1,10 +1,11 @@
 {
   "name": "agora",
   "private": true,
-  "version": "0.1.49",
+  "version": "0.1.50",
   "type": "module",
   "main": "electron/main.cjs",
-  "author": "Agora",
+  "author": "Andreas Amundsen",
+  "license": "UNLICENSED",
   "description": "A debate harness: map a debate as a structured graph, export it as Argdown, and stage it as an animated exchange.",
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/server/index.ts",
@@ -40,7 +41,7 @@
   "build": {
     "appId": "com.agora.debate",
     "productName": "Agora",
-    "copyright": "Agora",
+    "copyright": "Andreas Amundsen",
     "asar": true,
     "publish": null,
     "npmRebuild": false,

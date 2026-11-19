@@ -1,14 +1,22 @@
-# Agora — tester notes
+# Agora — private beta notes
 
-Agora is a local debate harness. You install it like a normal Windows app; no Node, npm, or terminal is needed.
+Agora is a local debate harness. You install it like a normal Windows app; no Node, npm, or terminal is needed. This is a binary-only private beta: source files are not included. See `PRIVATE-BETA.txt` for the handoff note and `BETA-TERMS.txt` for the evaluation terms.
 
 ## Install
 
-1. Run `Agora-Setup-0.1.29.exe`.
+1. Run `Agora-Setup-0.1.50.exe`.
 2. Windows will warn that the publisher is unknown. This build is intentionally unsigned: choose **More info → Run anyway**.
 3. The installer is per-user and does not need administrator rights. Agora opens when it finishes.
 4. To upgrade, close Agora first, then run the newer installer over it. Your debates stay in `%APPDATA%\Agora\data`.
 5. The SHA-256 checksum should match the file supplied with the build. A matching hash is not a code signature; it only confirms the file has not changed.
+
+## What's new in 0.1.50
+
+- **Judgment playback is calmer and clearer.** Each direct argument's branches are drained before the next stem, card and count changes settle at the end of each beat, and the Rulings list keeps every ruling visible while concealing future verdicts.
+- **Judgment keeps the map's relation colors.** Active attacks stay red, undercuts stay purple, and support case lines stay green. A proved motion now shows a single green **✓ Proved** badge.
+- **Argdown export uses native premise-conclusion structures** and branch-first order; the round-trip preserves the reasoning sections.
+- **Map routing is cleaner.** Short same-lane secondary links route around the outside, and short diagonal links no longer end with an arrow pointing away from the target. The reader's Case/Thread choice persists across map changes.
+- The inspector gives the conclusion more prominence; authoring prompts ask for tighter premises and conclusions.
 
 ## What's new in 0.1.29
 
@@ -151,7 +159,7 @@ Provider calls go directly from your machine to the provider you choose. When yo
 - If a debate file cannot be read, Agora leaves it in place and names it in a warning instead of deleting or overwriting it.
 - To reset completely, uninstall and delete `%APPDATA%\Agora`.
 
-This tester build stores settings locally as plain JSON. Use a key you can rotate, and do not use a shared production key.
+This private beta stores settings locally as plain JSON. Use a key you can rotate, and do not use a shared production key.
 
 ## Sending feedback
 
