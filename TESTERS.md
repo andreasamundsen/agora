@@ -4,11 +4,15 @@ Agora is a local debate harness. You install it like a normal Windows app; no No
 
 ## Install
 
-1. Run `Agora-Setup-0.1.50.exe`.
+1. Run `Agora-Setup-0.1.51.exe`.
 2. Windows will warn that the publisher is unknown. This build is intentionally unsigned: choose **More info → Run anyway**.
 3. The installer is per-user and does not need administrator rights. Agora opens when it finishes.
 4. To upgrade, close Agora first, then run the newer installer over it. Your debates stay in `%APPDATA%\Agora\data`.
 5. The SHA-256 checksum should match the file supplied with the build. A matching hash is not a code signature; it only confirms the file has not changed.
+
+## What's new in 0.1.51
+
+- **Production dependency audit is clean.** The bundled Argdown parser stack now resolves `lodash-es` 4.18.1 through a package override, addressing the two lodash advisories (CVE-2026-4800 and CVE-2026-2950). `npm audit --omit=dev` reports zero vulnerabilities. No app behavior was intentionally changed.
 
 ## What's new in 0.1.50
 
