@@ -555,7 +555,6 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
                   judgmentRole={judgmentRole}
                   motionDisposition={judgment?.motionDisposition}
                   motionProvisional={Boolean(judgment?.motionProvisional)}
-                  proved={Boolean(judgment?.proved.includes(card.node.id))}
                   motionProved={Boolean(judgment?.motionProved && card.node.id === debate.thesisId)}
                   reinstated={Boolean(judgment?.reinstated.includes(card.node.id))}
                   unsupported={Boolean(judgment?.unsupportedThesis && card.node.id === debate.thesisId)}
@@ -588,7 +587,6 @@ interface NodeCardProps {
   judgmentRole?: "source" | "target";
   motionDisposition?: JudgmentOutcome;
   motionProvisional: boolean;
-  proved: boolean;
   motionProved: boolean;
   reinstated: boolean;
   unsupported: boolean;
@@ -612,7 +610,6 @@ function NodeCard({
   judgmentRole,
   motionDisposition,
   motionProvisional,
-  proved,
   motionProved,
   reinstated,
   unsupported,
@@ -653,7 +650,6 @@ function NodeCard({
         showWeakened ? "is-weakened" : "",
         caseLine ? "is-case-line" : "",
         judgmentRole ? `is-clash-${judgmentRole}` : "",
-        proved ? "is-proved" : "",
         motionProved ? "is-motion-proved" : "",
         reinstated ? "is-reinstated" : ""
       ].join(" ")}
@@ -665,7 +661,7 @@ function NodeCard({
       }}
       onPointerEnter={() => onHover(node.id)}
       onPointerLeave={() => onHover(null)}
-      aria-label={`${node.kind === "argument" ? "Argument" : "Statement"}: ${node.title}. ${node.stance === "pro" ? "For the motion" : node.stance === "con" ? "Against the motion" : "Neutral"}.${statusLabel ? ` ${motion ? "Motion status" : "Status"}: ${statusLabel}${motion && motionProvisional ? " (in session)" : ""}.` : ""}${proved ? " Proved." : ""}`}
+      aria-label={`${node.kind === "argument" ? "Argument" : "Statement"}: ${node.title}. ${node.stance === "pro" ? "For the motion" : node.stance === "con" ? "Against the motion" : "Neutral"}.${statusLabel ? ` ${motion ? "Motion status" : "Status"}: ${statusLabel}${motion && motionProvisional ? " (in session)" : ""}.` : ""}`}
     >
       <div className="node-top">
         <span className={`node-kind ${isThesis ? "node-kind--motion" : ""}`}>
@@ -685,11 +681,6 @@ function NodeCard({
               {node.stance === "pro" ? "For" : node.stance === "con" ? "Against" : "Context"}
             </span>
           ) : null}
-          {proved && !isThesis && (
-            <span className="node-proof-seal" title="Clean, strong direct support proved.">
-              Proved
-            </span>
-          )}
         </div>
       </div>
       <div className="node-title">{node.title}</div>
