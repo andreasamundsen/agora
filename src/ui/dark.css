@@ -194,6 +194,8 @@ html[data-theme="dark"] .settings-status.is-bad { background: var(--con-soft); }
 
 html[data-theme="dark"] .modal-backdrop { background: rgba(6, 5, 4, 0.72); }
 html[data-theme="dark"] .modal { background: var(--surface-strong); border-color: var(--line-strong); }
+html[data-theme="dark"] .settings-instructions { background: rgba(255, 253, 247, 0.035); }
+html[data-theme="dark"] .instruction-tab.is-active { color: var(--ink); }
 html[data-theme="dark"] .modal-head {
   background: rgba(255, 240, 215, 0.035);
   border-bottom-color: var(--line);

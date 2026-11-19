@@ -5,6 +5,7 @@ import type { UiSettings, ReasoningEffort } from "../api";
 import { downloadArgdown, fetchArgdown, saveSettings, testSettings } from "../api";
 import { applyThemePreference, readThemePreference, type ThemePreference } from "../theme";
 import { isLocalProvider, providerHost, providerUrlProblem } from "../../shared/provider-url";
+import { InstructionPolicyViewer } from "./InstructionPolicyViewer";
 
 /* ------------------------------------------------------------------ */
 /* Shell                                                               */
@@ -489,6 +490,12 @@ export function SettingsModal({
   const [status, setStatus] = useState<{ ok: boolean; message: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [forgetKey, setForgetKey] = useState(false);
+  const [view, setView] = useState<"settings" | "instructions">("settings");
+
+  useEffect(() => {
+    const scroller = document.querySelector(".modal-scroll");
+    if (scroller instanceof HTMLElement) scroller.scrollTop = 0;
+  }, [view]);
   const hasEffectiveKey = Boolean(apiKey.trim()) || (!forgetKey && settings.hasKey);
   const urlProblem = providerUrlProblem(baseUrl, hasEffectiveKey);
   const providerIsLocal = isLocalProvider(baseUrl);
@@ -545,27 +552,44 @@ export function SettingsModal({
   return (
     <Modal
       eyebrow="Settings"
-      title="Model & keys"
+      title={view === "instructions" ? "Model instructions" : "Model & keys"}
       onClose={onClose}
       busy={saving || testing}
       wide="lg"
       actions={
-        <>
-          <div className="modal-note">
-            {initialPreset.id !== "custom" && settings.ready ? `Currently using ${settings.model}.` : "Local reasoner active until a model is connected."}
-            <span className="settings-version">Agora {__APP_VERSION__}</span>
-          </div>
-          <div className="modal-action-group">
-            <button type="button" className="btn btn--ghost" onClick={() => void persist(true)} disabled={saving || testing || Boolean(urlProblem)}>
-              {testing ? "Testing…" : "Save & test"}
-            </button>
-            <button type="button" className="btn btn--primary" onClick={() => void persist(false)} disabled={saving || testing || Boolean(urlProblem)}>
-              {saving ? "Saving…" : "Save settings"}
-            </button>
-          </div>
-        </>
+        view === "instructions" ? (
+          <>
+            <div className="modal-note">
+              Read-only built-in policy. The JSON output contract stays fixed by the app.
+            </div>
+            <div className="modal-action-group">
+              <button type="button" className="btn btn--ghost" onClick={() => setView("settings")}>
+                Back to settings
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="modal-note">
+              {initialPreset.id !== "custom" && settings.ready ? `Currently using ${settings.model}.` : "Local reasoner active until a model is connected."}
+              <span className="settings-version">Agora {__APP_VERSION__}</span>
+            </div>
+            <div className="modal-action-group">
+              <button type="button" className="btn btn--ghost" onClick={() => void persist(true)} disabled={saving || testing || Boolean(urlProblem)}>
+                {testing ? "Testing…" : "Save & test"}
+              </button>
+              <button type="button" className="btn btn--primary" onClick={() => void persist(false)} disabled={saving || testing || Boolean(urlProblem)}>
+                {saving ? "Saving…" : "Save settings"}
+              </button>
+            </div>
+          </>
+        )
       }
     >
+      {view === "instructions" ? (
+        <InstructionPolicyViewer />
+      ) : (
+        <>
       <p className="modal-lede">
         Agora speaks to any OpenAI-compatible chat-completions endpoint. The local scaffolder is always available;
         a model makes the arguments topic-specific.
@@ -579,6 +603,19 @@ export function SettingsModal({
           Provider settings are coming from environment variables. Entering a provider here overrides them.
         </p>
       )}
+
+      <div className="settings-instructions">
+        <div>
+          <span className="field-label">Model instructions</span>
+          <p className="field-hint">
+            Read the built-in policy Agora sends for authoring, chamber answers, judging, and weighing. This view is
+            read-only.
+          </p>
+        </div>
+        <button type="button" className="btn btn--ghost" onClick={() => setView("instructions")}>
+          Inspect instructions
+        </button>
+      </div>
 
       <div className="field field--appearance">
         <span className="field-label">
@@ -733,6 +770,8 @@ export function SettingsModal({
         </div>
       )}
       {error && <div className="form-error">{error}</div>}
+        </>
+      )}
     </Modal>
   );
 }

@@ -1643,6 +1643,62 @@ button:disabled { cursor: not-allowed; }
 .settings-status.is-bad { border-color: rgba(165,61,49,0.3); background: var(--con-soft); }
 .settings-status.is-bad span { color: var(--con); }
 
+.settings-instructions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 4px 0 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  background: rgba(255, 253, 247, 0.32);
+}
+.settings-instructions .field-hint { max-width: 520px; margin: 4px 0 0; }
+.settings-instructions .btn { flex: none; }
+
+.instruction-viewer { display: flex; flex-direction: column; gap: 18px; }
+.instruction-viewer-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.instruction-viewer-head h3 { margin: 5px 0 5px; font-family: var(--serif); font-size: 22px; font-weight: 500; line-height: 1.2; }
+.instruction-viewer-head p { margin: 0; max-width: 600px; font-size: 11px; line-height: 1.55; color: var(--muted); }
+.instruction-badge {
+  flex: none;
+  padding: 4px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.instruction-tabs { display: flex; gap: 3px; padding-bottom: 1px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.instruction-tab {
+  border: 1px solid transparent;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  padding: 7px 11px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.instruction-tab:hover { color: var(--ink); border-color: var(--line); }
+.instruction-tab.is-active { color: var(--ink); border-bottom-color: var(--con); }
+.instruction-panel { padding: 2px 0 0; }
+.instruction-copy {
+  white-space: pre-wrap;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ink-soft);
+  max-width: 690px;
+}
+.instruction-note { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+.instruction-note p { margin: 5px 0 0; max-width: 690px; font-size: 12px; line-height: 1.6; color: var(--ink-soft); }
+.instruction-footnote { margin: 0; padding-top: 14px; border-top: 1px solid var(--line); font-size: 10.5px; line-height: 1.55; color: var(--faint); max-width: 690px; }
+
+
 /* Build state (new debate loading) */
 .build-state { display: flex; gap: 30px; align-items: flex-start; padding: 14px 0 4px; min-height: 260px; }
 .build-glyph { position: relative; width: 92px; height: 92px; flex: none; margin: 8px 10px 0 6px; }
