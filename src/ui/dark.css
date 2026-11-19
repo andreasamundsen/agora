@@ -143,6 +143,7 @@ html[data-theme="dark"] .graph-node--thesis .node-title { color: #f2e5ca; }
 html[data-theme="dark"] .graph-node--thesis .node-text { color: rgba(212, 198, 176, 0.72); }
 html[data-theme="dark"] .node-text { color: var(--muted); }
 html[data-theme="dark"] .node-judgment--defeated { color: var(--con); }
+html[data-theme="dark"] .node-judgment--irrelevant { color: var(--muted); background: rgba(180, 170, 154, 0.08); }
 html[data-theme="dark"] .node-judgment--standing { color: var(--pro); }
 html[data-theme="dark"] .node-judgment--weakened { color: var(--gold); background: rgba(216, 179, 106, 0.09); }
 html[data-theme="dark"] .graph-node.is-weakened { border-color: rgba(216, 179, 106, 0.5); }

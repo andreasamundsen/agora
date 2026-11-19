@@ -20,6 +20,7 @@ export interface GraphJudgment {
   active: boolean;
   statuses: Record<string, ArgumentStatus>;
   weakened: string[];
+  irrelevant: string[];
   activeEdgeId?: string;
   activeNodeIds: string[];
   /** A direct support being introduced before its first incoming clash. */
@@ -390,6 +391,7 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
           <span className="legend-item"><i className="status-swatch status-swatch--weakened" /> weakened</span>
           <span className="legend-item"><i className="status-swatch status-swatch--contested" /> contested</span>
           <span className="legend-item"><i className="status-swatch status-swatch--defeated" /> defeated</span>
+          <span className="legend-item"><i className="status-swatch status-swatch--irrelevant" /> irrelevant</span>
           <span className="legend-item"><i className="status-swatch status-swatch--proved" /> proved</span>
         </div>
       ) : (
@@ -551,6 +553,7 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
                   judging={Boolean(judgment?.active)}
                   judgmentStatus={judgmentStatus}
                   weakened={Boolean(judgment?.weakened.includes(card.node.id))}
+                  irrelevant={Boolean(judgment?.irrelevant.includes(card.node.id))}
                   caseLine={Boolean(judgment?.active && judgment.caseLineNodeId === card.node.id)}
                   judgmentRole={judgmentRole}
                   motionDisposition={judgment?.motionDisposition}
@@ -583,6 +586,7 @@ interface NodeCardProps {
   judging: boolean;
   judgmentStatus?: ArgumentStatus;
   weakened: boolean;
+  irrelevant: boolean;
   caseLine: boolean;
   judgmentRole?: "source" | "target";
   motionDisposition?: JudgmentOutcome;
@@ -606,6 +610,7 @@ function NodeCard({
   judging,
   judgmentStatus,
   weakened,
+  irrelevant,
   caseLine,
   judgmentRole,
   motionDisposition,
@@ -619,18 +624,21 @@ function NodeCard({
   const node = card.node;
   const motion = isThesis && judging ? motionDisposition : undefined;
   const motionProof = Boolean(isThesis && motionProved);
+  const irrelevantCard = Boolean(irrelevant && !isThesis);
   const displayStatus = !motion && unsupported && judgmentStatus === "standing" ? "unsupported" : judgmentStatus;
-  const showWeakened = weakened && !isThesis && !motion && displayStatus === "standing";
-  const statusKey = motion ? undefined : showWeakened ? "weakened" : displayStatus;
+  const showWeakened = weakened && !isThesis && !motion && !irrelevantCard && displayStatus === "standing";
+  const statusKey = motion ? undefined : irrelevantCard ? "irrelevant" : showWeakened ? "weakened" : displayStatus;
   const statusLabel = motionProof
     ? "Proved"
     : motion
       ? OUTCOME_SHORT[motion]
-      : showWeakened
-        ? "Weakened"
-        : displayStatus
-          ? STATUS_LABEL[displayStatus]
-          : null;
+      : irrelevantCard
+        ? "Irrelevant"
+        : showWeakened
+          ? "Weakened"
+          : displayStatus
+            ? STATUS_LABEL[displayStatus]
+            : null;
   return (
     <button
       type="button"
@@ -671,7 +679,7 @@ function NodeCard({
           {statusLabel ? (
             <span
               className={`node-judgment ${motionProof ? "node-judgment--proved" : motion ? `node-judgment--motion node-judgment--${motion}` : `node-judgment--${statusKey}`}`}
-              title={motionProof ? "Proved by a clean direct support." : motion && motionProvisional ? "Provisional while the bench is in session" : showWeakened ? "Survives, but a ruling says the argument was weakened." : undefined}
+              title={motionProof ? "Proved by a clean direct support." : motion && motionProvisional ? "Provisional while the bench is in session" : irrelevantCard ? "Every outgoing clash missed its target." : showWeakened ? "Survives, but a ruling says the argument was weakened." : undefined}
             >
               {statusLabel}
               {motion && motionProvisional && <i className="node-judgment-provisional">in session</i>}
@@ -686,7 +694,7 @@ function NodeCard({
       <div className="node-title">{node.title}</div>
       {!isThesis && <div className="node-text">{node.text}</div>}
       {isThesis && <div className="node-text node-text--thesis">{node.text}</div>}
-      {reinstated && <span className="node-restored">Restored</span>}
+      {reinstated && !irrelevantCard && <span className="node-restored">Restored</span>}
     </button>
   );
 }

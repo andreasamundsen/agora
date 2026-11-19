@@ -114,6 +114,8 @@ export interface JudgmentSnapshot {
   contested: string[];
   /** Non-thesis nodes that survive a live `weakens` ruling. A condition, not a structural status. */
   weakened: string[];
+  /** Non-thesis nodes whose every outgoing clash missed, with no live support role. Display-only. */
+  irrelevant: string[];
   /** Direct thesis defeats that count as a hard fall under the corroboration rule. */
   hardDefeats: string[];
   /** Direct `defeats` rulings that did not meet the corroboration rule. */
@@ -520,6 +522,34 @@ export function solveJudgment(
     setThesisStatus("contested");
   }
 
+  // `irrelevant` is a verdict on a clash, not a structural status. A card earns
+  // the display condition only when every outgoing clash has missed and it no
+  // longer has a live support role. Shared replies with one live attack remain
+  // normal; an irrelevant attack on one target does not erase the whole argument.
+  const irrelevant = debate.nodes
+    .filter((node) => node.id !== debate.thesisId)
+    .filter((node) => {
+      const outgoingClashes = debate.edges.filter(
+        (edge) => edge.from === node.id && isClashEdge(edge)
+      );
+      if (!outgoingClashes.length) return false;
+      if (
+        !outgoingClashes.every(
+          (edge) => verdictByEdge.get(edge.id)?.verdict === "irrelevant"
+        )
+      ) {
+        return false;
+      }
+      return !debate.edges.some(
+        (edge) =>
+          edge.from === node.id &&
+          edge.type === "support" &&
+          statuses[edge.from] !== "defeated" &&
+          statuses[edge.to] !== "defeated"
+      );
+    })
+    .map((node) => node.id);
+
   const balance = buildCaseBalance({
     debate,
     verdicts,
@@ -569,6 +599,7 @@ export function solveJudgment(
     defeated,
     contested,
     weakened: debate.nodes.filter((node) => weakened.has(node.id)).map((node) => node.id),
+    irrelevant,
     hardDefeats: [...hardDefeatIds],
     withheldHardDefeats,
     proofs: [...proofIds],

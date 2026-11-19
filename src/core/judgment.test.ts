@@ -634,7 +634,61 @@ describe("judgment solver", () => {
       "pro"
     );
     expect(snapshot.liveAttacks).toHaveLength(0);
+    expect(snapshot.irrelevant).toEqual(["objection"]);
     expect(snapshot.outcome).toBe("stands");
+  });
+
+  it("keeps a shared reply normal when one outgoing clash still lands", () => {
+    const debate = debateWith([
+      { from: "support", to: "thesis", type: "support" },
+      { from: "objection", to: "thesis", type: "attack" },
+      { from: "objection", to: "support", type: "attack" }
+    ]);
+    const snapshot = solveJudgment(
+      debate,
+      [
+        verdict("e_objection_thesis", "objection", "thesis", "irrelevant"),
+        verdict("e_objection_support", "objection", "support", "weakens")
+      ],
+      "pro"
+    );
+    expect(snapshot.irrelevant).toEqual([]);
+  });
+
+  it("does not mark a card with a live support role", () => {
+    const debate = debateWith([
+      { from: "support", to: "thesis", type: "support" },
+      { from: "support", to: "objection", type: "attack" },
+      { from: "objection", to: "thesis", type: "attack" }
+    ]);
+    const snapshot = solveJudgment(
+      debate,
+      [
+        verdict("e_support_objection", "support", "objection", "irrelevant"),
+        verdict("e_objection_thesis", "objection", "thesis", "irrelevant")
+      ],
+      "pro"
+    );
+    expect(snapshot.irrelevant).toContain("objection");
+    expect(snapshot.irrelevant).not.toContain("support");
+  });
+
+  it("keeps the irrelevant marker when the argument is also defeated", () => {
+    const debate = debateWith([
+      { from: "support", to: "thesis", type: "support" },
+      { from: "objection", to: "thesis", type: "attack" },
+      { from: "rebuttal", to: "objection", type: "attack" }
+    ]);
+    const snapshot = solveJudgment(
+      debate,
+      [
+        verdict("e_objection_thesis", "objection", "thesis", "irrelevant"),
+        verdict("e_rebuttal_objection", "rebuttal", "objection", "defeats")
+      ],
+      "pro"
+    );
+    expect(snapshot.statuses.objection).toBe("defeated");
+    expect(snapshot.irrelevant).toContain("objection");
   });
 
   it("writes the live objection into the unestablished summary", () => {

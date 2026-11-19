@@ -338,10 +338,16 @@ export default function App() {
       : judgment.step > 1 && priorJudgmentSnapshot
         ? priorJudgmentSnapshot.weakened
         : [];
+    const visibleIrrelevant = effectRevealed
+      ? judgmentSnapshot.irrelevant
+      : judgment.step > 1 && priorJudgmentSnapshot
+        ? priorJudgmentSnapshot.irrelevant
+        : [];
     return {
       active: true,
       statuses: visibleStatuses,
       weakened: visibleWeakened,
+      irrelevant: visibleIrrelevant,
       activeEdgeId: settled || caseLine ? undefined : current?.edgeId,
       activeNodeIds: settled || caseLine || !current ? [] : [current.from, current.to],
       caseLineEdgeId: caseLine?.id,
