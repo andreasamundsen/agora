@@ -1,11 +1,11 @@
 /**
  * Judgment mode: a local, deterministic argumentation layer.
  *
- * The model's job is only to adjudicate one clash at a time. This module owns
- * the consequences: which arguments stand, which are defeated, which remain
- * contested, and whether the motion survives. Keeping that bookkeeping out of
- * the model makes the result reproducible and lets the UI replay it ruling by
- * ruling.
+ * The model's job is only to assess one argument link at a time, locally.
+ * This module owns the consequences: which arguments stand, which are
+ * defeated, which remain contested, and whether the motion survives. Keeping
+ * that bookkeeping out of the model makes the result reproducible and lets the
+ * UI replay it ruling by ruling.
  */
 
 import { Debate, DebateEdge, nodeById } from "./model";
@@ -23,12 +23,18 @@ export type CaseSide = "pro" | "con";
 export type ArgumentQuality = "strong" | "moderate" | "weak";
 export type AttackImpact = "decisive" | "material" | "marginal";
 
-export interface CaseLineAssessment {
+export interface SupportAssessment {
   edgeId: string;
-  side: CaseSide;
-  quality?: ArgumentQuality;
-  impact?: AttackImpact;
+  from: string;
+  to: string;
+  type: "support";
+  quality: ArgumentQuality;
   confidence: JudgmentConfidence;
+  reasoning: string;
+}
+
+export interface ClusterAssignment {
+  nodeId: string;
   cluster: string;
   reasoning?: string;
 }
@@ -72,11 +78,14 @@ export interface ClashJudgment {
   to: string;
   type: "attack" | "undercut";
   verdict: ClashVerdict;
+  impact: AttackImpact;
   criterion: JudgmentCriterion;
   confidence: JudgmentConfidence;
   targetComponent: TargetComponent;
   reasoning: string;
 }
+
+export type LinkAssessment = SupportAssessment | ClashJudgment;
 
 export type JudgmentCaseSide = "pro" | "con" | "neutral";
 export type JudgmentCaseKind = "support" | "attack";
@@ -155,8 +164,11 @@ export interface JudgmentRun {
   standard: StandardOfProof;
   strictness: JudgeStrictness;
   verdicts: ClashJudgment[];
+  /** Every local link assessment, including support links. */
+  links: LinkAssessment[];
+  /** One semantic cluster per argument node. */
+  clusters: ClusterAssignment[];
   waves: JudgmentWave[];
-  assessments: CaseLineAssessment[];
   balance: CaseBalance;
   warnings: string[];
   summary: string;
@@ -260,7 +272,7 @@ export const RATING_CONFIDENCE_FACTOR: Record<JudgmentConfidence, number> = {
   low: 0.5
 };
 
-/** Neutral fallback when a substantive case-line assessment is missing. */
+/** Neutral fallback when a substantive local link assessment is missing. */
 const STRUCTURAL_QUALITY: ArgumentQuality = "moderate";
 const STRUCTURAL_IMPACT: AttackImpact = "material";
 const STRUCTURAL_CONFIDENCE: JudgmentConfidence = "medium";
@@ -294,9 +306,9 @@ export const BURDEN_SHARE = 0.6;
  * The motion card speaks in outcomes, not in ordinary argument statuses. It
  * follows the trial in sequence: hold the standard-aware opening until the
  * thesis itself is defeated, reinstated, contested, or proved. Do not use the
- * prefix's weighted outcome here; that balance contains the finished
- * case-line assessment and can jump to the final-looking result while the
- * bench is still hearing an attack.
+ * prefix's weighted outcome here; that balance contains the finished local
+ * link assessments and can jump to the final-looking result while the bench
+ * is still hearing an attack.
  */
 export function motionOutcomeForDisplay(input: {
   standard: StandardOfProof;
@@ -343,12 +355,14 @@ export function judgmentForEdge(
  */
 export function solveJudgment(
   debate: Debate,
-  verdicts: ClashJudgment[],
+  links: LinkAssessment[] = [],
+  clusters: ClusterAssignment[] = [],
   standard: StandardOfProof = "preponderance",
-  assessments: CaseLineAssessment[] = [],
-  strictness: JudgeStrictness = "balanced"
+  strictness: JudgeStrictness = "balanced",
+  assessed = true
 ): JudgmentSnapshot {
   const nodeIds = new Set(debate.nodes.map((node) => node.id));
+  const verdicts = links.filter((link): link is ClashJudgment => link.type !== "support");
   const attackers = new Map<string, string[]>();
   for (const node of debate.nodes) attackers.set(node.id, []);
 
@@ -408,7 +422,7 @@ export function solveJudgment(
   const thesis = nodeById(debate, debate.thesisId);
   let thesisStatus = statuses[debate.thesisId] ?? "contested";
   const verdictByEdge = new Map(verdicts.map((verdict) => [verdict.edgeId, verdict]));
-  const rawAssessmentByEdge = new Map(assessments.map((item) => [item.edgeId, item]));
+  const linkByEdge = new Map(links.map((link) => [link.edgeId, link]));
   const setThesisStatus = (next: ArgumentStatus) => {
     if (thesisStatus === next) return;
     for (const list of [standing, defeated, contested]) {
@@ -463,21 +477,30 @@ export function solveJudgment(
     })
     .map((edge) => edge.id);
 
-  // The weighing pass must cover every eligible case line. If it does not,
-  // discard the partial set: a proof, hard defeat, or weighted comparison must
-  // not mix a model-rated line with a structural default.
+  // Every eligible case line must have a local link assessment. If any is
+  // missing, discard the partial set: a proof, hard defeat, or weighted
+  // comparison must not mix a model-rated line with a structural default.
   const lineSupportEdges = supportEdges.filter(
     (edge) => liveSupports.includes(edge.id) || statuses[edge.from] === "contested"
   );
   const lineAttackEdges = liveAttacks
     .map((edgeId) => debate.edges.find((edge) => edge.id === edgeId))
     .filter((edge): edge is DebateEdge => edge !== undefined && isClashEdge(edge));
-  const completeAssessments =
+  const completeLinks =
+    assessed &&
     lineSupportEdges.length + lineAttackEdges.length > 0 &&
-    lineSupportEdges.every((edge) => rawAssessmentByEdge.get(edge.id)?.side === "pro") &&
-    lineAttackEdges.every((edge) => rawAssessmentByEdge.get(edge.id)?.side === "con");
-  const effectiveAssessments = completeAssessments ? assessments : [];
-  const assessmentByEdge = new Map(effectiveAssessments.map((item) => [item.edgeId, item]));
+    lineSupportEdges.every((edge) => linkByEdge.get(edge.id)?.type === "support") &&
+    lineAttackEdges.every((edge) => {
+      const link = linkByEdge.get(edge.id);
+      return link?.type === "attack" || link?.type === "undercut";
+    });
+  const effectiveLinks = completeLinks ? links : [];
+  const supportByEdge = new Map<string, SupportAssessment>();
+  const conflictByEdge = new Map<string, ClashJudgment>();
+  for (const link of effectiveLinks) {
+    if (link.type === "support") supportByEdge.set(link.edgeId, link);
+    else conflictByEdge.set(link.edgeId, link);
+  }
 
   // Weakened is a condition, not another structural status. It records that a
   // surviving node was explicitly damaged by a live weakens ruling. It is
@@ -497,10 +520,10 @@ export function solveJudgment(
   }
 
   // A direct `defeats` ruling is not automatically a hard fall. Once the
-  // weighing pass has rated the case, a thesis defeat must be corroborated by
-  // a decisive con-line assessment at the same evidence bar as a proof, and
-  // the defeating attacker must be clean. Without a usable assessment, neither
-  // side gets a decisive override; the weighted balance decides.
+  // local link assessments have rated the case, a thesis defeat must be
+  // corroborated by a decisive conflict-link assessment at the same evidence
+  // bar as a proof, and the defeating attacker must be clean. Without a usable
+  // assessment, neither side gets a decisive override; the weighted balance decides.
   const directDefeatEdges = debate.edges.filter(
     (edge) =>
       edge.to === debate.thesisId &&
@@ -510,12 +533,9 @@ export function solveJudgment(
   );
   const hardDefeatEdges = directDefeatEdges.filter((edge) => {
     if (!cleanNodes.has(edge.from)) return false;
-    const assessment = assessmentByEdge.get(edge.id);
-    return (
-      assessment?.side === "con" &&
-      assessment.impact === "decisive" &&
-      meetsEvidenceBar(assessment.confidence, strictness)
-    );
+    const assessment = conflictByEdge.get(edge.id);
+    if (!assessment) return false;
+    return assessment.impact === "decisive" && meetsEvidenceBar(assessment.confidence, strictness);
   });
   const hardDefeatIds = new Set(hardDefeatEdges.map((edge) => edge.id));
   const withheldHardDefeats = directDefeatEdges
@@ -529,9 +549,9 @@ export function solveJudgment(
   const proofEdges = supportEdges.filter((edge) => {
     if (statuses[edge.from] !== "standing") return false;
     if (!cleanNodes.has(edge.from)) return false;
-    const assessment = assessmentByEdge.get(edge.id);
+    const assessment = supportByEdge.get(edge.id);
     return (
-      assessment?.side === "pro" &&
+      assessment?.type === "support" &&
       assessment.quality === "strong" &&
       meetsEvidenceBar(assessment.confidence, strictness)
     );
@@ -577,7 +597,8 @@ export function solveJudgment(
 
   const balance = buildCaseBalance({
     debate,
-    assessments: effectiveAssessments,
+    links: effectiveLinks,
+    clusters,
     statuses,
     liveSupports,
     liveAttacks,
@@ -663,13 +684,14 @@ function clusterKey(value: string | undefined, fallback: string): string {
  * supports and direct attacks on the thesis are case lines; replies earn
  * their effect through the status and pressure of the line they answer.
  *
- * Without judge assessments, a neutral structural rating is used. That keeps
- * replay and local review deterministic while making the lack of quality
- * information visible in `assessed`.
+ * Without complete local link assessments, a neutral structural rating is
+ * used. That keeps replay and local review deterministic while making the
+ * lack of quality information visible in `assessed`.
  */
 export function buildCaseBalance(input: {
   debate: Debate;
-  assessments: CaseLineAssessment[];
+  links: LinkAssessment[];
+  clusters: ClusterAssignment[];
   statuses: Record<string, ArgumentStatus>;
   liveSupports: string[];
   liveAttacks: string[];
@@ -677,7 +699,8 @@ export function buildCaseBalance(input: {
   standard: StandardOfProof;
   strictness: JudgeStrictness;
 }): CaseBalance {
-  const assessmentByEdge = new Map(input.assessments.map((item) => [item.edgeId, item]));
+  const linkByEdge = new Map(input.links.map((link) => [link.edgeId, link]));
+  const clusterByNode = new Map(input.clusters.map((item) => [item.nodeId, item.cluster]));
   const clean = new Set(input.cleanSupports);
   const lines: CaseLineWeight[] = [];
   const supportEdges = input.debate.edges.filter(
@@ -699,24 +722,27 @@ export function buildCaseBalance(input: {
     if (!sourceStatus || sourceStatus === "defeated") return [];
     return [edge];
   });
-  // If the weighing pass omitted any eligible line, ignore the entire partial
-  // set and use one neutral structural baseline for both sides. Mixing rated
-  // and unrated lines would make the two sides incomparable.
-  const completeAssessments =
+  const completeLinks =
     eligibleSupportEdges.length + eligibleAttackEdges.length > 0 &&
-    eligibleSupportEdges.every((edge) => assessmentByEdge.get(edge.id)?.side === "pro") &&
-    eligibleAttackEdges.every((edge) => assessmentByEdge.get(edge.id)?.side === "con");
-  const assessmentFor = (edgeId: string): CaseLineAssessment | undefined =>
-    completeAssessments ? assessmentByEdge.get(edgeId) : undefined;
+    eligibleSupportEdges.every((edge) => linkByEdge.get(edge.id)?.type === "support") &&
+    eligibleAttackEdges.every((edge) => {
+      const link = linkByEdge.get(edge.id);
+      return link?.type === "attack" || link?.type === "undercut";
+    });
+  const linkFor = (edgeId: string): LinkAssessment | undefined =>
+    completeLinks ? linkByEdge.get(edgeId) : undefined;
+  const clusterFor = (sourceId: string): string =>
+    clusterKey(clusterByNode.get(sourceId), sourceId);
 
   for (const edge of eligibleSupportEdges) {
     const source = nodeById(input.debate, edge.from);
     if (!source) continue;
     const sourceStatus = input.statuses[source.id];
     if (sourceStatus !== "standing" && sourceStatus !== "contested") continue;
-    const assessment = assessmentFor(edge.id);
-    const quality = assessment?.side === "pro" ? assessment.quality ?? STRUCTURAL_QUALITY : STRUCTURAL_QUALITY;
-    const confidenceLabel = assessment?.side === "pro" ? assessment.confidence : STRUCTURAL_CONFIDENCE;
+    const link = linkFor(edge.id);
+    const assessment = link?.type === "support" ? link : undefined;
+    const quality = assessment?.quality ?? STRUCTURAL_QUALITY;
+    const confidenceLabel = assessment?.confidence ?? STRUCTURAL_CONFIDENCE;
     // A contested support is already carrying the uncertainty of its source.
     // Do not apply the additional pressure discount on top of the half-weight.
     const pressure = sourceStatus === "contested" ? 1 : clean.has(edge.id) ? 1 : 0.6;
@@ -727,7 +753,7 @@ export function buildCaseBalance(input: {
       edgeId: edge.id,
       side: "pro",
       sourceId: source.id,
-      cluster: clusterKey(assessment?.side === "pro" ? assessment.cluster : undefined, edge.id),
+      cluster: clusterFor(source.id),
       base,
       confidence,
       confidenceLabel,
@@ -736,13 +762,13 @@ export function buildCaseBalance(input: {
       independence: 1,
       weight: base * confidence * pressure * survival,
       quality,
-      proves: assessment
-        ? assessment.side === "pro" &&
+      proves: Boolean(
+        assessment &&
           assessment.quality === "strong" &&
           clean.has(edge.id) &&
           meetsEvidenceBar(assessment.confidence, input.strictness)
-        : false,
-      reasoning: assessment?.side === "pro" ? assessment.reasoning : undefined
+      ),
+      reasoning: assessment?.reasoning
     });
   }
 
@@ -752,13 +778,10 @@ export function buildCaseBalance(input: {
     const sourceStatus = input.statuses[source.id];
     if (!sourceStatus || sourceStatus === "defeated") continue;
     const edgeId = edge.id;
-    const assessment = assessmentFor(edgeId);
-    const impact =
-      assessment?.side === "con"
-        ? assessment.impact ?? STRUCTURAL_IMPACT
-        : STRUCTURAL_IMPACT;
-    const confidenceLabel =
-      assessment?.side === "con" ? assessment.confidence : STRUCTURAL_CONFIDENCE;
+    const link = linkFor(edgeId);
+    const assessment = link && link.type !== "support" ? link : undefined;
+    const impact = assessment?.impact ?? STRUCTURAL_IMPACT;
+    const confidenceLabel = assessment?.confidence ?? STRUCTURAL_CONFIDENCE;
     const base = IMPACT_POINTS[impact];
     const confidence = RATING_CONFIDENCE_FACTOR[confidenceLabel];
     const survival = sourceStatus === "standing" ? 1 : 0.5;
@@ -766,7 +789,7 @@ export function buildCaseBalance(input: {
       edgeId,
       side: "con",
       sourceId: source.id,
-      cluster: clusterKey(assessment?.side === "con" ? assessment.cluster : undefined, edgeId),
+      cluster: clusterFor(source.id),
       base,
       confidence,
       confidenceLabel,
@@ -775,7 +798,7 @@ export function buildCaseBalance(input: {
       independence: 1,
       weight: base * confidence * survival,
       impact,
-      reasoning: assessment?.side === "con" ? assessment.reasoning : undefined
+      reasoning: assessment?.reasoning
     });
   }
 
@@ -834,7 +857,7 @@ export function buildCaseBalance(input: {
     margin,
     threshold,
     lines,
-    assessed: completeAssessments
+    assessed: completeLinks
   };
 }
 
@@ -1149,17 +1172,19 @@ function caseSteps(
  */
 export function judgmentSummary(
   debate: Debate,
-  verdicts: ClashJudgment[],
+  links: LinkAssessment[],
+  clusters: ClusterAssignment[] = [],
   standard: StandardOfProof = "preponderance",
-  assessments: CaseLineAssessment[] = [],
-  strictness: JudgeStrictness = "balanced"
+  strictness: JudgeStrictness = "balanced",
+  assessed = true
 ): {
   summary: string;
   outcome: JudgmentOutcome;
   decisive: DecisiveStep[];
   balance: CaseBalance;
 } {
-  const snapshot = solveJudgment(debate, verdicts, standard, assessments, strictness);
+  const verdicts = links.filter((link): link is ClashJudgment => link.type !== "support");
+  const snapshot = solveJudgment(debate, links, clusters, standard, strictness, assessed);
   const burden = standard === "pro" ? "pro burden" : standard === "con" ? "con burden" : "preponderance";
   const standingById = new Set(snapshot.standing);
   const directAttacks = debate.edges.filter(
@@ -1337,15 +1362,23 @@ export function buildJudgmentRun(input: {
   judge: { provider: string; model: string };
   standard: StandardOfProof;
   strictness: JudgeStrictness;
-  verdicts: ClashJudgment[];
-  assessments?: CaseLineAssessment[];
+  links: LinkAssessment[];
+  clusters?: ClusterAssignment[];
   warnings?: string[];
   id: string;
   createdAt?: number;
 }): JudgmentRun {
-  const assessments = input.assessments ?? [];
-  const ordered = orderVerdicts(input.debate, input.verdicts, input.id);
-  const summary = judgmentSummary(input.debate, ordered.verdicts, input.standard, assessments, input.strictness);
+  const clusters = input.clusters ?? [];
+  const verdicts = input.links.filter((link): link is ClashJudgment => link.type !== "support");
+  const ordered = orderVerdicts(input.debate, verdicts, input.id);
+  const summary = judgmentSummary(
+    input.debate,
+    input.links,
+    clusters,
+    input.standard,
+    input.strictness,
+    input.engine === "llm"
+  );
   return {
     id: input.id,
     debateId: input.debate.id,
@@ -1355,14 +1388,21 @@ export function buildJudgmentRun(input: {
     standard: input.standard,
     strictness: input.strictness,
     verdicts: ordered.verdicts,
+    links: input.links,
+    clusters,
     waves: ordered.waves,
-    assessments,
     balance: summary.balance,
     warnings: input.warnings ?? [],
     summary: summary.summary,
     outcome: summary.outcome,
     decisive: summary.decisive
   };
+}
+
+/** Support assessments are available from the opening; conflict links appear by step. */
+export function linksAtStep(run: JudgmentRun, step: number): LinkAssessment[] {
+  const revealed = new Set(run.verdicts.slice(0, Math.max(0, step)).map((verdict) => verdict.edgeId));
+  return run.links.filter((link) => link.type === "support" || revealed.has(link.edgeId));
 }
 
 export function judgmentMarkdown(debate: Debate, run: JudgmentRun): string {

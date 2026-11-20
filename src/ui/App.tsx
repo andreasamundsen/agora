@@ -4,6 +4,7 @@ import { message } from "../core/model";
 import { randomSeed, stageDebate, type StagedDebate } from "../core/stage";
 import {
   judgmentMarkdown,
+  linksAtStep,
   motionOutcomeForDisplay,
   OUTCOME_SHORT,
   solveJudgment,
@@ -191,6 +192,11 @@ export default function App() {
     [judgment?.run, judgment?.step]
   );
 
+  const appliedLinks = useMemo(
+    () => (judgment ? linksAtStep(judgment.run, judgment.step) : []),
+    [judgment?.run, judgment?.step]
+  );
+
   /**
    * A branch opens by selecting the argument its first ruling answers. The
    * engine supplies these branch starts so a support argument is visible even
@@ -267,8 +273,18 @@ export default function App() {
   }, [judgment?.run.waves]);
 
   const judgmentSnapshot = useMemo(
-    () => (debate && judgment ? solveJudgment(debate, appliedVerdicts, judgment.run.standard, judgment.run.assessments, judgment.run.strictness) : null),
-    [debate, judgment, appliedVerdicts]
+    () =>
+      debate && judgment
+        ? solveJudgment(
+            debate,
+            appliedLinks,
+            judgment.run.clusters,
+            judgment.run.standard,
+            judgment.run.strictness,
+            judgment.run.engine === "llm"
+          )
+        : null,
+    [debate, judgment, appliedLinks]
   );
 
   const priorJudgmentSnapshot = useMemo(
@@ -276,10 +292,11 @@ export default function App() {
       if (!debate || !judgment || judgment.step <= 0) return null;
       return solveJudgment(
         debate,
-        judgment.run.verdicts.slice(0, judgment.step - 1),
+        linksAtStep(judgment.run, judgment.step - 1),
+        judgment.run.clusters,
         judgment.run.standard,
-        judgment.run.assessments,
-        judgment.run.strictness
+        judgment.run.strictness,
+        judgment.run.engine === "llm"
       );
     },
     [debate, judgment?.run, judgment?.step]

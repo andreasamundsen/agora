@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { DebateStore, DebateReadError } from "./store";
 import { askDebate, authorDebate } from "./llm";
-import { judgeDebate, MAX_CLASHES } from "./judge";
+import { judgeDebate, MAX_LINKS } from "./judge";
 import { ArgdownImportError, importArgdown } from "./argdown-import";
 import { toArgdown } from "../core/argdown";
 import { message } from "../core/model";
@@ -111,10 +111,10 @@ export function createApi(store: DebateStore): Router {
         return res.status(400).json({ error: "Choose a strictness for the bench." });
       }
       const model = typeof req.body?.model === "string" ? req.body.model.trim().slice(0, 160) : undefined;
-      const clashCount = debate.edges.filter((edge) => edge.type === "attack" || edge.type === "undercut").length;
-      if (clashCount > MAX_CLASHES) {
+      const linkCount = debate.edges.length;
+      if (linkCount > MAX_LINKS) {
         return res.status(400).json({
-          error: `This map has ${clashCount} clashes. The bench can hear at most ${MAX_CLASHES} in one sitting.`
+          error: `This map has ${linkCount} argument links. The bench can hear at most ${MAX_LINKS} in one sitting.`
         });
       }
       const run = await judgeDebate(debate, { model, standard, strictness });

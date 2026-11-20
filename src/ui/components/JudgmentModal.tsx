@@ -60,8 +60,9 @@ export function JudgmentModal({
   const [error, setError] = useState<string | null>(null);
 
   const clashes = useMemo(() => clashEdges(debate), [debate]);
+  const links = debate.edges;
   const ready = Boolean(settings?.ready);
-  const estimate = ready ? `about ${Math.max(10, Math.ceil(clashes.length / 4) * 6)} seconds` : "a few seconds locally";
+  const estimate = ready ? `about ${Math.max(16, Math.ceil(links.length / 4) * 6 + 6)} seconds` : "a few seconds locally";
 
   useEffect(() => {
     if (!submitting) return;
@@ -71,7 +72,7 @@ export function JudgmentModal({
   }, [submitting]);
 
   const submit = async () => {
-    if (submitting || clashes.length === 0) return;
+    if (submitting || links.length === 0) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -100,13 +101,13 @@ export function JudgmentModal({
         submitting ? undefined : (
           <>
             <div className="modal-note">
-              {clashes.length === 0
-                ? "This map has no attacks or undercuts. Add an objection in the chamber first."
-                : `${clashes.length} clash${clashes.length === 1 ? "" : "es"} to hear · ${estimate}`}
+              {links.length === 0
+                ? "This map has no argument links. Add a support or objection in the chamber first."
+                : `${links.length} link${links.length === 1 ? "" : "s"} to assess${clashes.length ? ` · ${clashes.length} ruling${clashes.length === 1 ? "" : "s"} to play` : ""} · ${estimate}`}
             </div>
             <div className="modal-action-group">
               <button type="button" className="btn btn--quiet" onClick={onClose}>Cancel</button>
-              <button type="button" className="btn btn--primary" onClick={() => void submit()} disabled={clashes.length === 0}>
+              <button type="button" className="btn btn--primary" onClick={() => void submit()} disabled={links.length === 0}>
                 Begin judgment
               </button>
             </div>
@@ -121,11 +122,11 @@ export function JudgmentModal({
             <div className="eyebrow">Convened · {elapsed}</div>
             <h3>{waitLine}</h3>
             <p>
-              {clashes.length} clash{clashes.length === 1 ? "" : "es"} on the record. The judge rules one at a time;
-              the engine follows the consequences.
+              {links.length} argument link{links.length === 1 ? "" : "s"} on the record. The judge assesses one link at a
+              time; playback rules the conflicts.
             </p>
             <div className="bench-wait-track">
-              <span style={{ width: `${Math.min(94, 8 + (seconds / Math.max(12, clashes.length * 2.4)) * 86)}%` }} />
+              <span style={{ width: `${Math.min(94, 8 + (seconds / Math.max(12, links.length * 2.4)) * 86)}%` }} />
             </div>
             <div className="bench-wait-foot">
               <span>{ready ? model.trim() || settings?.model || "Configured judge" : "Local structural review"}</span>
@@ -141,9 +142,9 @@ export function JudgmentModal({
           </div>
 
           <p className="modal-lede judge-lede">
-            The judge does not decide the whole debate in one breath. It rules on each clash, names the criterion that
-            decided it, and hands the consequence back to the map. After the clashes, the bench weighs the surviving case
-            lines against the standard of proof.
+            The judge does not decide the whole debate in one breath. It assesses every arrow locally — supports for
+            strength, attacks and undercuts for a verdict and impact — and the engine follows the consequences through
+            the map. The rulings playback shows the conflicts one at a time; the balance applies the standard of proof.
           </p>
 
           {!ready && (

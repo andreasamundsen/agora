@@ -608,7 +608,7 @@ export function SettingsModal({
         <div>
           <span className="field-label">Model instructions</span>
           <p className="field-hint">
-            Read the built-in policy Agora sends for authoring, chamber answers, judging, and weighing. This view is
+            Read the built-in policy Agora sends for authoring, chamber answers, link assessments, and clustering. This view is
             read-only.
           </p>
         </div>

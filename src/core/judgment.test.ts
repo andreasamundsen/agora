@@ -10,10 +10,20 @@ import {
   solveJudgment,
   type ArgumentQuality,
   type AttackImpact,
-  type CaseLineAssessment,
   type ClashJudgment,
-  type JudgmentConfidence
+  type JudgmentConfidence,
+  type LinkAssessment
 } from "./judgment";
+
+type Assessment = {
+  edgeId: string;
+  side: "pro" | "con";
+  quality?: ArgumentQuality;
+  impact?: AttackImpact;
+  confidence: JudgmentConfidence;
+  cluster: string;
+  reasoning?: string;
+};
 
 function debateWith(edges: { from: string; to: string; type: "support" | "attack" | "undercut" }[]) {
   const used = new Set(["thesis", ...edges.flatMap((edge) => [edge.from, edge.to])]);
@@ -39,6 +49,7 @@ function verdict(edgeId: string, from: string, to: string, value: ClashJudgment[
     to,
     type: "attack",
     verdict: value,
+    impact: "material",
     criterion: "sufficiency",
     confidence: "high",
     targetComponent: "conclusion",
@@ -93,7 +104,7 @@ function assess(
   rating: ArgumentQuality | AttackImpact,
   cluster: string,
   confidence: JudgmentConfidence = "high"
-): CaseLineAssessment {
+): Assessment {
   return {
     edgeId,
     side,
@@ -106,13 +117,71 @@ function assess(
   };
 }
 
+function linkInputs(
+  debate: Parameters<typeof solveJudgment>[0],
+  verdicts: ClashJudgment[] = [],
+  assessments: Assessment[] = []
+): { links: LinkAssessment[]; clusters: { nodeId: string; cluster: string }[] } {
+  const links: LinkAssessment[] = [...verdicts];
+  const clusters = new Map<string, string>();
+  for (const assessment of assessments) {
+    const edge = debate.edges.find((candidate) => candidate.id === assessment.edgeId);
+    if (!edge) continue;
+    clusters.set(edge.from, assessment.cluster);
+    if (assessment.side === "pro") {
+      links.push({
+        edgeId: edge.id,
+        from: edge.from,
+        to: edge.to,
+        type: "support",
+        quality: assessment.quality ?? "moderate",
+        confidence: assessment.confidence,
+        reasoning: assessment.reasoning ?? ""
+      });
+    } else {
+      const conflict = links.find(
+        (link): link is ClashJudgment => link.edgeId === assessment.edgeId && link.type !== "support"
+      );
+      if (conflict) {
+        conflict.impact = assessment.impact ?? conflict.impact;
+        conflict.confidence = assessment.confidence;
+      }
+    }
+  }
+  return {
+    links,
+    clusters: [...clusters].map(([nodeId, cluster]) => ({ nodeId, cluster }))
+  };
+}
+
+function solve(
+  debate: Parameters<typeof solveJudgment>[0],
+  verdicts: ClashJudgment[] = [],
+  standard: Parameters<typeof solveJudgment>[3] = "preponderance",
+  assessments: Assessment[] = [],
+  strictness: Parameters<typeof solveJudgment>[4] = "balanced"
+) {
+  const { links, clusters } = linkInputs(debate, verdicts, assessments);
+  return solveJudgment(debate, links, clusters, standard, strictness);
+}
+
+function resolveSummary(
+  debate: Parameters<typeof solveJudgment>[0],
+  verdicts: ClashJudgment[] = [],
+  standard: Parameters<typeof solveJudgment>[3] = "preponderance",
+  assessments: Assessment[] = []
+) {
+  const { links, clusters } = linkInputs(debate, verdicts, assessments);
+  return judgmentSummary(debate, links, clusters, standard);
+}
+
 describe("judgment solver", () => {
   it("defeats the thesis when a standing objection strikes it", () => {
     const debate = debateWith([
       { from: "support", to: "thesis", type: "support" },
       { from: "objection", to: "thesis", type: "attack" }
     ]);
-    const snapshot = solveJudgment(
+    const snapshot = solve(
       debate,
       [verdict("e_objection_thesis", "objection", "thesis")],
       "preponderance",
@@ -131,7 +200,7 @@ describe("judgment solver", () => {
       { from: "support", to: "thesis", type: "support" },
       { from: "objection", to: "thesis", type: "attack" }
     ]);
-    const snapshot = solveJudgment(debate, [verdict("e_objection_thesis", "objection", "thesis")]);
+    const snapshot = solve(debate, [verdict("e_objection_thesis", "objection", "thesis")]);
     expect(snapshot.hardDefeats).toEqual([]);
     expect(snapshot.withheldHardDefeats).toEqual(["e_objection_thesis"]);
     expect(snapshot.thesisStatus).toBe("contested");
@@ -143,7 +212,7 @@ describe("judgment solver", () => {
       { from: "objection", to: "thesis", type: "attack" },
       { from: "rebuttal", to: "objection", type: "attack" }
     ]);
-    const snapshot = solveJudgment(debate, [
+    const snapshot = solve(debate, [
       verdict("e_objection_thesis", "objection", "thesis"),
       verdict("e_rebuttal_objection", "rebuttal", "objection")
     ]);
@@ -159,7 +228,7 @@ describe("judgment solver", () => {
       { from: "rebuttal", to: "objection", type: "attack" },
       { from: "objection", to: "rebuttal", type: "attack" }
     ]);
-    const snapshot = solveJudgment(
+    const snapshot = solve(
       debate,
       [
         verdict("e_objection_thesis", "objection", "thesis"),
@@ -181,7 +250,7 @@ describe("judgment solver", () => {
       { from: "objection", to: "rebuttal", type: "attack" },
       { from: "support", to: "objection", type: "attack" }
     ]);
-    const snapshot = solveJudgment(
+    const snapshot = solve(
       debate,
       [
         verdict("e_objection_thesis", "objection", "thesis"),
@@ -207,9 +276,9 @@ describe("judgment solver", () => {
       verdict("e_rebuttal_objection", "rebuttal", "objection"),
       verdict("e_objection_rebuttal", "objection", "rebuttal")
     ];
-    expect(solveJudgment(debate, verdicts, "preponderance").outcome).toBe("stands");
-    expect(solveJudgment(debate, verdicts, "pro").outcome).toBe("unestablished");
-    expect(solveJudgment(debate, verdicts, "con").outcome).toBe("stands");
+    expect(solve(debate, verdicts, "preponderance").outcome).toBe("stands");
+    expect(solve(debate, verdicts, "pro").outcome).toBe("unestablished");
+    expect(solve(debate, verdicts, "con").outcome).toBe("stands");
   });
 
   it("distinguishes an unestablished motion from a defeated one", () => {
@@ -217,7 +286,7 @@ describe("judgment solver", () => {
       { from: "support", to: "thesis", type: "support" },
       { from: "objection", to: "support", type: "attack" }
     ]);
-    const snapshot = solveJudgment(debate, [verdict("e_objection_support", "objection", "support")]);
+    const snapshot = solve(debate, [verdict("e_objection_support", "objection", "support")]);
     expect(snapshot.statuses.support).toBe("defeated");
     expect(snapshot.thesisStatus).toBe("standing");
     expect(snapshot.liveSupports).toHaveLength(0);
@@ -231,11 +300,11 @@ describe("judgment solver", () => {
     ]);
     for (const value of ["weakens", "undecided"] as const) {
       const verdicts = [verdict("e_objection_thesis", "objection", "thesis", value)];
-      const pro = solveJudgment(debate, verdicts, "pro");
+      const pro = solve(debate, verdicts, "pro");
       expect(pro.outcome).toBe("unestablished");
       expect(pro.liveAttacks).toEqual(["e_objection_thesis"]);
-      expect(solveJudgment(debate, verdicts, "preponderance").outcome).toBe("undecided");
-      expect(solveJudgment(debate, verdicts, "con").outcome).toBe("stands");
+      expect(solve(debate, verdicts, "preponderance").outcome).toBe("undecided");
+      expect(solve(debate, verdicts, "con").outcome).toBe("stands");
     }
   });
 
@@ -244,7 +313,7 @@ describe("judgment solver", () => {
       { from: "support", to: "thesis", type: "support" },
       { from: "objection", to: "support", type: "attack" }
     ]);
-    const snapshot = solveJudgment(
+    const snapshot = solve(
       debate,
       [verdict("e_objection_support", "objection", "support", "weakens")],
       "pro"
@@ -260,7 +329,7 @@ describe("judgment solver", () => {
       { from: "objection", to: "thesis", type: "attack" }
     ]);
     expect(
-      solveJudgment(
+      solve(
         thesisTarget,
         [verdict("e_objection_thesis", "objection", "thesis", "weakens")],
         "pro"
@@ -273,7 +342,7 @@ describe("judgment solver", () => {
       { from: "rebuttal", to: "support", type: "attack" }
     ]);
     expect(
-      solveJudgment(
+      solve(
         defeatedTarget,
         [
           verdict("e_rebuttal_support", "rebuttal", "support", "defeats"),
@@ -289,7 +358,7 @@ describe("judgment solver", () => {
       { from: "rebuttal", to: "objection", type: "attack" }
     ]);
     expect(
-      solveJudgment(
+      solve(
         defeatedAttacker,
         [
           verdict("e_rebuttal_objection", "rebuttal", "objection", "defeats"),
@@ -306,7 +375,7 @@ describe("judgment solver", () => {
       { from: "objection", to: "thesis", type: "attack" },
       { from: "rebuttal", to: "objection", type: "attack" }
     ]);
-    const snapshot = solveJudgment(
+    const snapshot = solve(
       debate,
       [
         verdict("e_objection_thesis", "objection", "thesis", "weakens"),
@@ -326,11 +395,11 @@ describe("judgment solver", () => {
       { from: "objection", to: "support", type: "attack" }
     ]);
     const verdicts = [verdict("e_objection_support", "objection", "support", "weakens")];
-    const pro = solveJudgment(debate, verdicts, "pro");
+    const pro = solve(debate, verdicts, "pro");
     expect(pro.outcome).toBe("unestablished");
     expect(pro.balance.pro).toBe(0.9);
-    expect(solveJudgment(debate, verdicts, "preponderance").outcome).toBe("stands");
-    expect(solveJudgment(debate, verdicts, "con").outcome).toBe("stands");
+    expect(solve(debate, verdicts, "preponderance").outcome).toBe("stands");
+    expect(solve(debate, verdicts, "con").outcome).toBe("stands");
   });
 
   it("uses the same neutral fallback for unassessed pro and con lines", () => {
@@ -339,7 +408,7 @@ describe("judgment solver", () => {
       { from: "objection", to: "thesis", type: "attack" }
     ]);
     const verdicts = [verdict("e_objection_thesis", "objection", "thesis", "weakens")];
-    const snapshot = solveJudgment(debate, verdicts, "preponderance");
+    const snapshot = solve(debate, verdicts, "preponderance");
     const proLine = snapshot.balance.lines.find((line) => line.side === "pro");
     const conLine = snapshot.balance.lines.find((line) => line.side === "con");
 
@@ -362,7 +431,7 @@ describe("judgment solver", () => {
       { from: "support", to: "thesis", type: "support" },
       { from: "objection", to: "thesis", type: "attack" }
     ]);
-    const snapshot = solveJudgment(
+    const snapshot = solve(
       debate,
       [verdict("e_objection_thesis", "objection", "thesis", "defeats")],
       "preponderance"
@@ -374,15 +443,13 @@ describe("judgment solver", () => {
     expect(snapshot.withheldHardDefeats).toEqual(["e_objection_thesis"]);
   });
 
-  it("uses the neutral fallback for the whole balance when an assessment is partial", () => {
+  it("uses the neutral fallback for the whole balance when a link assessment is missing", () => {
     const debate = debateWith([
       { from: "support", to: "thesis", type: "support" },
       { from: "objection", to: "thesis", type: "attack" }
     ]);
     const verdicts = [verdict("e_objection_thesis", "objection", "thesis", "weakens")];
-    const snapshot = solveJudgment(debate, verdicts, "preponderance", [
-      assess("e_support_thesis", "pro", "strong", "support-line", "high")
-    ]);
+    const snapshot = solve(debate, verdicts, "preponderance");
     const proLine = snapshot.balance.lines.find((line) => line.side === "pro");
     const conLine = snapshot.balance.lines.find((line) => line.side === "con");
     expect(proLine).toMatchObject({ quality: "moderate", confidenceLabel: "medium", weight: 1.5 });
@@ -397,7 +464,7 @@ describe("judgment solver", () => {
       { from: "objection", to: "support", type: "attack" },
       { from: "support", to: "objection", type: "attack" }
     ]);
-    const snapshot = solveJudgment(
+    const snapshot = solve(
       debate,
       [
         verdict("e_objection_support", "objection", "support"),
@@ -422,7 +489,7 @@ describe("judgment solver", () => {
       { from: "rebuttal", to: "objection", type: "attack" },
       { from: "objection", to: "rebuttal", type: "attack" }
     ]);
-    const snapshot = solveJudgment(
+    const snapshot = solve(
       debate,
       [
         verdict("e_objection_thesis", "objection", "thesis", "weakens"),
@@ -455,7 +522,7 @@ describe("judgment solver", () => {
         assess(`e_con${index}_thesis`, "con", "marginal", `con-line-${index}`)
       )
     ];
-    const smallSnapshot = solveJudgment(small, smallVerdicts, "pro", smallAssessments);
+    const smallSnapshot = solve(small, smallVerdicts, "pro", smallAssessments);
     expect(smallSnapshot.balance.margin).toBe(1);
     expect(smallSnapshot.balance.threshold).toBe(2);
     expect(smallSnapshot.outcome).toBe("unestablished");
@@ -472,7 +539,7 @@ describe("judgment solver", () => {
         assess(`e_con${index}_thesis`, "con", "marginal", `con-line-${index}`)
       )
     ];
-    const proportionalSnapshot = solveJudgment(
+    const proportionalSnapshot = solve(
       proportional,
       proportionalVerdicts,
       "pro",
@@ -496,7 +563,7 @@ describe("judgment solver", () => {
         assess(`e_con${index}_thesis`, "con", "marginal", `con-line-${index}`)
       )
     ];
-    const snapshot = solveJudgment(debate, verdicts, "pro", assessments);
+    const snapshot = solve(debate, verdicts, "pro", assessments);
     expect(snapshot.balance.margin).toBe(2);
     expect(snapshot.balance.threshold).toBe(4);
     expect(snapshot.outcome).toBe("unestablished");
@@ -515,7 +582,7 @@ describe("judgment solver", () => {
         assess(`e_con${index}_thesis`, "con", "marginal", `con-line-${index}`)
       )
     ];
-    expect(solveJudgment(close, closeVerdicts, "con", closeAssessments).outcome).toBe("stands");
+    expect(solve(close, closeVerdicts, "con", closeAssessments).outcome).toBe("stands");
 
     const clear = weightedDebate(4, 6);
     const clearVerdicts = Array.from({ length: 6 }, (_, index) =>
@@ -529,7 +596,7 @@ describe("judgment solver", () => {
         assess(`e_con${index}_thesis`, "con", "marginal", `con-line-${index}`)
       )
     ];
-    const snapshot = solveJudgment(clear, clearVerdicts, "con", clearAssessments);
+    const snapshot = solve(clear, clearVerdicts, "con", clearAssessments);
     expect(snapshot.balance.margin).toBe(-2);
     expect(snapshot.balance.threshold).toBe(-2);
     expect(snapshot.outcome).toBe("falls");
@@ -544,7 +611,7 @@ describe("judgment solver", () => {
       ),
       assess("e_con0_thesis", "con", "marginal", "con-line")
     ];
-    const snapshot = solveJudgment(debate, verdicts, "pro", assessments);
+    const snapshot = solve(debate, verdicts, "pro", assessments);
     expect(snapshot.balance.pro).toBe(30);
     expect(snapshot.balance.con).toBe(1);
     expect(snapshot.balance.margin).toBe(29);
@@ -560,12 +627,12 @@ describe("judgment solver", () => {
       ),
       assess("e_con0_thesis", "con", "decisive", "counter-mechanism")
     ];
-    const pro = solveJudgment(debate, verdicts, "pro", assessments);
+    const pro = solve(debate, verdicts, "pro", assessments);
     expect(pro.balance.pro).toBe(3);
     expect(pro.balance.margin).toBe(0);
     expect(pro.outcome).toBe("unestablished");
-    expect(solveJudgment(debate, verdicts, "con", assessments).outcome).toBe("stands");
-    expect(solveJudgment(debate, verdicts, "preponderance", assessments).outcome).toBe("undecided");
+    expect(solve(debate, verdicts, "con", assessments).outcome).toBe("stands");
+    expect(solve(debate, verdicts, "preponderance", assessments).outcome).toBe("undecided");
   });
 
   it("lets the burden decide a genuinely close case", () => {
@@ -575,9 +642,9 @@ describe("judgment solver", () => {
       assess("e_pro0_thesis", "pro", "moderate", "pro-line"),
       assess("e_con0_thesis", "con", "material", "con-line")
     ];
-    expect(solveJudgment(debate, verdicts, "pro", assessments).outcome).toBe("unestablished");
-    expect(solveJudgment(debate, verdicts, "con", assessments).outcome).toBe("stands");
-    expect(solveJudgment(debate, verdicts, "preponderance", assessments).outcome).toBe("undecided");
+    expect(solve(debate, verdicts, "pro", assessments).outcome).toBe("unestablished");
+    expect(solve(debate, verdicts, "con", assessments).outcome).toBe("stands");
+    expect(solve(debate, verdicts, "preponderance", assessments).outcome).toBe("undecided");
   });
 
   it("lets weighted con dominance reject the motion without a direct defeat", () => {
@@ -593,9 +660,9 @@ describe("judgment solver", () => {
         assess(`e_con${index}_thesis`, "con", "decisive", `con-line-${index}`)
       )
     ];
-    expect(solveJudgment(debate, verdicts, "pro", assessments).outcome).toBe("falls");
-    expect(solveJudgment(debate, verdicts, "con", assessments).outcome).toBe("falls");
-    expect(solveJudgment(debate, verdicts, "preponderance", assessments).outcome).toBe("falls");
+    expect(solve(debate, verdicts, "pro", assessments).outcome).toBe("falls");
+    expect(solve(debate, verdicts, "con", assessments).outcome).toBe("falls");
+    expect(solve(debate, verdicts, "preponderance", assessments).outcome).toBe("falls");
   });
 
   it("keeps a corroborated direct defeat of the thesis as a hard fall", () => {
@@ -606,7 +673,7 @@ describe("judgment solver", () => {
       ),
       assess("e_con0_thesis", "con", "decisive", "con-line")
     ];
-    const snapshot = solveJudgment(
+    const snapshot = solve(
       debate,
       [verdict("e_con0_thesis", "con0", "thesis")],
       "con",
@@ -628,7 +695,7 @@ describe("judgment solver", () => {
       ["material", "high"],
       ["decisive", "low"]
     ] as const) {
-      const snapshot = solveJudgment(debate, verdicts, "pro", [
+      const snapshot = solve(debate, verdicts, "pro", [
         ...proAssessments,
         assess("e_con0_thesis", "con", impact, "con-line", confidence)
       ]);
@@ -645,7 +712,7 @@ describe("judgment solver", () => {
       { from: "objection", to: "thesis", type: "attack" },
       { from: "rebuttal", to: "objection", type: "attack" }
     ]);
-    const snapshot = solveJudgment(
+    const snapshot = solve(
       debate,
       [
         verdict("e_objection_thesis", "objection", "thesis"),
@@ -666,7 +733,7 @@ describe("judgment solver", () => {
 
   it("treats a certified proof and a corroborated defeat as a contested record", () => {
     const debate = weightedDebate(1, 1);
-    const snapshot = solveJudgment(
+    const snapshot = solve(
       debate,
       [verdict("e_con0_thesis", "con0", "thesis")],
       "pro",
@@ -690,15 +757,15 @@ describe("judgment solver", () => {
       assess("e_pro0_thesis", "pro", "strong", "pro-line", "high"),
       assess("e_con0_thesis", "con", "decisive", "con-line")
     ];
-    const summary = judgmentSummary(debate, verdicts, "pro", assessments);
-    expect(summary.outcome).toBe("undecided");
-    expect(summary.summary).toContain("neither can displace the other");
-    expect(summary.decisive.map((step) => step.edgeId)).toEqual(["e_pro0_thesis", "e_con0_thesis"]);
+    const decision = resolveSummary(debate, verdicts, "pro", assessments);
+    expect(decision.outcome).toBe("undecided");
+    expect(decision.summary).toContain("neither can displace the other");
+    expect(decision.decisive.map((step) => step.edgeId)).toEqual(["e_pro0_thesis", "e_con0_thesis"]);
   });
 
   it("lets a certified proof carry the motion without a direct defeat", () => {
     const debate = weightedDebate(1, 1);
-    const snapshot = solveJudgment(
+    const snapshot = solve(
       debate,
       [verdict("e_con0_thesis", "con0", "thesis", "weakens")],
       "pro",
@@ -715,7 +782,7 @@ describe("judgment solver", () => {
 
   it("lets a certified proof stand when the direct defeat is not corroborated", () => {
     const debate = weightedDebate(1, 1);
-    const snapshot = solveJudgment(
+    const snapshot = solve(
       debate,
       [verdict("e_con0_thesis", "con0", "thesis")],
       "pro",
@@ -737,7 +804,7 @@ describe("judgment solver", () => {
       { from: "support", to: "thesis", type: "support" },
       { from: "objection", to: "support", type: "attack" }
     ]);
-    const snapshot = solveJudgment(
+    const snapshot = solve(
       debate,
       [verdict("e_objection_support", "objection", "support", "weakens")],
       "pro",
@@ -756,7 +823,7 @@ describe("judgment solver", () => {
       assess("e_pro0_thesis", "pro", "strong", "pro-line", "medium"),
       assess("e_con0_thesis", "con", "decisive", "con-line", "medium")
     ];
-    const strict = solveJudgment(
+    const strict = solve(
       debate,
       [verdict("e_con0_thesis", "con0", "thesis")],
       "pro",
@@ -767,7 +834,7 @@ describe("judgment solver", () => {
     expect(strict.hardDefeats).toEqual([]);
     expect(strict.thesisStatus).toBe("contested");
 
-    const balanced = solveJudgment(
+    const balanced = solve(
       debate,
       [verdict("e_con0_thesis", "con0", "thesis")],
       "pro",
@@ -785,7 +852,7 @@ describe("judgment solver", () => {
       { from: "support", to: "thesis", type: "support" },
       { from: "objection", to: "thesis", type: "attack" }
     ]);
-    const snapshot = solveJudgment(
+    const snapshot = solve(
       debate,
       [verdict("e_objection_thesis", "objection", "thesis", "irrelevant")],
       "pro"
@@ -801,7 +868,7 @@ describe("judgment solver", () => {
       { from: "objection", to: "thesis", type: "attack" },
       { from: "objection", to: "support", type: "attack" }
     ]);
-    const snapshot = solveJudgment(
+    const snapshot = solve(
       debate,
       [
         verdict("e_objection_thesis", "objection", "thesis", "irrelevant"),
@@ -818,7 +885,7 @@ describe("judgment solver", () => {
       { from: "support", to: "objection", type: "attack" },
       { from: "objection", to: "thesis", type: "attack" }
     ]);
-    const snapshot = solveJudgment(
+    const snapshot = solve(
       debate,
       [
         verdict("e_support_objection", "support", "objection", "irrelevant"),
@@ -836,7 +903,7 @@ describe("judgment solver", () => {
       { from: "objection", to: "thesis", type: "attack" },
       { from: "rebuttal", to: "objection", type: "attack" }
     ]);
-    const snapshot = solveJudgment(
+    const snapshot = solve(
       debate,
       [
         verdict("e_objection_thesis", "objection", "thesis", "irrelevant"),
@@ -853,7 +920,7 @@ describe("judgment solver", () => {
       { from: "support", to: "thesis", type: "support" },
       { from: "objection", to: "thesis", type: "attack" }
     ]);
-    const summary = judgmentSummary(
+    const summary = resolveSummary(
       debate,
       [verdict("e_objection_thesis", "objection", "thesis", "weakens")],
       "pro"
@@ -868,7 +935,7 @@ describe("judgment solver", () => {
       { from: "support", to: "thesis", type: "support" },
       { from: "objection", to: "support", type: "attack" }
     ]);
-    const summary = judgmentSummary(
+    const summary = resolveSummary(
       debate,
       [verdict("e_objection_support", "objection", "support", "weakens")],
       "pro"
@@ -1170,6 +1237,14 @@ describe("judgment solver", () => {
       { from: "support", to: "thesis", type: "support" },
       { from: "objection", to: "thesis", type: "attack" }
     ]);
+    const inputs = linkInputs(
+      debate,
+      [verdict("e_objection_thesis", "objection", "thesis")],
+      [
+        assess("e_support_thesis", "pro", "moderate", "support-line"),
+        assess("e_objection_thesis", "con", "decisive", "objection-line")
+      ]
+    );
     const run = buildJudgmentRun({
       id: "run-1",
       debate,
@@ -1177,17 +1252,15 @@ describe("judgment solver", () => {
       judge: { provider: "test", model: "judge" },
       standard: "pro",
       strictness: "balanced",
-      verdicts: [verdict("e_objection_thesis", "objection", "thesis")],
-      assessments: [
-        assess("e_support_thesis", "pro", "moderate", "support-line"),
-        assess("e_objection_thesis", "con", "decisive", "objection-line")
-      ]
+      ...inputs
     });
     expect(run.outcome).toBe("falls");
     expect(run.summary).toContain("falls");
     expect(run.decisive[0]?.from).toBe("objection");
     expect(run.waves[0]?.label).toBe("Branch 1");
-    expect(run.assessments).toHaveLength(2);
+    expect(run.links).toHaveLength(2);
+    expect(run.verdicts).toHaveLength(1);
+    expect(run.clusters).toHaveLength(2);
     expect(run.balance).toMatchObject({ pro: 2, con: 3, assessed: true });
   });
 
@@ -1218,6 +1291,14 @@ describe("judgment solver", () => {
       { from: "support", to: "thesis", type: "support" },
       { from: "objection", to: "thesis", type: "attack" }
     ]);
+    const inputs = linkInputs(
+      debate,
+      [verdict("e_objection_thesis", "objection", "thesis")],
+      [
+        assess("e_support_thesis", "pro", "moderate", "support-line"),
+        assess("e_objection_thesis", "con", "decisive", "objection-line")
+      ]
+    );
     const run = buildJudgmentRun({
       id: "run-report",
       debate,
@@ -1225,11 +1306,7 @@ describe("judgment solver", () => {
       judge: { provider: "test", model: "judge" },
       standard: "pro",
       strictness: "balanced",
-      verdicts: [verdict("e_objection_thesis", "objection", "thesis")],
-      assessments: [
-        assess("e_support_thesis", "pro", "moderate", "support-line"),
-        assess("e_objection_thesis", "con", "decisive", "objection-line")
-      ],
+      ...inputs,
       warnings: ["One clash was left open."]
     });
     const markdown = judgmentMarkdown(debate, run);

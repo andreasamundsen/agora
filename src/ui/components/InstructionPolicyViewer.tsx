@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { INSTRUCTION_POLICIES, type InstructionId } from "../../shared/instructions";
 
 export function InstructionPolicyViewer() {
-  const [activeId, setActiveId] = useState<InstructionId>("judge");
+  const [activeId, setActiveId] = useState<InstructionId>("link");
   const viewerRef = useRef<HTMLDivElement>(null);
   const active = INSTRUCTION_POLICIES.find((item) => item.id === activeId) ?? INSTRUCTION_POLICIES[0];
 

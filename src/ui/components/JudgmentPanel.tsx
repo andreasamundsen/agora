@@ -73,7 +73,7 @@ function effectLine(judgment: ClashJudgment, snapshot: JudgmentSnapshot, thesisI
       if (snapshot.weakened.includes(judgment.from)) {
         return "The ruling is recorded, but the attacker is itself weakened; it cannot deliver a hard fall.";
       }
-      return "The clash was ruled a defeat, but the weighing pass did not corroborate a decisive strike; the target remains contested.";
+      return "The link was ruled a defeat, but the local link assessment did not corroborate a decisive strike; the target remains contested.";
     }
     if (target === "defeated") return "The target is struck from the record.";
     if (target === "contested") return "The target remains contested; this strike does not settle it.";
@@ -192,6 +192,7 @@ function BalanceCard({
                           : "attacker contested"}
                     </span>
                     {line.independence < 1 && <span>overlap ×{formatPoints(line.independence)}</span>}
+                    {line.cluster && line.cluster !== line.sourceId && <span>cluster: {line.cluster}</span>}
                   </div>
                   {line.reasoning && <p className="balance-line-reasoning">{line.reasoning}</p>}
                 </li>
@@ -299,10 +300,10 @@ export function JudgmentPanel({
           <section className="bench-intro-card">
             <div className="bench-intro-mark">§</div>
             <div className="eyebrow">The bench is in session</div>
-            <h3>One clash at a time.</h3>
+            <h3>One ruling at a time.</h3>
             <p>
-              The judge reads the attacker and the target, rules only on their collision, and the engine follows the
-              consequences through the map.
+              The judge assesses every arrow locally. The playback rules the conflicts one at a time, and the engine
+              follows the consequences through the map.
             </p>
             <div className="bench-intro-meta">
               <span>{STANDARD_LABEL[run.standard]}</span>

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { reconcileDebate } from "../core/model";
-import { clashEdges, solveJudgment, type ClashJudgment } from "../core/judgment";
-import { assessmentPrompt, clashPrompt } from "./judge";
+import { clusterPrompt, linkPrompt } from "./judge";
 
 function promptDebate() {
   return reconcileDebate({
@@ -14,7 +13,7 @@ function promptDebate() {
         id: "p1",
         kind: "argument",
         title: "P1 supports the thesis",
-        text: "P1 TEXT SHOULD ONLY APPEAR AS A CONCLUSION HERE.",
+        text: "P1 text.",
         stance: "pro",
         premises: ["P1 premise."],
         conclusion: "P1 conclusion."
@@ -23,7 +22,7 @@ function promptDebate() {
         id: "c1",
         kind: "argument",
         title: "C1 attacks P1",
-        text: "C1 TEXT.",
+        text: "C1 text.",
         stance: "con",
         premises: ["C1 premise."],
         conclusion: "C1 conclusion."
@@ -32,120 +31,94 @@ function promptDebate() {
         id: "r1",
         kind: "argument",
         title: "R1 attacks C1",
-        text: "R1 TEXT.",
+        text: "R1 text.",
         stance: "pro",
         premises: ["R1 premise."],
         conclusion: "R1 conclusion."
       },
       {
-        id: "r2",
-        kind: "argument",
-        title: "R2 attacks R1",
-        text: "R2 TEXT.",
-        stance: "pro",
-        premises: ["R2 premise."],
-        conclusion: "R2 conclusion."
-      },
-      {
         id: "unrelated",
         kind: "argument",
         title: "An unrelated argument",
-        text: "UNRELATED CONTEXT SHOULD NOT APPEAR.",
+        text: "UNRELATED CONTEXT.",
         stance: "pro",
         premises: ["Unrelated premise."]
+      },
+      {
+        id: "framing",
+        kind: "statement",
+        title: "A framing note",
+        text: "FRAMING NOTE, NOT AN ARGUMENT."
       }
     ],
     edges: [
-      { id: "e_p1_thesis", from: "p1", to: "thesis", type: "support" },
+      { id: "e_p1_thesis", from: "p1", to: "thesis", type: "support", note: "RELATION NOTE THAT MUST NOT LEAK." },
       { id: "e_c1_p1", from: "c1", to: "p1", type: "attack" },
       { id: "e_r1_c1", from: "r1", to: "c1", type: "attack" },
-      { id: "e_r2_r1", from: "r2", to: "r1", type: "attack" },
       { id: "e_unrelated_thesis", from: "unrelated", to: "thesis", type: "support" }
     ]
   });
 }
 
-describe("clash prompt context", () => {
-  it("includes the target's role and full immediate destination, but not the whole map", () => {
+describe("local link prompt", () => {
+  it("contains only the support's source, target, and relation type", () => {
     const debate = promptDebate();
-    const clash = clashEdges(debate).find((edge) => edge.from === "r2")!;
-    const prompt = clashPrompt(debate, clash, "pro");
+    const edge = debate.edges.find((candidate) => candidate.id === "e_p1_thesis")!;
+    const prompt = linkPrompt(debate, edge);
 
-    expect(prompt).toContain("TARGET'S ROLE IN THE MAP");
-    expect(prompt).toContain("Role: deeper response (3 steps from the thesis).");
-    expect(prompt).toContain("1. ATTACK: “C1 attacks P1”");
-    expect(prompt).toContain("C1 TEXT.");
-    expect(prompt).toContain("C1 premise.");
-    expect(prompt).toContain("SHORTEST PATH TO THE THESIS");
-    expect(prompt).toContain("DEEPER PATH NODES");
-    expect(prompt).toContain("“P1 supports the thesis” — P1 conclusion.");
-    expect(prompt).not.toContain("P1 TEXT SHOULD ONLY APPEAR AS A CONCLUSION HERE.");
-    expect(prompt).not.toContain("UNRELATED CONTEXT SHOULD NOT APPEAR.");
+    expect(prompt).toContain("Relation: SUPPORT");
+    expect(prompt).toContain("SOURCE");
+    expect(prompt).toContain("TARGET");
+    expect(prompt).toContain("P1 text.");
+    expect(prompt).toContain("The chain holds.");
+    expect(prompt).not.toContain("C1 text.");
+    expect(prompt).not.toContain("UNRELATED CONTEXT.");
+    expect(prompt).not.toContain("TARGET'S ROLE IN THE MAP");
+    expect(prompt).not.toContain("SHORTEST PATH TO THE THESIS");
+    expect(prompt).not.toContain("OTHER RELATIONS AROUND THIS PAIR");
+    expect(prompt).not.toContain("RELATION NOTE THAT MUST NOT LEAK.");
+    expect(prompt).not.toContain("STANDARD OF PROOF");
+  });
+
+  it("contains only the conflict's source and target, not the reply chain", () => {
+    const debate = promptDebate();
+    const edge = debate.edges.find((candidate) => candidate.id === "e_c1_p1")!;
+    const prompt = linkPrompt(debate, edge);
+
+    expect(prompt).toContain("Relation: ATTACK");
+    expect(prompt).toContain("C1 text.");
+    expect(prompt).toContain("P1 text.");
+    expect(prompt).not.toContain("R1 text.");
+    expect(prompt).not.toContain("UNRELATED CONTEXT.");
   });
 });
 
-describe("assessment prompt", () => {
-  function contestedSupportDebate() {
-    return reconcileDebate({
-      id: "contested-support",
-      motion: "Should the test pass?",
+describe("clustering prompt", () => {
+  it("contains every argument text but no edges, rulings, or ratings", () => {
+    const debate = promptDebate();
+    const prompt = clusterPrompt(debate)!;
+
+    expect(prompt).toContain("P1 text.");
+    expect(prompt).toContain("C1 text.");
+    expect(prompt).toContain("R1 text.");
+    expect(prompt).toContain("UNRELATED CONTEXT.");
+    expect(prompt).not.toContain("FRAMING NOTE, NOT AN ARGUMENT.");
+    expect(prompt).not.toContain("e_p1_thesis");
+    expect(prompt).not.toContain("Relation:");
+    expect(prompt).not.toContain("defeats");
+    expect(prompt).not.toContain("strong");
+    expect(prompt).not.toContain("SOURCE");
+    expect(prompt).not.toContain("TARGET");
+  });
+
+  it("returns null when there are no arguments to cluster", () => {
+    const debate = reconcileDebate({
+      id: "solo-thesis",
+      motion: "A solo thesis",
       thesisId: "thesis",
-      nodes: [
-        { id: "thesis", kind: "statement", title: "The test passes", text: "The test passes." },
-        {
-          id: "support",
-          kind: "argument",
-          title: "A reason for the test",
-          text: "A reason.",
-          stance: "pro",
-          premises: ["The reason holds."],
-          conclusion: "The test passes."
-        },
-        {
-          id: "objection",
-          kind: "argument",
-          title: "An objection",
-          text: "An objection.",
-          stance: "con",
-          premises: ["The objection holds."],
-          conclusion: "The test does not pass."
-        }
-      ],
-      edges: [
-        { id: "e_support_thesis", from: "support", to: "thesis", type: "support" },
-        { id: "e_objection_support", from: "objection", to: "support", type: "attack" },
-        { id: "e_support_objection", from: "support", to: "objection", type: "attack" }
-      ]
+      nodes: [{ id: "thesis", kind: "statement", title: "The thesis", text: "The thesis." }],
+      edges: []
     });
-  }
-
-  function ruling(edgeId: string, from: string, to: string): ClashJudgment {
-    return {
-      edgeId,
-      from,
-      to,
-      type: "attack",
-      verdict: "defeats",
-      criterion: "sufficiency",
-      confidence: "high",
-      targetComponent: "conclusion",
-      reasoning: "A test ruling."
-    };
-  }
-
-  it("includes a contested pro support in the weighing pass", () => {
-    const debate = contestedSupportDebate();
-    const verdicts = [
-      ruling("e_objection_support", "objection", "support"),
-      ruling("e_support_objection", "support", "objection")
-    ];
-    const provisional = solveJudgment(debate, verdicts, "preponderance");
-    const prompt = assessmentPrompt(debate, provisional, verdicts, "preponderance");
-
-    expect(provisional.statuses.support).toBe("contested");
-    expect(prompt).toContain("LINE e_support_thesis — PRO SUPPORT");
-    expect(prompt).toContain("Source status: contested");
-    expect(prompt).toContain("EVIDENCE BAR");
-    expect(prompt).not.toContain('"proves"');
+    expect(clusterPrompt(debate)).toBeNull();
   });
 });

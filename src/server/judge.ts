@@ -1,34 +1,21 @@
 import { z } from "zod";
-import type { Debate, DebateNode } from "../core/model";
+import type { Debate, DebateEdge, DebateNode } from "../core/model";
 import { cleanText, uid } from "../core/model";
-import { buildClashContext, MAX_DIRECT_CONTEXT_RELATIONS, type ClashContext } from "../core/clash-context";
 import {
   buildJudgmentRun,
-  clashEdges,
-  isClashEdge,
-  judgmentForEdge,
   solveJudgment,
-  STANDARD_LABEL,
-  STANDARD_NOTE,
-  STRICTNESS_LABEL,
-  STRICTNESS_NOTE,
-  type ArgumentQuality,
-  type AttackImpact,
-  type CaseLineAssessment,
-  type CaseSide,
-  type ClashEdge,
   type ClashJudgment,
+  type ClusterAssignment,
   type JudgeStrictness,
-  type JudgmentCriterion,
-  type JudgmentConfidence,
+  type LinkAssessment,
   type StandardOfProof,
-  type TargetComponent
+  type SupportAssessment
 } from "../core/judgment";
 import { getSettings, isReady, type StoredSettings } from "./settings";
 import { callModel, parseJsonObject } from "./llm";
-import { ASSESSMENT_RULES, JUDGE_RULES } from "../shared/instructions";
+import { CLUSTER_RULES, LINK_RULES } from "../shared/instructions";
 
-export const MAX_CLASHES = 40;
+export const MAX_LINKS = 80;
 
 export interface JudgeOptions {
   model?: string;
@@ -36,28 +23,31 @@ export interface JudgeOptions {
   strictness: JudgeStrictness;
 }
 
-const RulingSchema = z.object({
-  verdict: z.enum(["defeats", "weakens", "undecided", "irrelevant"]).catch("undecided"),
+const SupportLinkSchema = z.object({
+  quality: z.enum(["strong", "moderate", "weak"]),
+  confidence: z.enum(["high", "medium", "low"]),
+  reasoning: z.string().catch("")
+});
+
+const ConflictLinkSchema = z.object({
+  verdict: z.enum(["defeats", "weakens", "undecided", "irrelevant"]),
   criterion: z.enum(["relevance", "grounds", "sufficiency", "scope", "burden"]).catch("sufficiency"),
-  confidence: z.enum(["high", "medium", "low"]).catch("medium"),
+  impact: z.enum(["decisive", "material", "marginal"]),
+  confidence: z.enum(["high", "medium", "low"]),
   target_component: z
     .enum(["conclusion", "inference", "premise", "scope", "unknown"])
     .catch("conclusion"),
   reasoning: z.string().catch("")
 });
 
-const AssessmentLineSchema = z.object({
-  edgeId: z.string(),
-  side: z.enum(["pro", "con"]).catch("pro"),
-  quality: z.enum(["strong", "moderate", "weak"]).optional(),
-  impact: z.enum(["decisive", "material", "marginal"]).optional(),
-  confidence: z.enum(["high", "medium", "low"]).catch("medium"),
-  cluster: z.string().catch(""),
-  reasoning: z.string().catch("")
-});
-
-const AssessmentSchema = z.object({
-  lines: z.array(AssessmentLineSchema)
+const ClusterSchema = z.object({
+  clusters: z.array(
+    z.object({
+      nodeId: z.string(),
+      cluster: z.string().catch(""),
+      reasoning: z.string().catch("")
+    })
+  )
 });
 
 function normalizeCluster(value: string, fallback: string): string {
@@ -70,99 +60,39 @@ function normalizeCluster(value: string, fallback: string): string {
   return normalized || fallback;
 }
 
-function normalizeAssessmentRaw(value: unknown): unknown {
+function normalizeLinkRaw(value: unknown): unknown {
+  if (!value || typeof value !== "object") return value;
+  const copy = { ...(value as Record<string, unknown>) };
+  for (const key of [
+    "quality",
+    "verdict",
+    "criterion",
+    "impact",
+    "confidence",
+    "target_component"
+  ] as const) {
+    const field = copy[key];
+    if (typeof field === "string") copy[key] = field.trim().toLowerCase();
+  }
+  return copy;
+}
+
+function normalizeClusterRaw(value: unknown): unknown {
   if (!value || typeof value !== "object") return value;
   const record = value as Record<string, unknown>;
-  if (!Array.isArray(record.lines)) return value;
+  if (!Array.isArray(record.clusters)) return value;
   return {
     ...record,
-    lines: record.lines.map((line) => {
-      if (!line || typeof line !== "object") return line;
-      const copy = { ...(line as Record<string, unknown>) };
-      for (const key of ["side", "quality", "impact", "confidence"] as const) {
+    clusters: record.clusters.map((cluster) => {
+      if (!cluster || typeof cluster !== "object") return cluster;
+      const copy = { ...(cluster as Record<string, unknown>) };
+      for (const key of ["nodeId", "cluster"] as const) {
         const field = copy[key];
-        if (field === null || field === undefined || (typeof field === "string" && field.trim() === "")) {
-          if (key === "quality" || key === "impact") delete copy[key];
-          continue;
-        }
-        if (typeof field === "string") copy[key] = field.trim().toLowerCase();
+        if (typeof field === "string") copy[key] = field.trim();
       }
       return copy;
     })
   };
-}
-
-export function assessmentPrompt(
-  debate: Debate,
-  provisional: ReturnType<typeof solveJudgment>,
-  verdicts: ClashJudgment[],
-  standard: StandardOfProof,
-  strictness: JudgeStrictness = "balanced"
-): string | null {
-  const supportEdges = debate.edges.filter(
-    (edge) =>
-      edge.type === "support" &&
-      edge.to === debate.thesisId &&
-      (provisional.liveSupports.includes(edge.id) ||
-        provisional.statuses[edge.from] === "contested")
-  );
-  const attackEdges = debate.edges.filter(
-    (edge) =>
-      (edge.type === "attack" || edge.type === "undercut") &&
-      edge.to === debate.thesisId &&
-      provisional.liveAttacks.includes(edge.id)
-  );
-
-  if (!supportEdges.length && !attackEdges.length) return null;
-
-  const supportBlocks = supportEdges.flatMap((edge) => {
-    const source = debate.nodes.find((node) => node.id === edge.from);
-    if (!source) return [];
-    const clean = provisional.cleanSupports.includes(edge.id);
-    return [
-      `LINE ${edge.id} — PRO SUPPORT`,
-      nodeBlock(source, "SUPPORTING ARGUMENT"),
-      `Source status: ${provisional.statuses[source.id] ?? "unknown"}. Pressure: ${
-        clean ? "clean; no live attack against the source" : "under a live attack"
-      }`,
-      ""
-    ].join("\n");
-  });
-
-  const attackBlocks = attackEdges.flatMap((edge) => {
-    const source = debate.nodes.find((node) => node.id === edge.from);
-    if (!source) return [];
-    const ruling = judgmentForEdge(verdicts, edge.id);
-    return [
-      `LINE ${edge.id} — CON ${edge.type.toUpperCase()}`,
-      nodeBlock(source, "ATTACKING ARGUMENT"),
-      `Ruling: ${ruling?.verdict ?? "undecided"}; confidence: ${ruling?.confidence ?? "medium"}`,
-      ruling?.reasoning ? `Ruling reason: ${ruling.reasoning}` : "",
-      ""
-    ].join("\n");
-  });
-
-  return `THE MOTION
-${debate.motion}
-
-THE THESIS
-${cleanText(debate.thesisText) || debate.motion}
-
-STANDARD OF PROOF
-${STANDARD_LABEL[standard]}. ${STANDARD_NOTE[standard]}
-
-EVIDENCE BAR
-${STRICTNESS_LABEL[strictness]}. ${STRICTNESS_NOTE[strictness]}
-
---- BEGIN UNTRUSTED ARGUMENT DATA ---
-
-${supportBlocks.join("\n")}
-
-${attackBlocks.join("\n")}
-
---- END UNTRUSTED ARGUMENT DATA ---
-
-Rate only the lines above. Return one record per line.`;
 }
 
 function nodeBlock(node: DebateNode, role: string): string {
@@ -171,153 +101,51 @@ function nodeBlock(node: DebateNode, role: string): string {
     : "  (no explicit premises)";
   return `${role}
 Title: ${node.title}
-Kind: ${node.kind}
-Stance: ${node.stance}
 Text: ${cleanText(node.text) || node.title}
 Premises:
 ${premises}
 Conclusion: ${node.conclusion ? cleanText(node.conclusion) : "(not stated separately)"}`;
 }
 
-function pathChain(context: ClashContext): string {
-  const parts = [`“${context.target.title}”`];
-  for (const step of context.path) {
-    parts.push(`—${step.edge.type.toUpperCase()}→ “${step.to.title}”`);
-  }
-  return parts.join(" ");
-}
-
-function targetContextBlock(debate: Debate, context: ClashContext): string {
-  const lines: string[] = [];
-  const role =
-    context.path.length && context.target.id !== debate.thesisId
-      ? `${context.role} (${context.path.length} step${context.path.length === 1 ? "" : "s"} from the thesis)`
-      : context.role;
-
-  lines.push("TARGET'S ROLE IN THE MAP");
-  lines.push(`Role: ${role}.`);
-  lines.push("What the target itself attacks or supports:");
-
-  if (!context.directRelations.length) {
-    lines.push("(No outgoing support, attack, or undercut edges.)");
-  } else {
-    context.directRelations.forEach((relation, index) => {
-      lines.push(`${index + 1}. ${relation.edge.type.toUpperCase()}: “${relation.destination.title}”`);
-      if (relation.destination.id === debate.thesisId) {
-        lines.push("Destination: THE THESIS (already stated above).");
-      } else {
-        lines.push(nodeBlock(relation.destination, "DIRECT DESTINATION"));
-      }
-    });
-    if (context.omittedDirectRelations > 0) {
-      lines.push(
-        `(${context.omittedDirectRelations} further outgoing relation${context.omittedDirectRelations === 1 ? "" : "s"} omitted by the ${MAX_DIRECT_CONTEXT_RELATIONS}-relation cap.)`
-      );
-    }
-  }
-
-  if (context.path.length) {
-    lines.push("");
-    lines.push("SHORTEST PATH TO THE THESIS");
-    lines.push(pathChain(context));
-
-    const directDestinationIds = new Set(context.directRelations.map((relation) => relation.destination.id));
-    const deeper = context.path
-      .map((step) => step.to)
-      .filter(
-        (node) =>
-          node.id !== context.target.id &&
-          node.id !== debate.thesisId &&
-          !directDestinationIds.has(node.id)
-      );
-    const seen = new Set<string>();
-    const uniqueDeeper = deeper.filter((node) => {
-      if (seen.has(node.id)) return false;
-      seen.add(node.id);
-      return true;
-    });
-
-    if (uniqueDeeper.length) {
-      lines.push("DEEPER PATH NODES");
-      for (const node of uniqueDeeper) {
-        lines.push(
-          `- “${node.title}” — ${node.conclusion ? cleanText(node.conclusion) : "(no separate conclusion stated)"}`
-        );
-      }
-    }
-  } else if (context.target.id !== debate.thesisId) {
-    lines.push("");
-    lines.push("No directed path from the target to the thesis was found on this map.");
-  }
-
-  return lines.join("\n");
-}
-
-function contextBlock(debate: Debate, edge: ClashEdge): string {
-  const around = new Set([edge.from, edge.to]);
-  const lines: string[] = [];
-  for (const candidate of debate.edges) {
-    if (candidate.id === edge.id) continue;
-    if (!around.has(candidate.from) && !around.has(candidate.to)) continue;
-    const from = debate.nodes.find((node) => node.id === candidate.from);
-    const to = debate.nodes.find((node) => node.id === candidate.to);
-    if (!from || !to) continue;
-    lines.push(`- ${candidate.type.toUpperCase()}: “${from.title}” → “${to.title}”`);
-    if (lines.length >= 8) break;
-  }
-  return lines.length ? lines.join("\n") : "(no other relations touch this pair)";
-}
-
-export function clashPrompt(debate: Debate, edge: ClashEdge, standard: StandardOfProof): string {
-  const attacker = debate.nodes.find((node) => node.id === edge.from);
+/** A local link prompt sees only the source, the target, and the relation type. */
+export function linkPrompt(debate: Debate, edge: DebateEdge): string {
+  const source = debate.nodes.find((node) => node.id === edge.from);
   const target = debate.nodes.find((node) => node.id === edge.to);
-  if (!attacker || !target) throw new Error("The clash points at a missing argument.");
-  const context = buildClashContext(debate, edge);
-  if (!context) throw new Error("The clash target has no context in the map.");
-  return `THE MOTION
+  if (!source || !target) throw new Error("The link points at a missing argument.");
+  return `THE LINK
+Relation: ${edge.type.toUpperCase()}
+
+--- BEGIN UNTRUSTED ARGUMENT DATA ---
+
+${nodeBlock(source, "SOURCE")}
+
+${nodeBlock(target, "TARGET")}
+
+--- END UNTRUSTED ARGUMENT DATA ---
+
+Assess only this link. The rest of the map is not in evidence.`;
+}
+
+/** The clustering prompt sees every argument text, but no edges, rulings, or ratings. */
+export function clusterPrompt(debate: Debate): string | null {
+  const argumentsOnMap = debate.nodes.filter(
+    (node) => node.kind === "argument" && node.id !== debate.thesisId
+  );
+  if (!argumentsOnMap.length) return null;
+  const blocks = argumentsOnMap.map((node) => nodeBlock(node, `ARGUMENT ${node.id}`)).join("\n\n");
+  return `--- BEGIN UNTRUSTED DEBATE DATA ---
+
+THE MOTION
 ${debate.motion}
 
 THE THESIS
 ${cleanText(debate.thesisText) || debate.motion}
 
-STANDARD OF PROOF
-${STANDARD_LABEL[standard]}. ${STANDARD_NOTE[standard]}
+${blocks}
 
-THE CLASH
-Relation: ${edge.type.toUpperCase()}
-${edge.note ? `Relation note: ${edge.note}` : ""}
-Use the target's role and path below to interpret the target. Judge only this clash, not the whole motion.
+--- END UNTRUSTED DEBATE DATA ---
 
---- BEGIN UNTRUSTED ARGUMENT DATA ---
-
-${nodeBlock(attacker, "ATTACKER")}
-
-${nodeBlock(target, "TARGET")}
-
-${targetContextBlock(debate, context)}
-
-OTHER RELATIONS AROUND THIS PAIR
-${contextBlock(debate, edge)}
-
---- END UNTRUSTED ARGUMENT DATA ---
-
-Rule on this clash alone.`;
-}
-
-function isVerdict(value: unknown): value is ClashJudgment["verdict"] {
-  return value === "defeats" || value === "weakens" || value === "undecided" || value === "irrelevant";
-}
-
-function isCriterion(value: unknown): value is JudgmentCriterion {
-  return value === "relevance" || value === "grounds" || value === "sufficiency" || value === "scope" || value === "burden";
-}
-
-function isConfidence(value: unknown): value is JudgmentConfidence {
-  return value === "high" || value === "medium" || value === "low";
-}
-
-function isComponent(value: unknown): value is TargetComponent {
-  return value === "conclusion" || value === "inference" || value === "premise" || value === "scope" || value === "unknown";
+Group only the arguments above by shared premise or mechanism. Return one record for every argument id. Do not assess strength, rule on a link, or decide the motion.`;
 }
 
 function cleanReasoning(value: unknown): string {
@@ -325,18 +153,32 @@ function cleanReasoning(value: unknown): string {
   return text.length > 1200 ? `${text.slice(0, 1199).trimEnd()}…` : text;
 }
 
-function localRuling(edge: ClashEdge): ClashJudgment {
+function localSupport(edge: DebateEdge): SupportAssessment {
   return {
     edgeId: edge.id,
     from: edge.from,
     to: edge.to,
-    type: edge.type,
+    type: "support",
+    quality: "moderate",
+    confidence: "medium",
+    reasoning:
+      "Local structural review: no judge model is connected, so this support is assigned a neutral structural rating for procedure only."
+  };
+}
+
+function localRuling(edge: DebateEdge): ClashJudgment {
+  return {
+    edgeId: edge.id,
+    from: edge.from,
+    to: edge.to,
+    type: edge.type as "attack" | "undercut",
     verdict: "defeats",
+    impact: "material",
     criterion: "sufficiency",
     confidence: "low",
     targetComponent: edge.type === "undercut" ? "inference" : "conclusion",
     reasoning:
-      "Local structural review: no judge model is connected, so this clash is treated as decisive only to demonstrate the procedure. Connect a judge model for a substantive ruling on the argument's content."
+      "Local structural review: no judge model is connected, so this link is treated as decisive only to demonstrate the procedure. Connect a judge model for a substantive ruling on the argument's content."
   };
 }
 
@@ -372,66 +214,122 @@ function providerError(error: unknown): string {
   return raw.replace(/\s+/g, " ").slice(0, 240);
 }
 
-async function assessCaseLines(
+async function assessLink(
   debate: Debate,
-  verdicts: ClashJudgment[],
-  standard: StandardOfProof,
-  strictness: JudgeStrictness,
+  edge: DebateEdge,
+  settings: StoredSettings,
+  strictness: JudgeStrictness
+): Promise<LinkAssessment> {
+  const prompt = linkPrompt(debate, edge);
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const content = await callModel(
+        settings,
+        [
+          { role: "system", content: LINK_RULES },
+          { role: "user", content: prompt }
+        ],
+        { temperature: 0, maxTokens: 900 }
+      );
+      const raw = normalizeLinkRaw(parseJsonObject(content));
+      if (edge.type === "support") {
+        const parsed = SupportLinkSchema.safeParse(raw);
+        if (!parsed.success) throw new Error("The link assessor returned an invalid support shape.");
+        return {
+          edgeId: edge.id,
+          from: edge.from,
+          to: edge.to,
+          type: "support",
+          quality: parsed.data.quality,
+          confidence: parsed.data.confidence,
+          reasoning: cleanReasoning(parsed.data.reasoning)
+        };
+      }
+      const parsed = ConflictLinkSchema.safeParse(raw);
+      if (!parsed.success) throw new Error("The link assessor returned an invalid conflict shape.");
+      return enforceStrictness(
+        {
+          edgeId: edge.id,
+          from: edge.from,
+          to: edge.to,
+          type: edge.type,
+          verdict: parsed.data.verdict,
+          impact: parsed.data.impact,
+          criterion: parsed.data.criterion,
+          confidence: parsed.data.confidence,
+          targetComponent: parsed.data.target_component,
+          reasoning:
+            cleanReasoning(parsed.data.reasoning) ||
+            "The judge did not provide a reason. The link is left as assessed, but the reasoning is missing."
+        },
+        strictness
+      );
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw new Error(
+    `The judge could not assess the ${edge.type} link “${edge.id}”: ${providerError(lastError)}`
+  );
+}
+
+async function assessAllLinks(
+  debate: Debate,
+  settings: StoredSettings,
+  strictness: JudgeStrictness
+): Promise<LinkAssessment[]> {
+  return mapLimit(debate.edges, 4, (edge) => assessLink(debate, edge, settings, strictness));
+}
+
+export async function clusterArguments(
+  debate: Debate,
   settings: StoredSettings,
   warnings: string[]
-): Promise<CaseLineAssessment[]> {
-  const provisional = solveJudgment(debate, verdicts, standard, [], strictness);
-  const prompt = assessmentPrompt(debate, provisional, verdicts, standard, strictness);
+): Promise<ClusterAssignment[]> {
+  const prompt = clusterPrompt(debate);
   if (!prompt) return [];
-
-  const sides = new Map<string, CaseSide>();
-  for (const edge of debate.edges) {
-    if (edge.to !== debate.thesisId) continue;
-    if (
-      edge.type === "support" &&
-      (provisional.liveSupports.includes(edge.id) ||
-        provisional.statuses[edge.from] === "contested")
-    ) {
-      sides.set(edge.id, "pro");
-    }
-    if (isClashEdge(edge) && provisional.liveAttacks.includes(edge.id)) sides.set(edge.id, "con");
-  }
+  const argumentNodes = debate.nodes.filter(
+    (node) => node.kind === "argument" && node.id !== debate.thesisId
+  );
 
   try {
     const content = await callModel(
       settings,
       [
-        { role: "system", content: ASSESSMENT_RULES },
+        { role: "system", content: CLUSTER_RULES },
         { role: "user", content: prompt }
       ],
-      { temperature: 0, maxTokens: 1800 }
+      { temperature: 0, maxTokens: 1600 }
     );
-    const parsed = AssessmentSchema.safeParse(normalizeAssessmentRaw(parseJsonObject(content)));
-    if (!parsed.success) throw new Error("The weighing pass returned an invalid shape.");
-    const assessed = new Map<string, CaseLineAssessment>();
-    for (const record of parsed.data.lines) {
-      const side = sides.get(record.edgeId);
-      if (!side) continue;
-      assessed.set(record.edgeId, {
-        edgeId: record.edgeId,
-        side,
-        quality: side === "pro" ? record.quality ?? "moderate" : undefined,
-        impact: side === "con" ? record.impact ?? "material" : undefined,
-        confidence: record.confidence,
-        cluster: normalizeCluster(record.cluster, record.edgeId),
-        reasoning: cleanReasoning(record.reasoning)
+    const parsed = ClusterSchema.safeParse(normalizeClusterRaw(parseJsonObject(content)));
+    if (!parsed.success) throw new Error("The clustering pass returned an invalid shape.");
+    const byNode = new Map<string, { cluster: string; reasoning?: string }>();
+    const known = new Set(argumentNodes.map((node) => node.id));
+    for (const record of parsed.data.clusters) {
+      if (!known.has(record.nodeId)) continue;
+      byNode.set(record.nodeId, {
+        cluster: normalizeCluster(record.cluster, record.nodeId),
+        reasoning: cleanReasoning(record.reasoning) || undefined
       });
     }
-    if (!assessed.size) throw new Error("The weighing pass did not rate any case line.");
-    if (assessed.size < sides.size) {
+    if (!byNode.size) throw new Error("The clustering pass did not group any argument.");
+    if (byNode.size < argumentNodes.length) {
       warnings.push(
-        `The weighing pass rated ${assessed.size} of ${sides.size} case lines. The whole balance uses the symmetric structural fallback.`
+        `The clustering pass grouped ${byNode.size} of ${argumentNodes.length} arguments. Missing arguments use their own node id.`
       );
-      return [];
     }
-    return [...assessed.values()];
+    return argumentNodes.map((node) => ({
+      nodeId: node.id,
+      cluster: byNode.get(node.id)?.cluster ?? node.id,
+      reasoning: byNode.get(node.id)?.reasoning
+    }));
   } catch (error) {
-    warnings.push(`The weighing pass could not rate the case lines: ${providerError(error)}. Symmetric structural weights were used.`);
+    warnings.push(
+      `The clustering pass could not group the arguments: ${providerError(error)}. Unique node ids were used.`
+    );
     return [];
   }
 }
@@ -441,98 +339,46 @@ export async function judgeDebate(debate: Debate, options: JudgeOptions): Promis
   const model = options.model?.trim() || settings.model;
   const judgeSettings: StoredSettings = { ...settings, model };
   const engine: "llm" | "local" = isReady(judgeSettings) ? "llm" : "local";
-  const clashes = clashEdges(debate);
-  if (clashes.length > MAX_CLASHES) {
-    throw new Error(`This map has ${clashes.length} clashes. The bench can hear at most ${MAX_CLASHES} in one sitting.`);
+  if (debate.edges.length > MAX_LINKS) {
+    throw new Error(
+      `This map has ${debate.edges.length} argument links. The bench can hear at most ${MAX_LINKS} in one sitting.`
+    );
   }
 
   const warnings: string[] = [];
   if (engine === "local") {
     warnings.push(
-      "Local structural review: no judge model is connected. The rulings are placeholders that demonstrate the procedure, not substantive judgments."
+      "Local structural review: no judge model is connected. The link assessments are neutral placeholders that demonstrate the procedure, not substantive judgments."
     );
   }
 
-  const verdicts: ClashJudgment[] = [];
+  let links: LinkAssessment[];
+  let clusters: ClusterAssignment[] = [];
 
-  if (engine === "llm" && clashes.length) {
-    const results = await mapLimit(clashes, 4, async (edge) => {
-      try {
-        const content = await callModel(
-          judgeSettings,
-          [
-            { role: "system", content: JUDGE_RULES },
-            { role: "user", content: clashPrompt(debate, edge, options.standard) }
-          ],
-          { temperature: 0, maxTokens: 900 }
-        );
-        const raw = parseJsonObject(content);
-        const parsed = RulingSchema.safeParse(raw);
-        if (!parsed.success) throw new Error("The judge returned a ruling in the wrong shape.");
-        const record = raw as Record<string, unknown>;
-        const verdict = isVerdict(record.verdict) ? record.verdict : parsed.data.verdict;
-        const criterion = isCriterion(record.criterion) ? record.criterion : parsed.data.criterion;
-        const confidence = isConfidence(record.confidence) ? record.confidence : parsed.data.confidence;
-        const component = isComponent(record.target_component)
-          ? record.target_component
-          : parsed.data.target_component;
-        const reasoning = cleanReasoning(parsed.data.reasoning);
-        return enforceStrictness(
-          {
-            edgeId: edge.id,
-            from: edge.from,
-            to: edge.to,
-            type: edge.type,
-            verdict,
-            criterion,
-            confidence,
-            targetComponent: component,
-            reasoning:
-              reasoning ||
-              "The judge did not provide a reason. The clash is left as the ruling states, but the reasoning is missing."
-          },
-          options.strictness
-        );
-      } catch (error) {
-        const message = providerError(error);
-        warnings.push(`One clash could not be judged: ${message}. It remains open.`);
-        return {
-          edgeId: edge.id,
-          from: edge.from,
-          to: edge.to,
-          type: edge.type,
-          verdict: "undecided" as const,
-          criterion: "sufficiency" as const,
-          confidence: "low" as const,
-          targetComponent: "unknown" as const,
-          reasoning: "The bench could not obtain a usable ruling for this clash. It remains open rather than being struck."
-        };
-      }
-    });
-    verdicts.push(...results);
-  } else if (engine === "local") {
-    for (const edge of clashes) verdicts.push(localRuling(edge));
+  if (engine === "llm") {
+    // Clustering is independent: it runs before any link ruling and sees only
+    // argument text, never verdicts, strengths, or edge data.
+    clusters = await clusterArguments(debate, judgeSettings, warnings);
+    links = await assessAllLinks(debate, judgeSettings, options.strictness);
+  } else {
+    links = debate.edges.map((edge) => (edge.type === "support" ? localSupport(edge) : localRuling(edge)));
   }
 
-  if (!clashes.length) {
-    warnings.push("There are no attack or undercut edges on this map, so there are no clashes to adjudicate.");
+  if (!debate.edges.length) {
+    warnings.push("There are no argument links on this map, so there is nothing for the bench to assess.");
   }
-
-  const assessments =
-    engine === "llm"
-      ? await assessCaseLines(debate, verdicts, options.standard, options.strictness, judgeSettings, warnings)
-      : [];
 
   const corroborated = solveJudgment(
     debate,
-    verdicts,
+    links,
+    clusters,
     options.standard,
-    assessments,
-    options.strictness
+    options.strictness,
+    engine === "llm"
   );
   if (corroborated.withheldHardDefeats.length) {
     warnings.push(
-      "A hard fall was withheld: the direct defeat of the thesis was not corroborated by a decisive assessment at the selected evidence bar, or its attacker was under pressure. The weighted balance decided the motion."
+      "A hard fall was withheld: the direct defeat of the thesis was not corroborated by a decisive link assessment at the selected evidence bar, or its attacker was under pressure. The weighted balance decided the motion."
     );
   }
 
@@ -546,8 +392,8 @@ export async function judgeDebate(debate: Debate, options: JudgeOptions): Promis
         : { provider: "local", model: "local structural review" },
     standard: options.standard,
     strictness: options.strictness,
-    verdicts,
-    assessments,
+    links,
+    clusters,
     warnings: [...new Set(warnings)].slice(0, 8)
   });
 }
