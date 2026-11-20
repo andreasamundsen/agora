@@ -152,8 +152,40 @@ describe("JudgmentPanel case-line cue", () => {
 
     const supportRow = markup.match(/<button[^>]*record-row--support[^>]*>/)?.[0] ?? "";
     expect(supportRow).toContain("is-future");
-    expect(supportRow).not.toContain("is-support-active");
+    expect(supportRow).not.toContain("is-current");
     expect(markup).not.toContain("Strong support");
+  });
+
+  it("highlights only the current ruling when no case line is active", () => {
+    const { debate, run, snapshot } = panelFixture();
+    const markup = renderToStaticMarkup(
+      <JudgmentPanel
+        debate={debate}
+        run={run}
+        step={1}
+        playing={false}
+        speed={1}
+        snapshot={snapshot}
+        restored={[]}
+        counts={snapshot.counts}
+        onTogglePlay={() => {}}
+        onNext={() => {}}
+        onPrevious={() => {}}
+        onRestart={() => {}}
+        onSeek={() => {}}
+        onInspectSupport={() => {}}
+        onSpeedChange={() => {}}
+        onExit={() => {}}
+        onNewRun={() => {}}
+        onOpenSettings={() => {}}
+        onReport={() => {}}
+      />
+    );
+
+    const currentRows = markup.match(/<button[^>]*class="[^"]*is-current[^"]*"[^>]*>[\s\S]*?<\/button>/g) ?? [];
+    expect(currentRows).toHaveLength(1);
+    expect(currentRows[0]).toContain("Another objection");
+    expect(currentRows[0]).not.toContain("record-row--support");
   });
 
   it("lists every link and can pin a support at the end of the run", () => {
@@ -189,5 +221,9 @@ describe("JudgmentPanel case-line cue", () => {
     expect(markup).toContain("An objection");
     expect(markup).toContain("Strong support");
     expect(markup).toContain("This support contributes to the pro case.");
+    const supportRow = markup.match(/<button[^>]*record-row--support[^>]*>/)?.[0] ?? "";
+    expect(supportRow).toContain("is-current");
+    const currentRows = markup.match(/<button[^>]*class="[^"]*is-current[^"]*"[^>]*>[\s\S]*?<\/button>/g) ?? [];
+    expect(currentRows).toHaveLength(1);
   });
 });

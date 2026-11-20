@@ -484,7 +484,7 @@ export function JudgmentPanel({
                     <li key={`support:${entry.support.edgeId}`}>
                       <button
                         type="button"
-                        className={`record-row record-row--support ${isActive ? "is-support-active" : ""} ${isFuture ? "is-future" : ""}`}
+                        className={`record-row record-row--support ${isActive ? "is-current" : ""} ${isFuture ? "is-future" : ""}`}
                         onClick={() => onInspectSupport(entry.support.edgeId)}
                         aria-label={
                           isActive
