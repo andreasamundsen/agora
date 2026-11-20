@@ -4,11 +4,19 @@ Agora is a local debate harness. You install it like a normal Windows app; no No
 
 ## Install
 
-1. Run `Agora-Setup-0.1.53.exe`.
+1. Run `Agora-Setup-0.1.54.exe`.
 2. Windows will warn that the publisher is unknown. This build is intentionally unsigned: choose **More info → Run anyway**.
 3. The installer is per-user and does not need administrator rights. Agora opens when it finishes.
 4. To upgrade, close Agora first, then run the newer installer over it. Your debates stay in `%APPDATA%\Agora\data`.
 5. The SHA-256 checksum should match the file supplied with the build. A matching hash is not a code signature; it only confirms the file has not changed.
+
+## What's new in 0.1.54
+
+- **The record now lists every judged link, including direct supports.** The bench assesses each argument relation locally and hands the results to the deterministic engine. Supports show their quality, confidence, reasoning, and effect in the same record as the conflict rulings; they still never count as conflict rulings or change the verdict math.
+- **Supports are numbered stations in one playback timeline.** Supports carry a continuous record number with a small `S` marker. Play, Next, Previous, and clicking any record row all move the same cursor; selecting a support gives it the only gold row, opens its case-line card, and spotlights its source and target on the map.
+- **Future entries stay readable but keep their assessment concealed** until playback reaches them. Selecting a future support enters that station and reveals it.
+- **The final judgment has its own destination.** Once the finale is reached, an unnumbered **Final judgment** row stays at the bottom of the record after you browse back through earlier entries. Clicking it returns to the finale without replaying; it is not counted as a link, ruling, or support.
+- **The record header separates the counts:** total links, conflict rulings, and supports. A final support gets its own beat before the separate final-judgment state.
 
 ## What's new in 0.1.53
 
