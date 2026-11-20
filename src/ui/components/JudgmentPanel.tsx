@@ -230,19 +230,23 @@ export function JudgmentPanel({
   onNewRun,
   onOpenSettings,
   onReport,
-  caseLineId
+  caseLineId,
+  finalSeen = false,
+  onShowFinal = () => {}
 }: {
   debate: Debate;
   run: JudgmentRun;
   step: number;
   currentOrder: number;
   finished?: boolean;
+  finalSeen?: boolean;
   playing: boolean;
   speed: number;
   snapshot: JudgmentSnapshot;
   restored: string[];
   counts: JudgmentSnapshot["counts"];
   caseLineId?: string;
+  onShowFinal?: () => void;
   onTogglePlay: () => void;
   onNext: () => void;
   onPrevious: () => void;
@@ -527,6 +531,20 @@ export function JudgmentPanel({
                 );
               })}
             </ol>
+            {(finalSeen || complete) && (
+              <button
+                type="button"
+                className={`record-final ${complete ? "is-current" : ""}`}
+                onClick={onShowFinal}
+                aria-label={complete ? "Final judgment, selected" : "Return to the final judgment"}
+              >
+                <span className="record-dot record-dot--final" />
+                <span className="record-final-label">Final judgment</span>
+                <span className={`record-final-outcome record-final-outcome--${run.outcome}`}>
+                  {OUTCOME_SHORT[run.outcome]}
+                </span>
+              </button>
+            )}
           </div>
         )}
 

@@ -2661,6 +2661,27 @@ button:disabled { cursor: not-allowed; }
 .record-verdict--weakens { color: var(--gold-deep); }
 .record-verdict--undecided { color: var(--under); }
 .record-verdict--support { color: var(--pro-deep); }
+.record-final {
+  display: grid;
+  grid-template-columns: 5px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  margin-top: 7px;
+  padding: 8px 7px;
+  border: 0;
+  border-top: 1px solid var(--line-strong);
+  background: transparent;
+  text-align: left;
+}
+.record-final:hover { background: rgba(255, 253, 247, 0.55); }
+.record-final.is-current { background: var(--gold-soft); }
+.record-final-label { font-family: var(--serif); font-size: 10.5px; color: var(--ink); }
+.record-final-outcome { font-family: var(--mono); font-size: 8px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.record-final-outcome--stands { color: var(--pro-deep); }
+.record-final-outcome--falls { color: var(--con); }
+.record-final-outcome--undecided { color: var(--under); }
+.record-dot--final { background: var(--gold); }
 .judgment-unsupported-note { margin-top: 14px; padding: 8px 10px; border-left: 2px solid var(--line-strong); background: var(--paper); font-size: 10.5px; line-height: 1.45; color: var(--muted); }
 
 .judgment-controls {

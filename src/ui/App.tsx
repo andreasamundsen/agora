@@ -48,6 +48,8 @@ interface JudgmentState {
   eventIndex: number;
   /** The final judgment has replaced the last record entry. */
   finished: boolean;
+  /** The final judgment has been reached once; its record row stays available. */
+  finalSeen: boolean;
   playing: boolean;
   speed: number;
 }
@@ -380,7 +382,7 @@ export default function App() {
     setRevealedEffects([]);
     setStage(null);
     setSelectedId(null);
-    setJudgment({ run: response.run, eventIndex: 0, finished: false, playing: true, speed: 1 });
+    setJudgment({ run: response.run, eventIndex: 0, finished: false, finalSeen: false, playing: true, speed: 1 });
     setModal(null);
     showToast(
       response.run.engine === "local"
@@ -401,7 +403,7 @@ export default function App() {
     if (judgment?.finished) {
       setRevealedEffects([]);
       setJudgment((current) => current
-        ? { ...current, eventIndex: 0, finished: false, playing: true }
+        ? { ...current, eventIndex: 0, finished: false, finalSeen: false, playing: true }
         : current);
       return;
     }
@@ -416,7 +418,7 @@ export default function App() {
       if (current.eventIndex < record.length) {
         return { ...current, eventIndex: current.eventIndex + 1, playing: false };
       }
-      return { ...current, finished: true, playing: false };
+      return { ...current, finished: true, finalSeen: true, playing: false };
     });
   }, []);
 
@@ -436,7 +438,7 @@ export default function App() {
   const restartJudgment = useCallback(() => {
     setRevealedEffects([]);
     setJudgment((current) => current
-      ? { ...current, eventIndex: 0, finished: false, playing: true }
+      ? { ...current, eventIndex: 0, finished: false, finalSeen: false, playing: true }
       : current);
   }, []);
 
@@ -450,6 +452,20 @@ export default function App() {
         ...current,
         eventIndex: target,
         finished: false,
+        playing: false
+      };
+    });
+  }, []);
+
+  const showFinalJudgment = useCallback(() => {
+    setJudgment((current) => {
+      if (!current) return current;
+      const record = buildJudgmentRecord(current.run);
+      return {
+        ...current,
+        eventIndex: record.length,
+        finished: true,
+        finalSeen: true,
         playing: false
       };
     });
@@ -479,7 +495,7 @@ export default function App() {
       // replaces it as a separate end state.
       const timer = window.setTimeout(() => {
         setJudgment((current) => current && current.playing && !current.finished
-          ? { ...current, finished: true, playing: false }
+          ? { ...current, finished: true, finalSeen: true, playing: false }
           : current);
       }, PLAYBACK_BEAT_MS / judgment.speed);
       return () => window.clearTimeout(timer);
@@ -915,6 +931,7 @@ export default function App() {
             step={conflictStep}
             currentOrder={judgment.eventIndex}
             finished={judgment.finished}
+            finalSeen={judgment.finalSeen}
             playing={judgment.playing}
             speed={judgment.speed}
             snapshot={judgmentSnapshot}
@@ -926,6 +943,7 @@ export default function App() {
             onPrevious={previousEntry}
             onRestart={restartJudgment}
             onSeek={selectEntry}
+            onShowFinal={showFinalJudgment}
             onSpeedChange={(speed) => setJudgment((current) => current ? { ...current, speed } : current)}
             onExit={closeJudgment}
             onNewRun={() => setModal("judge")}

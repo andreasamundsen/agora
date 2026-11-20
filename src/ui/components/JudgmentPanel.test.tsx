@@ -241,14 +241,54 @@ describe("JudgmentPanel unified record", () => {
     expect(supportBeat).toContain("Case line");
     expect(supportBeat).toContain("This support contributes to the pro case.");
     expect(supportBeat).not.toContain("judgment-finale");
+    expect(supportBeat).not.toContain("Final judgment");
     expect(supportBeat.match(/record-row[^>]*is-current/)).toHaveLength(1);
 
     const finished = renderToStaticMarkup(
-      <JudgmentPanel {...common} currentOrder={record.length} finished />
+      <JudgmentPanel {...common} currentOrder={record.length} finished finalSeen />
     );
     expect(finished).toContain("judgment-finale");
     expect(finished).not.toContain("ruling-card--case-line");
+    expect(finished).toContain("Final judgment");
+    expect(finished).toContain("record-final is-current");
     expect(finished).not.toMatch(/record-row[^>]*is-current/);
+  });
+
+  it("keeps the final-judgment row reachable after selecting a record entry", () => {
+    const { debate, run, snapshot } = panelFixture();
+    const supportOrder = orderFor(run, "e_support");
+    const markup = renderToStaticMarkup(
+      <JudgmentPanel
+        debate={debate}
+        run={run}
+        step={0}
+        currentOrder={supportOrder}
+        finished={false}
+        finalSeen
+        playing={false}
+        speed={1}
+        snapshot={snapshot}
+        restored={[]}
+        counts={snapshot.counts}
+        caseLineId="e_support"
+        onTogglePlay={() => {}}
+        onNext={() => {}}
+        onPrevious={() => {}}
+        onRestart={() => {}}
+        onSeek={() => {}}
+        onShowFinal={() => {}}
+        onSpeedChange={() => {}}
+        onExit={() => {}}
+        onNewRun={() => {}}
+        onOpenSettings={() => {}}
+        onReport={() => {}}
+      />
+    );
+
+    expect(markup).toContain("3 links · 2 rulings · 1 support");
+    expect(markup).toContain("Final judgment");
+    expect(markup).not.toContain("record-final is-current");
+    expect(markup.match(/record-row[^>]*is-current/)).toHaveLength(1);
   });
 
   it("lists every link and selects a support without a competing ruling highlight", () => {
