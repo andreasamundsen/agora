@@ -505,6 +505,7 @@ describe("judgment solver", () => {
     expect(snapshot.statuses.objection).toBe("contested");
     const line = snapshot.balance.lines.find((candidate) => candidate.edgeId === "e_objection_thesis");
     expect(line?.survival).toBe(0.5);
+    expect(line?.pressure).toBe(1);
     expect(line?.weight).toBe(1.5);
     expect(snapshot.balance.con).toBe(1.5);
   });
@@ -729,6 +730,75 @@ describe("judgment solver", () => {
     expect(snapshot.thesisStatus).toBe("contested");
     expect(snapshot.hardDefeats).toEqual([]);
     expect(snapshot.withheldHardDefeats).toEqual(["e_objection_thesis"]);
+  });
+
+  it.each(["weakens", "undecided"] as const)(
+    "discounts a direct attack whose source is under live %s pressure",
+    (pressureVerdict) => {
+      const debate = debateWith([
+        { from: "support", to: "thesis", type: "support" },
+        { from: "objection", to: "thesis", type: "attack" },
+        { from: "rebuttal", to: "objection", type: "attack" }
+      ]);
+      const snapshot = solve(
+        debate,
+        [
+          verdict("e_objection_thesis", "objection", "thesis"),
+          verdict("e_rebuttal_objection", "rebuttal", "objection", pressureVerdict)
+        ],
+        "preponderance",
+        [
+          assess("e_support_thesis", "pro", "moderate", "support-line"),
+          assess("e_objection_thesis", "con", "decisive", "objection-line")
+        ]
+      );
+      const line = snapshot.balance.lines.find(
+        (candidate) => candidate.edgeId === "e_objection_thesis"
+      );
+      expect(snapshot.statuses.objection).toBe("standing");
+      expect(line).toMatchObject({ survival: 1, pressure: 0.6, weight: 1.8 });
+      expect(snapshot.balance.con).toBe(1.8);
+      expect(snapshot.outcome).toBe("undecided");
+    }
+  );
+
+  it("keeps full pressure on a clean direct attacker", () => {
+    const debate = debateWith([
+      { from: "support", to: "thesis", type: "support" },
+      { from: "objection", to: "thesis", type: "attack" }
+    ]);
+    const snapshot = solve(
+      debate,
+      [verdict("e_objection_thesis", "objection", "thesis")],
+      "preponderance",
+      [
+        assess("e_support_thesis", "pro", "moderate", "support-line"),
+        assess("e_objection_thesis", "con", "decisive", "objection-line")
+      ]
+    );
+    const line = snapshot.balance.lines.find(
+      (candidate) => candidate.edgeId === "e_objection_thesis"
+    );
+    expect(line).toMatchObject({ survival: 1, pressure: 1, weight: 3 });
+  });
+
+  it("does not let a weakens erase a defeat of a non-thesis target", () => {
+    const debate = debateWith([
+      { from: "support", to: "thesis", type: "support" },
+      { from: "objection", to: "support", type: "attack" },
+      { from: "rebuttal", to: "objection", type: "attack" }
+    ]);
+    const snapshot = solve(
+      debate,
+      [
+        verdict("e_objection_support", "objection", "support"),
+        verdict("e_rebuttal_objection", "rebuttal", "objection", "weakens")
+      ],
+      "preponderance"
+    );
+    expect(snapshot.statuses.support).toBe("defeated");
+    expect(snapshot.statuses.objection).toBe("standing");
+    expect(snapshot.weakened).toEqual(["objection"]);
   });
 
   it("treats a certified proof and a corroborated defeat as a contested record", () => {

@@ -157,21 +157,33 @@ function BalanceCard({
                 : line.side === "pro"
                   ? line.quality ? QUALITY_LABEL[line.quality] : "Moderate"
                   : line.impact ? IMPACT_LABEL[line.impact] : "Material";
+              const sourceState =
+                line.survival === 0.5
+                  ? line.side === "pro"
+                    ? "contested support"
+                    : "contested attacker"
+                  : line.pressure === 1
+                    ? line.side === "pro"
+                      ? "clean"
+                      : "standing"
+                    : "under attack";
+              const sourceMeta =
+                line.survival === 0.5
+                  ? line.side === "pro"
+                    ? "support contested"
+                    : "attacker contested"
+                  : line.pressure === 1
+                    ? line.side === "pro"
+                      ? "clean line"
+                      : "attacker standing"
+                    : line.side === "pro"
+                      ? "under attack"
+                      : "attacker pressured";
               return (
                 <li
                   key={line.edgeId}
                   className={`balance-line balance-line--${line.side}`}
-                  title={`${rating} ${formatPoints(line.base)} × ${line.confidenceLabel} confidence ${formatPoints(line.confidence)} × ${
-                    line.side === "pro"
-                      ? line.survival === 0.5
-                        ? "contested support"
-                        : line.pressure === 1
-                          ? "clean"
-                          : "under attack"
-                      : line.survival === 1
-                        ? "standing"
-                        : "contested"
-                  } ${formatPoints(line.side === "pro" ? line.pressure * line.survival : line.survival)} × overlap ${formatPoints(line.independence)} = ${formatPoints(line.weight)}`}
+                  title={`${rating} ${formatPoints(line.base)} × ${line.confidenceLabel} confidence ${formatPoints(line.confidence)} × ${sourceState} ${formatPoints(line.pressure * line.survival)} × overlap ${formatPoints(line.independence)} = ${formatPoints(line.weight)}`}
                 >
                   <div className="balance-line-main">
                     <span className="balance-line-side">{line.side === "pro" ? "Pro" : "Con"}</span>
@@ -182,17 +194,7 @@ function BalanceCard({
                   <div className="balance-line-meta">
                     <span>{line.confidenceLabel} confidence</span>
                     {line.proves && <span>proved</span>}
-                    <span>
-                      {line.side === "pro"
-                        ? line.survival === 0.5
-                          ? "support contested"
-                          : line.pressure === 1
-                            ? "clean line"
-                            : "under attack"
-                        : line.survival === 1
-                          ? "attacker standing"
-                          : "attacker contested"}
-                    </span>
+                    <span>{sourceMeta}</span>
                     {line.independence < 1 && <span>overlap ×{formatPoints(line.independence)}</span>}
                     {line.cluster && line.cluster !== line.sourceId && <span>cluster: {line.cluster}</span>}
                   </div>

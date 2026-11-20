@@ -603,6 +603,7 @@ export function solveJudgment(
     liveSupports,
     liveAttacks,
     cleanSupports,
+    cleanNodes,
     standard,
     strictness
   });
@@ -696,6 +697,7 @@ export function buildCaseBalance(input: {
   liveSupports: string[];
   liveAttacks: string[];
   cleanSupports: string[];
+  cleanNodes: Set<string>;
   standard: StandardOfProof;
   strictness: JudgeStrictness;
 }): CaseBalance {
@@ -777,6 +779,11 @@ export function buildCaseBalance(input: {
     if (!source) continue;
     const sourceStatus = input.statuses[source.id];
     if (!sourceStatus || sourceStatus === "defeated") continue;
+    // Match the support-side pressure rule: a standing direct attacker under
+    // a live attack keeps its structural edge but its ordinary case line is
+    // discounted. A contested attacker already carries the half-survival
+    // discount, so do not apply pressure on top of it.
+    const pressure = sourceStatus === "standing" && !input.cleanNodes.has(source.id) ? 0.6 : 1;
     const edgeId = edge.id;
     const link = linkFor(edgeId);
     const assessment = link && link.type !== "support" ? link : undefined;
@@ -794,9 +801,9 @@ export function buildCaseBalance(input: {
       confidence,
       confidenceLabel,
       survival,
-      pressure: 1,
+      pressure,
       independence: 1,
-      weight: base * confidence * survival,
+      weight: base * confidence * survival * pressure,
       impact,
       reasoning: assessment?.reasoning
     });
