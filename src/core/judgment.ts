@@ -1405,6 +1405,78 @@ export function linksAtStep(run: JudgmentRun, step: number): LinkAssessment[] {
   return run.links.filter((link) => link.type === "support" || revealed.has(link.edgeId));
 }
 
+export interface JudgmentRecordRuling {
+  kind: "ruling";
+  /** Number in the conflict-only ruling sequence, starting at 1. */
+  index: number;
+  /** Number of conflict rulings entered before this row. */
+  step: number;
+  verdict: ClashJudgment;
+}
+
+export interface JudgmentRecordSupport {
+  kind: "support";
+  /** Number of conflict rulings entered when this case-line cue belongs. */
+  step: number;
+  support: SupportAssessment;
+  /** The playback case that introduces the support, when one exists. */
+  wave?: string;
+}
+
+export type JudgmentRecordEntry = JudgmentRecordRuling | JudgmentRecordSupport;
+
+/**
+ * Build the stable record index shown beside the map. Conflict rulings keep
+ * their numbered order; support assessments sit at the case-line cue where
+ * they enter playback. Every assessed support is present, including supports
+ * that have no cue (those are appended at the end rather than invented as a
+ * fake ruling).
+ */
+export function buildJudgmentRecord(run: JudgmentRun): JudgmentRecordEntry[] {
+  const total = run.verdicts.length;
+  const supports = run.links.filter((link): link is SupportAssessment => link.type === "support");
+  const supportByEdge = new Map(supports.map((support) => [support.edgeId, support]));
+  const placed = new Set<string>();
+  const byStep = new Map<number, Array<{ support: SupportAssessment; wave?: string }>>();
+
+  const place = (edgeId: string | undefined, step: number, wave?: string) => {
+    if (!edgeId || placed.has(edgeId)) return;
+    const support = supportByEdge.get(edgeId);
+    if (!support) return;
+    placed.add(edgeId);
+    const cueStep = Math.max(0, Math.min(total, step));
+    const list = byStep.get(cueStep) ?? [];
+    list.push({ support, wave });
+    byStep.set(cueStep, list);
+  };
+
+  for (const wave of run.waves) {
+    for (const opening of wave.openings ?? []) {
+      place(opening.edgeId, opening.step, wave.label);
+    }
+    if (wave.rootKind === "support" && wave.rootEdgeId) {
+      place(wave.rootEdgeId, wave.startStep ?? 0, wave.label);
+    }
+  }
+
+  // A support without a cue is still an assessed link. Keep it in the record
+  // at the end rather than dropping it or inventing a verdict.
+  for (const support of supports) {
+    place(support.edgeId, total);
+  }
+
+  const entries: JudgmentRecordEntry[] = [];
+  for (let step = 0; step <= total; step += 1) {
+    for (const item of byStep.get(step) ?? []) {
+      entries.push({ kind: "support", step, support: item.support, wave: item.wave });
+    }
+    if (step < total) {
+      entries.push({ kind: "ruling", index: step + 1, step, verdict: run.verdicts[step]! });
+    }
+  }
+  return entries;
+}
+
 export function judgmentMarkdown(debate: Debate, run: JudgmentRun): string {
   const lines: string[] = [];
   lines.push(`# Judgment: ${debate.motion}`);
@@ -1465,6 +1537,23 @@ export function judgmentMarkdown(debate: Debate, run: JudgmentRun): string {
     lines.push("");
     lines.push(verdict.reasoning);
     lines.push("");
+  }
+
+  const supports = run.links.filter((link): link is SupportAssessment => link.type === "support");
+  if (supports.length) {
+    lines.push("## Support case lines");
+    lines.push("");
+    for (const support of supports) {
+      lines.push(`### ${QUALITY_LABEL[support.quality]} support — ${titleOf(debate, support.from)} → ${titleOf(debate, support.to)}`);
+      lines.push("");
+      lines.push(`- Confidence: ${support.confidence}`);
+      lines.push(
+        `- Effect: ${support.to === debate.thesisId ? "supports the motion" : `supports ${titleOf(debate, support.to)}`}`
+      );
+      lines.push("");
+      lines.push(support.reasoning);
+      lines.push("");
+    }
   }
 
   if (run.warnings.length) {

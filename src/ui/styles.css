@@ -2370,15 +2370,6 @@ button:disabled { cursor: not-allowed; }
 .ruling-verdict--case-line span { color: var(--pro-deep); }
 .ruling-verdict--case-line i { color: var(--pro-deep); }
 .ruling-arrow--support { color: var(--pro-deep); }
-.case-line-note {
-  margin: 11px 0 0;
-  padding-top: 9px;
-  border-top: 1px dashed var(--line);
-  font-family: var(--serif);
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: var(--muted);
-}
 .ruling-clash {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr);
@@ -2658,7 +2649,11 @@ button:disabled { cursor: not-allowed; }
 .record-dot--weakens { background: var(--gold); }
 .record-dot--undecided { background: var(--under); }
 .record-dot--irrelevant { background: var(--faint); }
+.record-dot--support { background: var(--pro); }
 .record-number { font-family: var(--mono); font-size: 8.5px; color: var(--faint); }
+.record-row--support .record-number { color: var(--pro-deep); }
+.record-row--support { border-top-style: dotted; }
+.record-row--support.is-support-active { background: var(--pro-soft); }
 .record-clash { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; color: var(--muted); }
 .record-clash b { font-family: var(--serif); font-size: 10px; font-weight: 500; color: var(--ink-soft); }
 .record-clash i { font-style: normal; color: var(--faint); padding: 0 2px; }
@@ -2666,6 +2661,7 @@ button:disabled { cursor: not-allowed; }
 .record-verdict--defeats { color: var(--con); }
 .record-verdict--weakens { color: var(--gold-deep); }
 .record-verdict--undecided { color: var(--under); }
+.record-verdict--support { color: var(--pro-deep); }
 .judgment-unsupported-note { margin-top: 14px; padding: 8px 10px; border-left: 2px solid var(--line-strong); background: var(--paper); font-size: 10.5px; line-height: 1.45; color: var(--muted); }
 
 .judgment-controls {

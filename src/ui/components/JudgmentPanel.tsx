@@ -1,7 +1,8 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { Debate } from "../../core/model";
 import {
   BURDEN_SHARE,
+  buildJudgmentRecord,
   CRITERION_LABEL,
   IMPACT_LABEL,
   OUTCOME_LABEL,
@@ -16,6 +17,7 @@ import {
   type ClashJudgment,
   type JudgmentRun,
   type JudgmentSnapshot,
+  type SupportAssessment,
   type TargetComponent
 } from "../../core/judgment";
 
@@ -226,7 +228,9 @@ export function JudgmentPanel({
   onNewRun,
   onOpenSettings,
   onReport,
-  caseLineId
+  onInspectSupport,
+  caseLineId,
+  caseLinePinned = false
 }: {
   debate: Debate;
   run: JudgmentRun;
@@ -237,11 +241,13 @@ export function JudgmentPanel({
   restored: string[];
   counts: JudgmentSnapshot["counts"];
   caseLineId?: string;
+  caseLinePinned?: boolean;
   onTogglePlay: () => void;
   onNext: () => void;
   onPrevious: () => void;
   onRestart: () => void;
   onSeek: (step: number) => void;
+  onInspectSupport: (edgeId: string) => void;
   onSpeedChange: (speed: number) => void;
   onExit: () => void;
   onNewRun: () => void;
@@ -252,9 +258,20 @@ export function JudgmentPanel({
   const complete = step >= total;
   const current = step > 0 ? run.verdicts[step - 1] : undefined;
   const caseLine = caseLineId ? debate.edges.find((edge) => edge.id === caseLineId) : undefined;
+  const caseSupport: SupportAssessment | undefined = caseLine
+    ? run.links.find(
+        (link): link is SupportAssessment => link.type === "support" && link.edgeId === caseLine.id
+      )
+    : undefined;
+  const record = useMemo(() => buildJudgmentRecord(run), [run]);
+  const supportCount = record.filter((entry) => entry.kind === "support").length;
   const caseLineWave = caseLine
     ? run.waves.find((wave) => wave.rootEdgeId === caseLine.id)?.label
     : undefined;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (caseLineId) scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  }, [caseLineId]);
   const waveFor = useMemo(() => {
     const map = new Map<string, string>();
     for (const wave of run.waves) for (const id of wave.verdictIds) map.set(id, wave.label);
@@ -276,7 +293,7 @@ export function JudgmentPanel({
         </div>
       </header>
 
-      <div className="judgment-scroll">
+      <div className="judgment-scroll" ref={scrollRef}>
         {run.engine === "local" && !complete && (
           <div className="judge-mode-note">
             <b>Structural demonstration</b>
@@ -319,15 +336,15 @@ export function JudgmentPanel({
           </section>
         )}
 
-        {caseLine && !complete && (
+        {caseLine && (
           <article className="ruling-card ruling-card--case-line" key={`case-line-${caseLine.id}`}>
             <div className="ruling-head">
               <span className="ruling-index">Case line</span>
               <span className="ruling-wave">{caseLineWave}</span>
             </div>
             <div className="ruling-verdict ruling-verdict--case-line">
-              <span>Support</span>
-              <i>The stem opens this case</i>
+              <span>{caseSupport ? `${QUALITY_LABEL[caseSupport.quality]} support` : "Support"}</span>
+              <i>{caseSupport ? "A direct support in the case" : "The stem opens this case"}</i>
             </div>
             <div className="ruling-clash">
               <div className="ruling-party">
@@ -340,7 +357,24 @@ export function JudgmentPanel({
                 <b>{titleFor(debate, caseLine.to)}</b>
               </div>
             </div>
-            <p className="case-line-note">A case line is being introduced. The first ruling follows.</p>
+            {caseSupport && (
+              <div className="ruling-meta">
+                <span className="ruling-criterion">Case line</span>
+                <span className={`ruling-confidence confidence--${caseSupport.confidence}`}>{caseSupport.confidence} confidence</span>
+                <span>{caseLine.to === debate.thesisId ? "supports the motion" : `supports ${titleFor(debate, caseLine.to)}`}</span>
+              </div>
+            )}
+            {caseSupport?.reasoning && (
+              <blockquote className="ruling-reasoning">{caseSupport.reasoning}</blockquote>
+            )}
+            <div className="ruling-effect">
+              <span className="effect-mark effect-mark--standing" />
+              {caseLinePinned
+                ? caseLine.to === debate.thesisId
+                  ? "This support contributes to the pro case."
+                  : `This support contributes to the case for ${titleFor(debate, caseLine.to)}.`
+                : "A case line is being introduced; the first ruling follows."}
+            </div>
           </article>
         )}
 
@@ -429,33 +463,65 @@ export function JudgmentPanel({
           </section>
         )}
 
-        {total > 0 && (
+        {record.length > 0 && (
           <div className="judgment-record">
             <div className="record-head">
               <span>Rulings</span>
-              <span>{step} / {total} entered</span>
+              <span>{record.length} links · {total} rulings · {supportCount} {supportCount === 1 ? "support" : "supports"}</span>
             </div>
             <ol>
-              {run.verdicts.map((verdict, index) => {
-                const isCurrent = !caseLine && index === step - 1;
-                const isFuture = index >= step;
+              {record.map((entry) => {
+                if (entry.kind === "support") {
+                  const isActive = caseLineId === entry.support.edgeId;
+                  const isFuture = entry.step > step && !isActive;
+                  return (
+                    <li key={`support:${entry.support.edgeId}`}>
+                      <button
+                        type="button"
+                        className={`record-row record-row--support ${isActive ? "is-support-active" : ""} ${isFuture ? "is-future" : ""}`}
+                        onClick={() => onInspectSupport(entry.support.edgeId)}
+                        aria-label={
+                          isActive
+                            ? `Support ${titleFor(debate, entry.support.from)}, selected`
+                            : isFuture
+                              ? `Support ${titleFor(debate, entry.support.from)}, not yet entered`
+                              : `Support ${titleFor(debate, entry.support.from)}`
+                        }
+                      >
+                        <span className={`record-dot ${isFuture ? "" : "record-dot--support"}`} />
+                        <span className="record-number" title="Support link">S</span>
+                        <span className="record-clash">
+                          <b>{titleFor(debate, entry.support.from)}</b>
+                          <i>→</i>
+                          {titleFor(debate, entry.support.to)}
+                        </span>
+                        <span className={`record-verdict ${isFuture ? "" : "record-verdict--support"}`}>
+                          {isFuture ? "—" : `${QUALITY_LABEL[entry.support.quality]} support`}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                }
+
+                const isCurrent = !caseLine && entry.index === step;
+                const isFuture = entry.index > step;
                 return (
-                  <li key={verdict.edgeId}>
+                  <li key={`ruling:${entry.verdict.edgeId}`}>
                     <button
                       type="button"
                       className={`record-row ${isCurrent ? "is-current" : ""} ${isFuture ? "is-future" : ""}`}
-                      onClick={() => onSeek(index + 1)}
-                      aria-label={isFuture ? `Ruling ${index + 1}, not yet entered` : undefined}
+                      onClick={() => onSeek(entry.index)}
+                      aria-label={isFuture ? `Ruling ${entry.index}, not yet entered` : undefined}
                     >
-                      <span className={`record-dot ${isFuture ? "" : `record-dot--${verdict.verdict}`}`} />
-                      <span className="record-number">{String(index + 1).padStart(2, "0")}</span>
+                      <span className={`record-dot ${isFuture ? "" : `record-dot--${entry.verdict.verdict}`}`} />
+                      <span className="record-number">{String(entry.index).padStart(2, "0")}</span>
                       <span className="record-clash">
-                        <b>{titleFor(debate, verdict.from)}</b>
+                        <b>{titleFor(debate, entry.verdict.from)}</b>
                         <i>→</i>
-                        {titleFor(debate, verdict.to)}
+                        {titleFor(debate, entry.verdict.to)}
                       </span>
-                      <span className={`record-verdict ${isFuture ? "" : `record-verdict--${verdict.verdict}`}`}>
-                        {isFuture ? "—" : VERDICT_LABEL[verdict.verdict]}
+                      <span className={`record-verdict ${isFuture ? "" : `record-verdict--${entry.verdict.verdict}`}`}>
+                        {isFuture ? "—" : VERDICT_LABEL[entry.verdict.verdict]}
                       </span>
                     </button>
                   </li>

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { reconcileDebate } from "./model";
 import {
+  buildJudgmentRecord,
   buildJudgmentRun,
   linksAtStep,
   solveJudgment,
@@ -224,5 +225,48 @@ describe("local link judgments", () => {
     expect(run.links).toEqual(links);
     expect(run.clusters).toEqual(clusters);
     expect(run.verdicts).toHaveLength(1);
+  });
+
+  it("includes every support link in the record without adding fake rulings", () => {
+    const debate = debateWith([
+      { from: "support1", to: "thesis", type: "support" },
+      { from: "support2", to: "thesis", type: "support" },
+      { from: "objection", to: "support1", type: "attack" },
+      { from: "objection", to: "thesis", type: "attack" }
+    ]);
+    const reply: ClashJudgment = {
+      ...conflict("e_objection_support1", "objection"),
+      to: "support1"
+    };
+    const links: LinkAssessment[] = [
+      support("e_support1_thesis", "support1"),
+      support("e_support2_thesis", "support2", "moderate", "medium"),
+      reply,
+      conflict("e_objection_thesis", "objection")
+    ];
+    const run = buildJudgmentRun({
+      id: "run-record-support",
+      debate,
+      engine: "llm",
+      judge: { provider: "test", model: "test" },
+      standard: "preponderance",
+      strictness: "balanced",
+      links
+    });
+
+    const record = buildJudgmentRecord(run);
+    const supportRows = record.filter((entry) => entry.kind === "support");
+    const rulingRows = record.filter((entry) => entry.kind === "ruling");
+
+    expect(record).toHaveLength(4);
+    expect(supportRows).toHaveLength(2);
+    expect(supportRows.map((entry) => entry.support.edgeId).sort()).toEqual([
+      "e_support1_thesis",
+      "e_support2_thesis"
+    ]);
+    expect(rulingRows.map((entry) => entry.index)).toEqual([1, 2]);
+    expect(rulingRows.map((entry) => entry.verdict.edgeId)).toEqual(
+      run.verdicts.map((verdict) => verdict.edgeId)
+    );
   });
 });

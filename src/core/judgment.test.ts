@@ -1314,6 +1314,9 @@ describe("judgment solver", () => {
     expect(markdown).toContain("**Outcome:** The motion falls");
     expect(markdown).toContain("An objection");
     expect(markdown).toContain("## Balance");
+    expect(markdown).toContain("## Support case lines");
+    expect(markdown).toContain("Moderate support");
+    expect(markdown).toContain("A test assessment.");
     expect(markdown).toContain("## Warnings");
     expect(markdown).toContain("One clash was left open.");
   });

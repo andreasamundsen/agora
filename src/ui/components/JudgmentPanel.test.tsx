@@ -4,7 +4,8 @@ import { reconcileDebate } from "../../core/model";
 import {
   buildJudgmentRun,
   solveJudgment,
-  type ClashJudgment
+  type ClashJudgment,
+  type SupportAssessment
 } from "../../core/judgment";
 import { JudgmentPanel } from "./JudgmentPanel";
 
@@ -61,7 +62,16 @@ function panelFixture() {
     from: "objection2",
     reasoning: "The second objection also has force but does not strike the thesis."
   };
-  const links = [verdict, verdict2];
+  const supportAssessment: SupportAssessment = {
+    edgeId: "e_support",
+    from: "support",
+    to: "thesis",
+    type: "support",
+    quality: "strong",
+    confidence: "high",
+    reasoning: "The support directly carries the thesis."
+  };
+  const links = [supportAssessment, verdict, verdict2];
   return {
     debate,
     run: buildJudgmentRun({
@@ -96,6 +106,7 @@ describe("JudgmentPanel case-line cue", () => {
         onPrevious={() => {}}
         onRestart={() => {}}
         onSeek={() => {}}
+        onInspectSupport={() => {}}
         onSpeedChange={() => {}}
         onExit={() => {}}
         onNewRun={() => {}}
@@ -106,9 +117,45 @@ describe("JudgmentPanel case-line cue", () => {
 
     expect(markup).toContain("Case line");
     expect(markup).toContain("Supporting reason");
-    expect(markup).toContain("A case line is being introduced. The first ruling follows.");
-    expect(markup).toContain("0 / 2 entered");
-    expect(markup).not.toContain("1 / 2 entered");
+    expect(markup).toContain("Strong support");
+    expect(markup).toContain("The support directly carries the thesis.");
+    expect(markup).toContain("3 links · 2 rulings · 1 support");
+    expect(markup).toContain("A case line is being introduced; the first ruling follows.");
     expect(markup).not.toContain("Ruling 01");
+  });
+
+  it("lists every link and can pin a support at the end of the run", () => {
+    const { debate, run, snapshot } = panelFixture();
+    const markup = renderToStaticMarkup(
+      <JudgmentPanel
+        debate={debate}
+        run={run}
+        step={2}
+        playing={false}
+        speed={1}
+        snapshot={snapshot}
+        restored={[]}
+        counts={snapshot.counts}
+        caseLineId="e_support"
+        caseLinePinned
+        onTogglePlay={() => {}}
+        onNext={() => {}}
+        onPrevious={() => {}}
+        onRestart={() => {}}
+        onSeek={() => {}}
+        onInspectSupport={() => {}}
+        onSpeedChange={() => {}}
+        onExit={() => {}}
+        onNewRun={() => {}}
+        onOpenSettings={() => {}}
+        onReport={() => {}}
+      />
+    );
+
+    expect(markup).toContain("3 links · 2 rulings · 1 support");
+    expect(markup).toContain("Another objection");
+    expect(markup).toContain("An objection");
+    expect(markup).toContain("Strong support");
+    expect(markup).toContain("This support contributes to the pro case.");
   });
 });

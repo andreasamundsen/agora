@@ -49,6 +49,10 @@ interface JudgmentState {
   caseLineId?: string;
   /** The playback step at which that branch opening belongs. */
   caseLineStep?: number;
+  /** A support selected from the record for inspection, not a playback step. */
+  supportPreviewId?: string;
+  /** The conflict prefix that was visible when the support was selected. */
+  supportPreviewStep?: number;
   /** Branch openings already introduced, keyed by step and edge. */
   caseLineSeen: string[];
 }
@@ -273,9 +277,11 @@ export default function App() {
   // ruling so autoplay does not replay it. The panel must still show the prefix
   // before that ruling; otherwise its numbered record claims a ruling is entered
   // while the map is showing the support stem.
-  const panelStep = judgment?.caseLineId
-    ? Math.min(judgment.step, Math.max(0, judgment.caseLineStep ?? judgment.step - 1))
-    : judgment?.step ?? 0;
+  const panelStep = judgment?.supportPreviewId
+    ? judgment.supportPreviewStep ?? judgment.step
+    : judgment?.caseLineId
+      ? Math.min(judgment.step, Math.max(0, judgment.caseLineStep ?? judgment.step - 1))
+      : judgment?.step ?? 0;
 
   const effectRevealed = Boolean(
     judgment && judgment.step > 0 && revealedEffects.includes(effectRevealKey(judgment.run.id, judgment.step))
@@ -315,9 +321,11 @@ export default function App() {
       thesisStatus: motionSnapshot.thesisStatus,
       proofConflict: motionSnapshot.proofConflict
     });
-    const caseLine = judgment.caseLineId
-      ? debate.edges.find((edge) => edge.id === judgment.caseLineId)
+    const caseLineId = judgment.supportPreviewId ?? judgment.caseLineId;
+    const caseLine = caseLineId
+      ? debate.edges.find((edge) => edge.id === caseLineId)
       : undefined;
+    const caseLinePreview = Boolean(judgment.supportPreviewId);
     const visibleStatuses = effectRevealed
       ? judgmentSnapshot.statuses
       : judgment.step > 1 && priorJudgmentSnapshot
@@ -342,6 +350,7 @@ export default function App() {
       activeNodeIds: settled || caseLine || !current ? [] : [current.from, current.to],
       caseLineEdgeId: caseLine?.id,
       caseLineNodeId: caseLine?.from,
+      caseLinePreview,
       reinstated: effectRevealed ? restored : [],
       verdictByEdge,
       complete: settled,
@@ -430,6 +439,20 @@ export default function App() {
     setJudgment((current) => {
       if (!current) return current;
       const total = current.run.verdicts.length;
+      if (current.supportPreviewId) {
+        const restart = current.step >= total;
+        if (restart) setRevealedEffects([]);
+        return {
+          ...current,
+          step: restart ? 0 : (current.supportPreviewStep ?? current.step),
+          supportPreviewId: undefined,
+          supportPreviewStep: undefined,
+          caseLineId: undefined,
+          caseLineStep: undefined,
+          caseLineSeen: restart ? [] : current.caseLineSeen,
+          playing: true
+        };
+      }
       if (current.step >= total) {
         setRevealedEffects([]);
         return { ...current, step: 0, playing: true, caseLineId: undefined, caseLineStep: undefined, caseLineSeen: [] };
@@ -441,6 +464,16 @@ export default function App() {
   const nextRuling = useCallback(() => {
     setJudgment((current) => {
       if (!current) return current;
+      if (current.supportPreviewId) {
+        const base = current.supportPreviewStep ?? current.step;
+        return {
+          ...current,
+          step: Math.min(current.run.verdicts.length, base + 1),
+          playing: false,
+          supportPreviewId: undefined,
+          supportPreviewStep: undefined
+        };
+      }
       if (current.caseLineId) {
         return {
           ...current,
@@ -465,12 +498,17 @@ export default function App() {
     setRevealedEffects([]);
     setJudgment((current) => {
       if (!current) return current;
+      const base = current.supportPreviewId
+        ? current.supportPreviewStep ?? current.step
+        : current.step;
       return {
         ...current,
-        step: Math.max(0, current.step - 1),
+        step: Math.max(0, base - 1),
         playing: false,
         caseLineId: undefined,
         caseLineStep: undefined,
+        supportPreviewId: undefined,
+        supportPreviewStep: undefined,
         caseLineSeen: []
       };
     });
@@ -479,7 +517,7 @@ export default function App() {
   const restartJudgment = useCallback(() => {
     setRevealedEffects([]);
     setJudgment((current) => current
-      ? { ...current, step: 0, playing: true, caseLineId: undefined, caseLineStep: undefined, caseLineSeen: [] }
+      ? { ...current, step: 0, playing: true, caseLineId: undefined, caseLineStep: undefined, supportPreviewId: undefined, supportPreviewStep: undefined, caseLineSeen: [] }
       : current);
   }, []);
 
@@ -496,7 +534,25 @@ export default function App() {
         playing: false,
         caseLineId: undefined,
         caseLineStep: undefined,
+        supportPreviewId: undefined,
+        supportPreviewStep: undefined,
         caseLineSeen: []
+      };
+    });
+  }, []);
+
+  const inspectSupport = useCallback((edgeId: string) => {
+    setJudgment((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        playing: false,
+        caseLineId: undefined,
+        caseLineStep: undefined,
+        supportPreviewId: edgeId,
+        supportPreviewStep: current.caseLineId
+          ? Math.min(current.step, Math.max(0, current.caseLineStep ?? current.step - 1))
+          : current.step
       };
     });
   }, []);
@@ -987,12 +1043,14 @@ export default function App() {
             snapshot={judgmentSnapshot}
             restored={effectRevealed ? restored : []}
             counts={visibleCounts}
-            caseLineId={judgment.caseLineId}
+            caseLineId={judgment.supportPreviewId ?? judgment.caseLineId}
+            caseLinePinned={Boolean(judgment.supportPreviewId)}
             onTogglePlay={toggleJudgmentPlay}
             onNext={nextRuling}
             onPrevious={previousRuling}
             onRestart={restartJudgment}
             onSeek={seekRuling}
+            onInspectSupport={inspectSupport}
             onSpeedChange={(speed) => setJudgment((current) => current ? { ...current, speed } : current)}
             onExit={closeJudgment}
             onNewRun={() => setModal("judge")}
