@@ -485,7 +485,8 @@ export function JudgmentPanel({
                       <button
                         type="button"
                         className={`record-row record-row--support ${isActive ? "is-current" : ""} ${isFuture ? "is-future" : ""}`}
-                        onClick={() => onInspectSupport(entry.support.edgeId)}
+                        disabled={isFuture}
+                        onClick={isFuture ? undefined : () => onInspectSupport(entry.support.edgeId)}
                         aria-label={
                           isActive
                             ? `Support ${titleFor(debate, entry.support.from)}, selected`
