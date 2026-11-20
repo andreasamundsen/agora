@@ -82,9 +82,6 @@ Criteria for a conflict link — name the one that decides it:
 - scope: does it answer the strongest form of the target, or a narrower version?
 - burden: does it meet the standard required for this kind of claim?
 
-LANGUAGE OF THE FREE-TEXT REASONING
-Only one field is free-text prose: "reasoning". Write it in the language of the TARGET argument. If the target is too short or genuinely mixed, follow the language of the SOURCE argument. Keep every JSON key and every value of "quality", "verdict", "impact", "criterion", "confidence", and "target_component" exactly in the canonical English tokens specified in the output contract. Do not translate argument IDs, names, quoted wording, or technical terms that are normally left in their original language.
-
 Rules of the bench:
 1. A restatement of the negation is not an argument. Mere disagreement is not a defeat.
 2. Do not infer evidence the source did not provide.
