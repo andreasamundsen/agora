@@ -41,4 +41,15 @@ describe("model instruction policy", () => {
     expect(LINK_RULES).toBe(`${LINK_POLICY}\n\n${LINK_FORMAT}\n${LINK_TRAILER}`);
     expect(CLUSTER_RULES).toBe(`${CLUSTER_POLICY}\n\n${CLUSTER_FORMAT}\n${CLUSTER_TRAILER}`);
   });
+
+  it("localizes only the link reasoning while keeping the JSON contract canonical", () => {
+    expect(LINK_POLICY).toContain('Only one field is free-text prose: "reasoning".');
+    expect(LINK_POLICY).toContain("language of the TARGET argument");
+    expect(LINK_POLICY).toContain("language of the SOURCE argument");
+    expect(LINK_POLICY).toContain("canonical English tokens");
+    for (const field of ["quality", "verdict", "impact", "criterion", "confidence", "target_component"]) {
+      expect(LINK_POLICY).toContain(field);
+    }
+    expect(CLUSTER_POLICY).not.toContain("language of the TARGET argument");
+  });
 });
