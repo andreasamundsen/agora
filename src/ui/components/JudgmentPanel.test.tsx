@@ -225,9 +225,10 @@ describe("JudgmentPanel case-line cue", () => {
     expect(markup).toContain("This support contributes to the pro case.");
     expect(markup).not.toContain("judgment-finale");
     const supportRow = markup.match(/<button[^>]*record-row--support[^>]*>/)?.[0] ?? "";
-    expect(supportRow).toContain("is-current");
+    expect(supportRow).not.toContain("is-current");
     expect(supportRow).not.toContain("disabled");
     const currentRows = markup.match(/<button[^>]*class="[^"]*is-current[^"]*"[^>]*>[\s\S]*?<\/button>/g) ?? [];
     expect(currentRows).toHaveLength(1);
+    expect(currentRows[0]).toContain("An objection");
   });
 });

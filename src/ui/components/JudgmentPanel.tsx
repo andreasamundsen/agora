@@ -480,11 +480,12 @@ export function JudgmentPanel({
                   const isFuture =
                     !isActive &&
                     (entry.step > step || (entry.step === step && step < total));
+                  const isCurrent = isActive && !caseLinePinned;
                   return (
                     <li key={`support:${entry.support.edgeId}`}>
                       <button
                         type="button"
-                        className={`record-row record-row--support ${isActive ? "is-current" : ""} ${isFuture ? "is-future" : ""}`}
+                        className={`record-row record-row--support ${isCurrent ? "is-current" : ""} ${isFuture ? "is-future" : ""}`}
                         disabled={isFuture}
                         onClick={isFuture ? undefined : () => onInspectSupport(entry.support.edgeId)}
                         aria-label={
@@ -510,7 +511,7 @@ export function JudgmentPanel({
                   );
                 }
 
-                const isCurrent = !caseLine && entry.index === step;
+                const isCurrent = (!caseLine || caseLinePinned) && entry.index === step;
                 const isFuture = entry.index > step;
                 return (
                   <li key={`ruling:${entry.verdict.edgeId}`}>
