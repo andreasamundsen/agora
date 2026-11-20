@@ -1,4 +1,4 @@
-AGORA PRIVATE BETA — BUILD 0.1.54
+AGORA PRIVATE BETA — BUILD 0.1.55
 Prepared 20 November 2026
 
 Thank you for trying this private beta. This note explains what you are receiving and the risks you should know before installing it.
@@ -10,7 +10,7 @@ This is a compiled, binary-only beta. Agora's source files and build scripts are
 
 INSTALL
 1. Verify the SHA-256 checksum supplied with the installer before running it.
-2. Run Agora-Setup-0.1.54.exe.
+2. Run Agora-Setup-0.1.55.exe.
 3. Windows will warn that the publisher is unknown. This build is unsigned. Choose More info, then Run anyway only if the checksum matches and you trust the person who sent it.
 4. The installer is per-user and does not require administrator rights.
 5. To upgrade, close Agora and run a newer installer over it. To roll back, uninstall and run the previous installer.

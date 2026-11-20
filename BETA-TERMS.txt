@@ -1,5 +1,5 @@
 AGORA PRIVATE BETA — EVALUATION TERMS
-Version 0.1.54
+Version 0.1.55
 Copyright © 2026 Andreas Amundsen. All rights reserved.
 
 This is a limited private-beta evaluation, not an open-source or source-available release. Please read these terms before installing or using the software.

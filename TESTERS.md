@@ -4,11 +4,17 @@ Agora is a local debate harness. You install it like a normal Windows app; no No
 
 ## Install
 
-1. Run `Agora-Setup-0.1.54.exe`.
+1. Run `Agora-Setup-0.1.55.exe`.
 2. Windows will warn that the publisher is unknown. This build is intentionally unsigned: choose **More info → Run anyway**.
 3. The installer is per-user and does not need administrator rights. Agora opens when it finishes.
 4. To upgrade, close Agora first, then run the newer installer over it. Your debates stay in `%APPDATA%\Agora\data`.
 5. The SHA-256 checksum should match the file supplied with the build. A matching hash is not a code signature; it only confirms the file has not changed.
+
+## What's new in 0.1.55
+
+- **A direct attacker under live pressure now carries the same case-weight discount as a pressured support.** If the attacker is standing but targeted by a `weakens` or `undecided` ruling, its ordinary con line uses the existing `0.6` pressure factor. A clean attacker stays at `1.0`; a contested attacker keeps its half-survival weight without a second discount.
+- **The structural `defeats` relation is unchanged.** A `weakens` on an attacker reduces its ordinary case weight and still withholds hard-fall certification, but it does not erase the attacker’s defeat of its target. Only a `defeats` on the attacker removes it and permits reinstatement.
+- The balance panel labels the affected con line **attacker pressured** and shows the pressure factor in its tooltip.
 
 ## What's new in 0.1.54
 
