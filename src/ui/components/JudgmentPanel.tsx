@@ -480,7 +480,7 @@ export function JudgmentPanel({
                   const isFuture =
                     !isActive &&
                     (entry.step > step || (entry.step === step && step < total));
-                  const isCurrent = isActive && !caseLinePinned;
+                  const isCurrent = isActive;
                   return (
                     <li key={`support:${entry.support.edgeId}`}>
                       <button
@@ -497,7 +497,7 @@ export function JudgmentPanel({
                         }
                       >
                         <span className={`record-dot ${isFuture ? "" : "record-dot--support"}`} />
-                        <span className="record-number" title="Support link">S</span>
+                        <span className="record-number record-number--support" title="Support link">{String(entry.order).padStart(2, "0")}</span>
                         <span className="record-clash">
                           <b>{titleFor(debate, entry.support.from)}</b>
                           <i>→</i>
@@ -511,7 +511,7 @@ export function JudgmentPanel({
                   );
                 }
 
-                const isCurrent = (!caseLine || caseLinePinned) && entry.index === step;
+                const isCurrent = !caseLine && entry.index === step;
                 const isFuture = entry.index > step;
                 return (
                   <li key={`ruling:${entry.verdict.edgeId}`}>
@@ -522,7 +522,7 @@ export function JudgmentPanel({
                       aria-label={isFuture ? `Ruling ${entry.index}, not yet entered` : undefined}
                     >
                       <span className={`record-dot ${isFuture ? "" : `record-dot--${entry.verdict.verdict}`}`} />
-                      <span className="record-number">{String(entry.index).padStart(2, "0")}</span>
+                      <span className="record-number">{String(entry.order).padStart(2, "0")}</span>
                       <span className="record-clash">
                         <b>{titleFor(debate, entry.verdict.from)}</b>
                         <i>→</i>

@@ -1407,6 +1407,8 @@ export function linksAtStep(run: JudgmentRun, step: number): LinkAssessment[] {
 
 export interface JudgmentRecordRuling {
   kind: "ruling";
+  /** One-based position in the unified record, including supports. */
+  order: number;
   /** Number in the conflict-only ruling sequence, starting at 1. */
   index: number;
   /** Number of conflict rulings entered before this row. */
@@ -1416,6 +1418,8 @@ export interface JudgmentRecordRuling {
 
 export interface JudgmentRecordSupport {
   kind: "support";
+  /** One-based position in the unified record, including supports. */
+  order: number;
   /** Number of conflict rulings entered when this case-line cue belongs. */
   step: number;
   support: SupportAssessment;
@@ -1468,10 +1472,10 @@ export function buildJudgmentRecord(run: JudgmentRun): JudgmentRecordEntry[] {
   const entries: JudgmentRecordEntry[] = [];
   for (let step = 0; step <= total; step += 1) {
     for (const item of byStep.get(step) ?? []) {
-      entries.push({ kind: "support", step, support: item.support, wave: item.wave });
+      entries.push({ kind: "support", order: entries.length + 1, step, support: item.support, wave: item.wave });
     }
     if (step < total) {
-      entries.push({ kind: "ruling", index: step + 1, step, verdict: run.verdicts[step]! });
+      entries.push({ kind: "ruling", order: entries.length + 1, index: step + 1, step, verdict: run.verdicts[step]! });
     }
   }
   return entries;

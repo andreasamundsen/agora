@@ -2650,6 +2650,7 @@ button:disabled { cursor: not-allowed; }
 .record-dot--irrelevant { background: var(--faint); }
 .record-dot--support { background: var(--pro); }
 .record-number { font-family: var(--mono); font-size: 8.5px; color: var(--faint); }
+.record-number--support::after { content: "S"; margin-left: 2px; font-size: 7px; color: var(--pro-deep); vertical-align: super; }
 .record-row--support .record-number { color: var(--pro-deep); }
 .record-row--support { border-top-style: dotted; }
 .record-clash { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; color: var(--muted); }

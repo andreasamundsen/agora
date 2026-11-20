@@ -259,6 +259,7 @@ describe("local link judgments", () => {
     const rulingRows = record.filter((entry) => entry.kind === "ruling");
 
     expect(record).toHaveLength(4);
+    expect(record.map((entry) => entry.order)).toEqual([1, 2, 3, 4]);
     expect(supportRows).toHaveLength(2);
     expect(supportRows.map((entry) => entry.support.edgeId).sort()).toEqual([
       "e_support1_thesis",
