@@ -2654,7 +2654,7 @@ button:disabled { cursor: not-allowed; }
 .record-number { font-family: var(--mono); font-size: 8.5px; color: var(--faint); }
 .record-row--support .record-number { color: var(--pro-deep); }
 .record-row--support { border-top-style: dotted; }
-.record-row--support.is-support-active { background: var(--pro-soft); }
+.record-row--support.is-support-active { background: transparent; box-shadow: inset 2px 0 0 var(--pro); }
 .record-clash { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; color: var(--muted); }
 .record-clash b { font-family: var(--serif); font-size: 10px; font-weight: 500; color: var(--ink-soft); }
 .record-clash i { font-style: normal; color: var(--faint); padding: 0 2px; }
