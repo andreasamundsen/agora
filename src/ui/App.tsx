@@ -235,43 +235,6 @@ export default function App() {
     return cues;
   }, [judgment?.run.waves]);
 
-  /**
-   * Branch openings are manual steps too: Next, Previous, and seeking to the
-   * first ruling must show the target before the ruling plays. Clean supports
-   * with no replies remain a stem cue only.
-   */
-  const caseOpenings = useMemo(() => {
-    const cues = new Map<number, string[]>();
-    if (!judgment) return cues;
-    const total = judgment.run.verdicts.length;
-    const cued = new Set<string>();
-    for (const wave of judgment.run.waves) {
-      const openings = wave.openings ?? [];
-      for (const opening of openings) {
-        if (!opening.edgeId || cued.has(opening.edgeId)) continue;
-        const cueStep = Math.max(0, Math.min(opening.step, total));
-        cued.add(opening.edgeId);
-        const list = cues.get(cueStep) ?? [];
-        if (!list.includes(opening.edgeId)) list.push(opening.edgeId);
-        cues.set(cueStep, list);
-      }
-      if (
-        wave.rootKind === "support" &&
-        wave.rootEdgeId &&
-        !cued.has(wave.rootEdgeId) &&
-        wave.verdictIds.length > 0 &&
-        openings.length === 0
-      ) {
-        const cueStep = Math.max(0, Math.min(wave.startStep ?? 0, total));
-        cued.add(wave.rootEdgeId);
-        const list = cues.get(cueStep) ?? [];
-        if (!list.includes(wave.rootEdgeId)) list.push(wave.rootEdgeId);
-        cues.set(cueStep, list);
-      }
-    }
-    return cues;
-  }, [judgment?.run.waves]);
-
   const judgmentSnapshot = useMemo(
     () =>
       debate && judgment
@@ -305,6 +268,14 @@ export default function App() {
   const judgmentComplete = Boolean(
     judgment && judgment.step >= judgment.run.verdicts.length
   );
+
+  // While a case-line cue is active, the cursor may already point at the next
+  // ruling so autoplay does not replay it. The panel must still show the prefix
+  // before that ruling; otherwise its numbered record claims a ruling is entered
+  // while the map is showing the support stem.
+  const panelStep = judgment?.caseLineId
+    ? Math.min(judgment.step, Math.max(0, judgment.caseLineStep ?? judgment.step - 1))
+    : judgment?.step ?? 0;
 
   const effectRevealed = Boolean(
     judgment && judgment.step > 0 && revealedEffects.includes(effectRevealKey(judgment.run.id, judgment.step))
@@ -470,19 +441,15 @@ export default function App() {
   const nextRuling = useCallback(() => {
     setJudgment((current) => {
       if (!current) return current;
-      if (current.step >= current.run.verdicts.length) return { ...current, playing: false };
-      const opening = (caseOpenings.get(current.step) ?? []).find(
-        (edgeId) => !current.caseLineSeen.includes(caseLineKey(current.step, edgeId))
-      );
-      if (opening) {
+      if (current.caseLineId) {
         return {
           ...current,
           playing: false,
-          caseLineId: opening,
-          caseLineStep: current.step,
-          caseLineSeen: [...current.caseLineSeen, caseLineKey(current.step, opening)]
+          caseLineId: undefined,
+          caseLineStep: undefined
         };
       }
+      if (current.step >= current.run.verdicts.length) return { ...current, playing: false };
       return {
         ...current,
         step: current.step + 1,
@@ -492,24 +459,22 @@ export default function App() {
         caseLineSeen: []
       };
     });
-  }, [caseOpenings]);
+  }, []);
 
   const previousRuling = useCallback(() => {
     setRevealedEffects([]);
     setJudgment((current) => {
       if (!current) return current;
-      const step = Math.max(0, current.step - 1);
-      const opening = (caseOpenings.get(step) ?? [])[0];
       return {
         ...current,
-        step,
+        step: Math.max(0, current.step - 1),
         playing: false,
-        caseLineId: opening,
-        caseLineStep: opening ? step : undefined,
-        caseLineSeen: opening ? [caseLineKey(step, opening)] : []
+        caseLineId: undefined,
+        caseLineStep: undefined,
+        caseLineSeen: []
       };
     });
-  }, [caseOpenings]);
+  }, []);
 
   const restartJudgment = useCallback(() => {
     setRevealedEffects([]);
@@ -523,25 +488,18 @@ export default function App() {
     setJudgment((current) => {
       if (!current) return current;
       const target = Math.max(0, Math.min(current.run.verdicts.length, step));
-      // Seeking to the first ruling of a branch is also an opening: the target
-      // argument must be visible before that ruling, even when the opening was
-      // shown earlier in this playback.
-      const direct = (caseOpenings.get(target) ?? [])[0];
-      const before = direct
-        ? undefined
-        : (target > 0 ? caseOpenings.get(target - 1) ?? [] : [])[0];
-      const opening = direct ?? before;
-      const openingStep = direct ? target : target - 1;
+      // Manual navigation is an inspection step. Show the selected ruling
+      // exactly; case-line cues belong to autoplay only.
       return {
         ...current,
         step: target,
         playing: false,
-        caseLineId: opening,
-        caseLineStep: opening ? openingStep : undefined,
-        caseLineSeen: opening ? [caseLineKey(openingStep, opening)] : []
+        caseLineId: undefined,
+        caseLineStep: undefined,
+        caseLineSeen: []
       };
     });
-  }, [caseOpenings]);
+  }, []);
 
   const saveJudgmentReport = useCallback(() => {
     if (!debate || !judgment) return;
@@ -1023,7 +981,7 @@ export default function App() {
           <JudgmentPanel
             debate={debate}
             run={judgment.run}
-            step={judgment.step}
+            step={panelStep}
             playing={judgment.playing}
             speed={judgment.speed}
             snapshot={judgmentSnapshot}

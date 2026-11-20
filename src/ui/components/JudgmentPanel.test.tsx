@@ -84,7 +84,7 @@ describe("JudgmentPanel case-line cue", () => {
       <JudgmentPanel
         debate={debate}
         run={run}
-        step={1}
+        step={0}
         playing={false}
         speed={1}
         snapshot={snapshot}
@@ -107,6 +107,8 @@ describe("JudgmentPanel case-line cue", () => {
     expect(markup).toContain("Case line");
     expect(markup).toContain("Supporting reason");
     expect(markup).toContain("A case line is being introduced. The first ruling follows.");
+    expect(markup).toContain("0 / 2 entered");
+    expect(markup).not.toContain("1 / 2 entered");
     expect(markup).not.toContain("Ruling 01");
   });
 });
