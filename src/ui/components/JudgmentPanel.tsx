@@ -473,7 +473,13 @@ export function JudgmentPanel({
               {record.map((entry) => {
                 if (entry.kind === "support") {
                   const isActive = caseLineId === entry.support.edgeId;
-                  const isFuture = entry.step > step && !isActive;
+                  // A support sits at the boundary before its case-line cue. Do
+                  // not reveal it as entered one ruling early; it becomes
+                  // entered when the cue starts (active) or after the cursor
+                  // has moved past that boundary.
+                  const isFuture =
+                    !isActive &&
+                    (entry.step > step || (entry.step === step && step < total));
                   return (
                     <li key={`support:${entry.support.edgeId}`}>
                       <button

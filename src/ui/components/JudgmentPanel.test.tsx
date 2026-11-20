@@ -124,6 +124,38 @@ describe("JudgmentPanel case-line cue", () => {
     expect(markup).not.toContain("Ruling 01");
   });
 
+  it("keeps a support row future until its case-line cue starts", () => {
+    const { debate, run, snapshot } = panelFixture();
+    const markup = renderToStaticMarkup(
+      <JudgmentPanel
+        debate={debate}
+        run={run}
+        step={0}
+        playing={false}
+        speed={1}
+        snapshot={snapshot}
+        restored={[]}
+        counts={snapshot.counts}
+        onTogglePlay={() => {}}
+        onNext={() => {}}
+        onPrevious={() => {}}
+        onRestart={() => {}}
+        onSeek={() => {}}
+        onInspectSupport={() => {}}
+        onSpeedChange={() => {}}
+        onExit={() => {}}
+        onNewRun={() => {}}
+        onOpenSettings={() => {}}
+        onReport={() => {}}
+      />
+    );
+
+    const supportRow = markup.match(/<button[^>]*record-row--support[^>]*>/)?.[0] ?? "";
+    expect(supportRow).toContain("is-future");
+    expect(supportRow).not.toContain("is-support-active");
+    expect(markup).not.toContain("Strong support");
+  });
+
   it("lists every link and can pin a support at the end of the run", () => {
     const { debate, run, snapshot } = panelFixture();
     const markup = renderToStaticMarkup(
