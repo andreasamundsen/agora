@@ -319,7 +319,7 @@ export function JudgmentPanel({
           </div>
         )}
 
-        {step === 0 && !complete && (
+        {step === 0 && !complete && !caseLine && (
           <section className="bench-intro-card">
             <div className="bench-intro-mark">§</div>
             <div className="eyebrow">The bench is in session</div>
@@ -414,7 +414,7 @@ export function JudgmentPanel({
           </article>
         )}
 
-        {complete && (
+        {complete && !caseLine && (
           <section className={`judgment-finale judgment-finale--${run.outcome}`}>
             <div className="finale-eyebrow">{run.engine === "local" ? "Structural review" : "Judgment"}</div>
             <div className="finale-outcome">
@@ -537,19 +537,19 @@ export function JudgmentPanel({
           </div>
         )}
 
-        {snapshot.unsupportedThesis && complete && (
+        {snapshot.unsupportedThesis && complete && !caseLine && (
           <div className="judgment-unsupported-note">
             The motion itself is still standing, but no supporting argument survives. It is unestablished.
           </div>
         )}
 
-        {complete && snapshot.outcome === "unestablished" && snapshot.liveAttacks.length > 0 && !snapshot.unsupportedThesis && (
+        {complete && !caseLine && snapshot.outcome === "unestablished" && snapshot.liveAttacks.length > 0 && !snapshot.unsupportedThesis && (
           <div className="judgment-unsupported-note">
             A live objection remains against the motion. Under the selected burden, the supporting case has not carried it.
           </div>
         )}
 
-        {complete && snapshot.outcome === "unestablished" && snapshot.liveAttacks.length === 0 && snapshot.liveSupports.length > 0 && snapshot.cleanSupports.length === 0 && (
+        {complete && !caseLine && snapshot.outcome === "unestablished" && snapshot.liveAttacks.length === 0 && snapshot.liveSupports.length > 0 && snapshot.cleanSupports.length === 0 && (
           <div className="judgment-unsupported-note">
             The supporting arguments remain contested. Under the selected burden, the supporting case has not carried the motion.
           </div>

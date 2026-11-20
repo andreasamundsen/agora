@@ -122,6 +122,7 @@ describe("JudgmentPanel case-line cue", () => {
     expect(markup).toContain("3 links · 2 rulings · 1 support");
     expect(markup).toContain("A case line is being introduced; the first ruling follows.");
     expect(markup).not.toContain("Ruling 01");
+    expect(markup).not.toContain("One ruling at a time.");
   });
 
   it("keeps a support row future until its case-line cue starts", () => {
@@ -221,6 +222,7 @@ describe("JudgmentPanel case-line cue", () => {
     expect(markup).toContain("An objection");
     expect(markup).toContain("Strong support");
     expect(markup).toContain("This support contributes to the pro case.");
+    expect(markup).not.toContain("judgment-finale");
     const supportRow = markup.match(/<button[^>]*record-row--support[^>]*>/)?.[0] ?? "";
     expect(supportRow).toContain("is-current");
     const currentRows = markup.match(/<button[^>]*class="[^"]*is-current[^"]*"[^>]*>[\s\S]*?<\/button>/g) ?? [];
