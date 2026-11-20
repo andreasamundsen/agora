@@ -26,8 +26,6 @@ export interface GraphJudgment {
   /** A direct support being introduced before its first incoming clash. */
   caseLineEdgeId?: string;
   caseLineNodeId?: string;
-  /** The support was selected from the record; keep the rest of the map dim. */
-  caseLinePreview?: boolean;
   reinstated: string[];
   /** The motion itself carries a proof marker. */
   motionProved: boolean;
@@ -536,7 +534,7 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
                 judgment?.active &&
                 judgmentSpotlightIds.length > 0 &&
                 !judgmentSpotlightIds.includes(card.node.id) &&
-                (!judgment.complete || judgment.caseLinePreview)
+                !judgment.complete
               );
               return (
                 <NodeCard

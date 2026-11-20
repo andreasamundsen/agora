@@ -213,6 +213,8 @@ export function JudgmentPanel({
   debate,
   run,
   step,
+  currentOrder,
+  finished,
   playing,
   speed,
   snapshot,
@@ -228,26 +230,24 @@ export function JudgmentPanel({
   onNewRun,
   onOpenSettings,
   onReport,
-  onInspectSupport,
-  caseLineId,
-  caseLinePinned = false
+  caseLineId
 }: {
   debate: Debate;
   run: JudgmentRun;
   step: number;
+  currentOrder: number;
+  finished?: boolean;
   playing: boolean;
   speed: number;
   snapshot: JudgmentSnapshot;
   restored: string[];
   counts: JudgmentSnapshot["counts"];
   caseLineId?: string;
-  caseLinePinned?: boolean;
   onTogglePlay: () => void;
   onNext: () => void;
   onPrevious: () => void;
   onRestart: () => void;
-  onSeek: (step: number) => void;
-  onInspectSupport: (edgeId: string) => void;
+  onSeek: (order: number) => void;
   onSpeedChange: (speed: number) => void;
   onExit: () => void;
   onNewRun: () => void;
@@ -255,7 +255,8 @@ export function JudgmentPanel({
   onReport: () => void;
 }) {
   const total = run.verdicts.length;
-  const complete = step >= total;
+  const record = useMemo(() => buildJudgmentRecord(run), [run]);
+  const complete = finished ?? step >= total;
   const current = step > 0 ? run.verdicts[step - 1] : undefined;
   const caseLine = caseLineId ? debate.edges.find((edge) => edge.id === caseLineId) : undefined;
   const caseSupport: SupportAssessment | undefined = caseLine
@@ -263,7 +264,6 @@ export function JudgmentPanel({
         (link): link is SupportAssessment => link.type === "support" && link.edgeId === caseLine.id
       )
     : undefined;
-  const record = useMemo(() => buildJudgmentRecord(run), [run]);
   const supportCount = record.filter((entry) => entry.kind === "support").length;
   const caseLineWave = caseLine
     ? run.waves.find((wave) => wave.rootEdgeId === caseLine.id)?.label
@@ -302,9 +302,9 @@ export function JudgmentPanel({
           </div>
         )}
 
-        {!complete && step > 0 && (
+        {!complete && currentOrder > 0 && (
           <div className="judgment-session-line">
-            <span><b>{step}</b> of {total} rulings</span>
+            <span><b>{currentOrder}</b> of {record.length} entries</span>
             <span className="judgment-session-sep" />
             <span>{counts.standing} standing</span>
             <span>{counts.defeated} struck</span>
@@ -369,11 +369,9 @@ export function JudgmentPanel({
             )}
             <div className="ruling-effect">
               <span className="effect-mark effect-mark--standing" />
-              {caseLinePinned
-                ? caseLine.to === debate.thesisId
-                  ? "This support contributes to the pro case."
-                  : `This support contributes to the case for ${titleFor(debate, caseLine.to)}.`
-                : "A case line is being introduced; the first ruling follows."}
+              {caseLine.to === debate.thesisId
+                ? "This support contributes to the pro case."
+                : `This support contributes to the case for ${titleFor(debate, caseLine.to)}.`}
             </div>
           </article>
         )}
@@ -466,28 +464,21 @@ export function JudgmentPanel({
         {record.length > 0 && (
           <div className="judgment-record">
             <div className="record-head">
-              <span>Rulings</span>
+              <span>Record</span>
               <span>{record.length} links · {total} rulings · {supportCount} {supportCount === 1 ? "support" : "supports"}</span>
             </div>
             <ol>
               {record.map((entry) => {
                 if (entry.kind === "support") {
                   const isActive = caseLineId === entry.support.edgeId;
-                  // A support sits at the boundary before its case-line cue. Do
-                  // not reveal it as entered one ruling early; it becomes
-                  // entered when the cue starts (active) or after the cursor
-                  // has moved past that boundary.
-                  const isFuture =
-                    !isActive &&
-                    (entry.step > step || (entry.step === step && step < total));
+                  const isFuture = entry.order > currentOrder;
                   const isCurrent = isActive;
                   return (
                     <li key={`support:${entry.support.edgeId}`}>
                       <button
                         type="button"
                         className={`record-row record-row--support ${isCurrent ? "is-current" : ""} ${isFuture ? "is-future" : ""}`}
-                        disabled={isFuture}
-                        onClick={isFuture ? undefined : () => onInspectSupport(entry.support.edgeId)}
+                        onClick={() => onSeek(entry.order)}
                         aria-label={
                           isActive
                             ? `Support ${titleFor(debate, entry.support.from)}, selected`
@@ -511,14 +502,14 @@ export function JudgmentPanel({
                   );
                 }
 
-                const isCurrent = !caseLine && entry.index === step;
-                const isFuture = entry.index > step;
+                const isCurrent = !complete && !caseLine && entry.order === currentOrder;
+                const isFuture = entry.order > currentOrder;
                 return (
                   <li key={`ruling:${entry.verdict.edgeId}`}>
                     <button
                       type="button"
                       className={`record-row ${isCurrent ? "is-current" : ""} ${isFuture ? "is-future" : ""}`}
-                      onClick={() => onSeek(entry.index)}
+                      onClick={() => onSeek(entry.order)}
                       aria-label={isFuture ? `Ruling ${entry.index}, not yet entered` : undefined}
                     >
                       <span className={`record-dot ${isFuture ? "" : `record-dot--${entry.verdict.verdict}`}`} />
@@ -560,13 +551,13 @@ export function JudgmentPanel({
 
       <footer className="judgment-controls">
         <div className="judgment-transport">
-          <button type="button" className="judge-control" onClick={onPrevious} disabled={step === 0} aria-label="Previous ruling">
+          <button type="button" className="judge-control" onClick={onPrevious} disabled={currentOrder <= 1} aria-label="Previous record entry">
             <StepIcon direction="prev" />
           </button>
           <button type="button" className="judge-control judge-control--play" onClick={complete ? onRestart : onTogglePlay} aria-label={complete ? "Replay" : playing ? "Pause" : "Play"}>
             <PlayIcon playing={playing && !complete} />
           </button>
-          <button type="button" className="judge-control" onClick={onNext} disabled={complete} aria-label="Next ruling">
+          <button type="button" className="judge-control" onClick={onNext} disabled={complete} aria-label="Next record entry">
             <StepIcon direction="next" />
           </button>
           <button type="button" className="judge-control judge-control--restart" onClick={onRestart} aria-label="Restart judgment">

@@ -3,11 +3,13 @@ import type { Debate, DebateSummary } from "../core/model";
 import { message } from "../core/model";
 import { randomSeed, stageDebate, type StagedDebate } from "../core/stage";
 import {
+  buildJudgmentRecord,
   judgmentMarkdown,
   linksAtStep,
   motionOutcomeForDisplay,
   OUTCOME_SHORT,
   solveJudgment,
+  type JudgmentRecordEntry,
   type JudgmentRun
 } from "../core/judgment";
 import {
@@ -42,19 +44,12 @@ interface StageState {
 
 interface JudgmentState {
   run: JudgmentRun;
-  step: number;
+  /** Number of unified record entries entered. 0 is the bench intro. */
+  eventIndex: number;
+  /** The final judgment has replaced the last record entry. */
+  finished: boolean;
   playing: boolean;
   speed: number;
-  /** A branch target being introduced before its first ruling. */
-  caseLineId?: string;
-  /** The playback step at which that branch opening belongs. */
-  caseLineStep?: number;
-  /** A support selected from the record for inspection, not a playback step. */
-  supportPreviewId?: string;
-  /** The conflict prefix that was visible when the support was selected. */
-  supportPreviewStep?: number;
-  /** Branch openings already introduced, keyed by step and edge. */
-  caseLineSeen: string[];
 }
 
 /** One visible beat of the judgment playback: every ruling and every stem cue. */
@@ -72,10 +67,6 @@ function timeAgo(timestamp: number): string {
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d ago`;
   return new Date(timestamp).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
-
-function caseLineKey(step: number, edgeId: string): string {
-  return `${step}:${edgeId}`;
 }
 
 function effectRevealKey(runId: string, step: number): string {
@@ -191,53 +182,37 @@ export default function App() {
     [debate, selectedId]
   );
 
+  const judgmentRecord = useMemo(
+    () => (judgment ? buildJudgmentRecord(judgment.run) : []),
+    [judgment?.run, debate]
+  );
+
+  const currentEntry: JudgmentRecordEntry | undefined =
+    judgment && judgment.eventIndex > 0 ? judgmentRecord[judgment.eventIndex - 1] : undefined;
+
+  // The conflict prefix is a property of the current record entry, not a
+  // separately mutable playback counter. Supports contribute zero conflicts;
+  // a ruling contributes its own position in the conflict sequence.
+  const conflictStep = judgment?.finished
+    ? judgment.run.verdicts.length
+    : currentEntry
+      ? currentEntry.kind === "ruling"
+        ? currentEntry.index
+        : currentEntry.step
+      : 0;
+
+  const currentSupportId =
+    !judgment?.finished && currentEntry?.kind === "support" ? currentEntry.support.edgeId : undefined;
+
   const appliedVerdicts = useMemo(
-    () => (judgment ? judgment.run.verdicts.slice(0, judgment.step) : []),
-    [judgment?.run, judgment?.step]
+    () => (judgment ? judgment.run.verdicts.slice(0, conflictStep) : []),
+    [judgment?.run, conflictStep]
   );
 
   const appliedLinks = useMemo(
-    () => (judgment ? linksAtStep(judgment.run, judgment.step) : []),
-    [judgment?.run, judgment?.step]
+    () => (judgment ? linksAtStep(judgment.run, conflictStep) : []),
+    [judgment?.run, conflictStep]
   );
-
-  /**
-   * A branch opens by selecting the argument its first ruling answers. The
-   * engine supplies these branch starts so a support argument is visible even
-   * when it is a fork or a nested support, not only when it owns a direct stem.
-   * Clean supports with no replies still get a stem cue; there is nothing to
-   * open.
-   */
-  const caseLineCues = useMemo(() => {
-    const cues = new Map<number, string[]>();
-    if (!judgment) return cues;
-    const total = judgment.run.verdicts.length;
-    const cued = new Set<string>();
-    for (const wave of judgment.run.waves) {
-      const openings = wave.openings ?? [];
-      for (const opening of openings) {
-        if (!opening.edgeId || cued.has(opening.edgeId)) continue;
-        const cueStep = Math.max(0, Math.min(opening.step, total));
-        cued.add(opening.edgeId);
-        const list = cues.get(cueStep) ?? [];
-        list.push(opening.edgeId);
-        cues.set(cueStep, list);
-      }
-      if (
-        wave.rootKind === "support" &&
-        wave.rootEdgeId &&
-        !cued.has(wave.rootEdgeId) &&
-        (wave.verdictIds.length === 0 || openings.length === 0)
-      ) {
-        const cueStep = Math.max(0, Math.min(wave.startStep ?? 0, total));
-        cued.add(wave.rootEdgeId);
-        const list = cues.get(cueStep) ?? [];
-        list.push(wave.rootEdgeId);
-        cues.set(cueStep, list);
-      }
-    }
-    return cues;
-  }, [judgment?.run.waves]);
 
   const judgmentSnapshot = useMemo(
     () =>
@@ -256,40 +231,30 @@ export default function App() {
 
   const priorJudgmentSnapshot = useMemo(
     () => {
-      if (!debate || !judgment || judgment.step <= 0) return null;
+      if (!debate || !judgment || conflictStep <= 0) return null;
       return solveJudgment(
         debate,
-        linksAtStep(judgment.run, judgment.step - 1),
+        linksAtStep(judgment.run, conflictStep - 1),
         judgment.run.clusters,
         judgment.run.standard,
         judgment.run.strictness,
         judgment.run.engine === "llm"
       );
     },
-    [debate, judgment?.run, judgment?.step]
+    [debate, judgment?.run, conflictStep]
   );
 
-  const judgmentComplete = Boolean(
-    judgment && judgment.step >= judgment.run.verdicts.length
-  );
-
-  // While a case-line cue is active, the cursor may already point at the next
-  // ruling so autoplay does not replay it. The panel must still show the prefix
-  // before that ruling; otherwise its numbered record claims a ruling is entered
-  // while the map is showing the support stem.
-  const panelStep = judgment?.supportPreviewId
-    ? judgment.supportPreviewStep ?? judgment.step
-    : judgment?.caseLineId
-      ? Math.min(judgment.step, Math.max(0, judgment.caseLineStep ?? judgment.step - 1))
-      : judgment?.step ?? 0;
+  const judgmentComplete = Boolean(judgment?.finished);
 
   const effectRevealed = Boolean(
-    judgment && judgment.step > 0 && revealedEffects.includes(effectRevealKey(judgment.run.id, judgment.step))
+    judgment &&
+      (judgment.finished ||
+        (conflictStep > 0 && revealedEffects.includes(effectRevealKey(judgment.run.id, conflictStep))))
   );
 
   const visibleCounts = judgment && effectRevealed && judgmentSnapshot
     ? judgmentSnapshot.counts
-    : judgment && judgment.step > 1 && priorJudgmentSnapshot
+    : judgment && conflictStep > 1 && priorJudgmentSnapshot
       ? priorJudgmentSnapshot.counts
       : { standing: debate?.nodes.length ?? 0, defeated: 0, contested: 0 };
 
@@ -302,11 +267,11 @@ export default function App() {
 
   useEffect(() => {
     setRestored(restoredNow);
-  }, [restoredNow.join("|"), judgment?.step]);
+  }, [restoredNow.join("|"), conflictStep]);
 
   const judgmentGraph: GraphJudgment | undefined = useMemo(() => {
     if (!judgment || !debate || !judgmentSnapshot) return undefined;
-    const current = judgment.step > 0 ? judgment.run.verdicts[judgment.step - 1] : undefined;
+    const current = !judgment.finished && currentEntry?.kind === "ruling" ? currentEntry.verdict : undefined;
     const verdictByEdge: GraphJudgment["verdictByEdge"] = {};
     const visibleVerdicts = effectRevealed ? appliedVerdicts : appliedVerdicts.slice(0, -1);
     for (const verdict of visibleVerdicts) verdictByEdge[verdict.edgeId] = verdict.verdict;
@@ -321,24 +286,22 @@ export default function App() {
       thesisStatus: motionSnapshot.thesisStatus,
       proofConflict: motionSnapshot.proofConflict
     });
-    const caseLineId = judgment.supportPreviewId ?? judgment.caseLineId;
-    const caseLine = caseLineId
-      ? debate.edges.find((edge) => edge.id === caseLineId)
+    const caseLine = currentSupportId
+      ? debate.edges.find((edge) => edge.id === currentSupportId)
       : undefined;
-    const caseLinePreview = Boolean(judgment.supportPreviewId);
     const visibleStatuses = effectRevealed
       ? judgmentSnapshot.statuses
-      : judgment.step > 1 && priorJudgmentSnapshot
+      : conflictStep > 1 && priorJudgmentSnapshot
         ? priorJudgmentSnapshot.statuses
         : {};
     const visibleWeakened = effectRevealed
       ? judgmentSnapshot.weakened
-      : judgment.step > 1 && priorJudgmentSnapshot
+      : conflictStep > 1 && priorJudgmentSnapshot
         ? priorJudgmentSnapshot.weakened
         : [];
     const visibleIrrelevant = effectRevealed
       ? judgmentSnapshot.irrelevant
-      : judgment.step > 1 && priorJudgmentSnapshot
+      : conflictStep > 1 && priorJudgmentSnapshot
         ? priorJudgmentSnapshot.irrelevant
         : [];
     return {
@@ -350,7 +313,6 @@ export default function App() {
       activeNodeIds: settled || caseLine || !current ? [] : [current.from, current.to],
       caseLineEdgeId: caseLine?.id,
       caseLineNodeId: caseLine?.from,
-      caseLinePreview,
       reinstated: effectRevealed ? restored : [],
       verdictByEdge,
       complete: settled,
@@ -360,7 +322,7 @@ export default function App() {
       motionProved: settled && effectRevealed && judgmentSnapshot.proofs.length > 0 && !judgmentSnapshot.proofConflict,
       unsupportedThesis: settled && effectRevealed && judgmentSnapshot.unsupportedThesis
     };
-  }, [judgment, judgmentSnapshot, priorJudgmentSnapshot, revealedEffects, effectRevealed, judgmentComplete, appliedVerdicts, restored]);
+  }, [judgment, judgmentSnapshot, priorJudgmentSnapshot, revealedEffects, effectRevealed, judgmentComplete, appliedVerdicts, restored, currentEntry, currentSupportId, conflictStep]);
 
   const openStage = useCallback(() => {
     if (!debate) return;
@@ -418,7 +380,7 @@ export default function App() {
     setRevealedEffects([]);
     setStage(null);
     setSelectedId(null);
-    setJudgment({ run: response.run, step: 0, playing: true, speed: 1, caseLineSeen: [] });
+    setJudgment({ run: response.run, eventIndex: 0, finished: false, playing: true, speed: 1 });
     setModal(null);
     showToast(
       response.run.engine === "local"
@@ -436,123 +398,59 @@ export default function App() {
   }, []);
 
   const toggleJudgmentPlay = useCallback(() => {
+    if (judgment?.finished) {
+      setRevealedEffects([]);
+      setJudgment((current) => current
+        ? { ...current, eventIndex: 0, finished: false, playing: true }
+        : current);
+      return;
+    }
+    setJudgment((current) => current ? { ...current, playing: !current.playing } : current);
+  }, [judgment?.finished]);
+
+  const nextEntry = useCallback(() => {
     setJudgment((current) => {
       if (!current) return current;
-      const total = current.run.verdicts.length;
-      if (current.supportPreviewId) {
-        const restart = current.step >= total;
-        if (restart) setRevealedEffects([]);
-        return {
-          ...current,
-          step: restart ? 0 : (current.supportPreviewStep ?? current.step),
-          supportPreviewId: undefined,
-          supportPreviewStep: undefined,
-          caseLineId: undefined,
-          caseLineStep: undefined,
-          caseLineSeen: restart ? [] : current.caseLineSeen,
-          playing: true
-        };
+      const record = buildJudgmentRecord(current.run);
+      if (current.finished) return { ...current, playing: false };
+      if (current.eventIndex < record.length) {
+        return { ...current, eventIndex: current.eventIndex + 1, playing: false };
       }
-      if (current.step >= total) {
-        setRevealedEffects([]);
-        return { ...current, step: 0, playing: true, caseLineId: undefined, caseLineStep: undefined, caseLineSeen: [] };
-      }
-      return { ...current, playing: !current.playing };
+      return { ...current, finished: true, playing: false };
     });
   }, []);
 
-  const nextRuling = useCallback(() => {
-    setJudgment((current) => {
-      if (!current) return current;
-      if (current.supportPreviewId) {
-        const base = current.supportPreviewStep ?? current.step;
-        return {
-          ...current,
-          step: Math.min(current.run.verdicts.length, base + 1),
-          playing: false,
-          supportPreviewId: undefined,
-          supportPreviewStep: undefined
-        };
-      }
-      if (current.caseLineId) {
-        return {
-          ...current,
-          playing: false,
-          caseLineId: undefined,
-          caseLineStep: undefined
-        };
-      }
-      if (current.step >= current.run.verdicts.length) return { ...current, playing: false };
-      return {
-        ...current,
-        step: current.step + 1,
-        playing: false,
-        caseLineId: undefined,
-        caseLineStep: undefined,
-        caseLineSeen: []
-      };
-    });
-  }, []);
-
-  const previousRuling = useCallback(() => {
+  const previousEntry = useCallback(() => {
     setRevealedEffects([]);
     setJudgment((current) => {
       if (!current) return current;
-      const base = current.supportPreviewId
-        ? current.supportPreviewStep ?? current.step
-        : current.step;
-      return {
-        ...current,
-        step: Math.max(0, base - 1),
-        playing: false,
-        caseLineId: undefined,
-        caseLineStep: undefined,
-        supportPreviewId: undefined,
-        supportPreviewStep: undefined,
-        caseLineSeen: []
-      };
+      const record = buildJudgmentRecord(current.run);
+      if (current.finished) {
+        return { ...current, eventIndex: record.length, finished: false, playing: false };
+      }
+      if (current.eventIndex <= 1) return { ...current, playing: false };
+      return { ...current, eventIndex: Math.max(0, current.eventIndex - 1), finished: false, playing: false };
     });
   }, []);
 
   const restartJudgment = useCallback(() => {
     setRevealedEffects([]);
     setJudgment((current) => current
-      ? { ...current, step: 0, playing: true, caseLineId: undefined, caseLineStep: undefined, supportPreviewId: undefined, supportPreviewStep: undefined, caseLineSeen: [] }
+      ? { ...current, eventIndex: 0, finished: false, playing: true }
       : current);
   }, []);
 
-  const seekRuling = useCallback((step: number) => {
+  const selectEntry = useCallback((order: number) => {
     setRevealedEffects([]);
     setJudgment((current) => {
       if (!current) return current;
-      const target = Math.max(0, Math.min(current.run.verdicts.length, step));
-      // Manual navigation is an inspection step. Show the selected ruling
-      // exactly; case-line cues belong to autoplay only.
+      const record = buildJudgmentRecord(current.run);
+      const target = Math.max(1, Math.min(record.length, order));
       return {
         ...current,
-        step: target,
-        playing: false,
-        caseLineId: undefined,
-        caseLineStep: undefined,
-        supportPreviewId: undefined,
-        supportPreviewStep: undefined,
-        caseLineSeen: []
-      };
-    });
-  }, []);
-
-  const inspectSupport = useCallback((edgeId: string) => {
-    setJudgment((current) => {
-      if (!current) return current;
-      return {
-        ...current,
-        playing: false,
-        caseLineId: undefined,
-        caseLineStep: undefined,
-        supportPreviewId: edgeId,
-        supportPreviewStep: current.caseLineId
-          ? Math.min(current.step, Math.max(0, current.caseLineStep ?? current.step - 1))
-          : current.step
+        eventIndex: target,
+        finished: false,
+        playing: false
       };
     });
   }, []);
@@ -574,65 +472,42 @@ export default function App() {
   }, [debate, judgment, showToast]);
 
   useEffect(() => {
-    if (!judgment?.playing) return;
-    if (judgment.caseLineId) {
+    if (!judgment?.playing || judgment.finished) return;
+    const recordLength = judgmentRecord.length;
+    if (judgment.eventIndex >= recordLength) {
+      // The last record entry gets its own beat, then the final judgment
+      // replaces it as a separate end state.
       const timer = window.setTimeout(() => {
-        setJudgment((current) => {
-          if (!current || !current.caseLineId) return current;
-          return {
-            ...current,
-            caseLineId: undefined,
-            caseLineStep: undefined,
-            caseLineSeen: [
-              ...current.caseLineSeen,
-              caseLineKey(current.caseLineStep ?? current.step, current.caseLineId)
-            ]
-          };
-        });
+        setJudgment((current) => current && current.playing && !current.finished
+          ? { ...current, finished: true, playing: false }
+          : current);
       }, PLAYBACK_BEAT_MS / judgment.speed);
       return () => window.clearTimeout(timer);
     }
-    const total = judgment.run.verdicts.length;
-    const nextCaseLine = (caseLineCues.get(judgment.step) ?? [])
-      .find((edgeId) => !judgment.caseLineSeen.includes(caseLineKey(judgment.step, edgeId)));
-    if (nextCaseLine) {
-      // The cursor has advanced to this step, but the previous branch's last
-      // ruling has not had its own beat yet. Let it hold, then open the support
-      // stem and advance the cursor with the cue so the reply is not replayed.
-      const cueDelay = judgment.step > 0 ? PLAYBACK_BEAT_MS / judgment.speed : 0;
-      const nextStep = Math.min(judgment.step + 1, judgment.run.verdicts.length);
-      const timer = window.setTimeout(() => {
-        setJudgment((current) => {
-          if (!current || current.caseLineId || current.step !== judgment.step) return current;
-          return {
-            ...current,
-            step: nextStep,
-            caseLineId: nextCaseLine,
-            caseLineStep: judgment.step
-          };
-        });
-      }, cueDelay);
-      return () => window.clearTimeout(timer);
-    }
-    if (total === 0 || judgment.step >= total) {
-      setJudgment((current) => current ? { ...current, playing: false } : current);
-      return;
-    }
-    // Every visible beat has the same length: rulings and support-stem cues
-    // alike. This keeps the bench from speeding up around branch transitions.
-    const delay = PLAYBACK_BEAT_MS / judgment.speed;
+    const from = judgment.eventIndex;
     const timer = window.setTimeout(() => {
       setJudgment((current) => {
-        if (!current || !current.playing) return current;
-        return { ...current, step: Math.min(current.run.verdicts.length, current.step + 1) };
+        if (!current || !current.playing || current.finished || current.eventIndex !== from) return current;
+        return { ...current, eventIndex: Math.min(recordLength, current.eventIndex + 1) };
       });
-    }, delay);
+    }, PLAYBACK_BEAT_MS / judgment.speed);
     return () => window.clearTimeout(timer);
-  }, [judgment?.playing, judgment?.step, judgment?.speed, judgment?.caseLineId, judgment?.caseLineSeen, judgment?.run.verdicts.length, caseLineCues]);
+  }, [judgment?.playing, judgment?.eventIndex, judgment?.speed, judgment?.finished, judgmentRecord.length]);
 
   useEffect(() => {
-    if (!judgment || judgment.step <= 0 || judgment.caseLineId) return;
-    const key = effectRevealKey(judgment.run.id, judgment.step);
+    if (!judgment || judgment.finished || judgment.eventIndex <= 0) return;
+    const entry = judgmentRecord[judgment.eventIndex - 1];
+    if (!entry) return;
+    if (entry.kind === "support") {
+      // Selecting a support jumps to a conflict prefix. That prefix must be
+      // visible immediately; the support itself is the selected station.
+      if (entry.step > 0) {
+        const key = effectRevealKey(judgment.run.id, entry.step);
+        setRevealedEffects((current) => current.includes(key) ? current : [...current, key]);
+      }
+      return;
+    }
+    const key = effectRevealKey(judgment.run.id, entry.index);
     if (revealedEffects.includes(key)) return;
     if (!judgment.playing) {
       setRevealedEffects((current) => current.includes(key) ? current : [...current, key]);
@@ -642,7 +517,7 @@ export default function App() {
       setRevealedEffects((current) => current.includes(key) ? current : [...current, key]);
     }, Math.max(0, PLAYBACK_BEAT_MS / judgment.speed - 350));
     return () => window.clearTimeout(timer);
-  }, [judgment?.run.id, judgment?.step, judgment?.speed, judgment?.playing, judgment?.caseLineId, revealedEffects]);
+  }, [judgment?.run.id, judgment?.eventIndex, judgment?.speed, judgment?.playing, judgment?.finished, revealedEffects, judgmentRecord]);
 
   useEffect(() => {
     if (!judgment || modal) return;
@@ -655,17 +530,17 @@ export default function App() {
         toggleJudgmentPlay();
       } else if (event.key === "ArrowRight") {
         event.preventDefault();
-        nextRuling();
+        nextEntry();
       } else if (event.key === "ArrowLeft") {
         event.preventDefault();
-        previousRuling();
+        previousEntry();
       } else if (event.key === "Escape" && !selectedId) {
         closeJudgment();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [judgment, selectedId, modal, toggleJudgmentPlay, nextRuling, previousRuling, closeJudgment]);
+  }, [judgment, selectedId, modal, toggleJudgmentPlay, nextEntry, previousEntry, closeJudgment]);
 
   useEffect(() => {
     if (!stage?.playing) return;
@@ -965,7 +840,7 @@ export default function App() {
               {debate && (
                 judgment && judgmentSnapshot ? (
                   <div className="canvas-stats canvas-stats--judgment">
-                    {judgment.step > 0 || judgmentComplete ? (
+                    {conflictStep > 0 || judgmentComplete ? (
                       <>
                         <span><b>{visibleCounts.standing}</b> standing</span>
                         <span><b>{visibleCounts.defeated}</b> defeated</span>
@@ -1037,20 +912,20 @@ export default function App() {
           <JudgmentPanel
             debate={debate}
             run={judgment.run}
-            step={panelStep}
+            step={conflictStep}
+            currentOrder={judgment.eventIndex}
+            finished={judgment.finished}
             playing={judgment.playing}
             speed={judgment.speed}
             snapshot={judgmentSnapshot}
             restored={effectRevealed ? restored : []}
             counts={visibleCounts}
-            caseLineId={judgment.supportPreviewId ?? judgment.caseLineId}
-            caseLinePinned={Boolean(judgment.supportPreviewId)}
+            caseLineId={currentSupportId}
             onTogglePlay={toggleJudgmentPlay}
-            onNext={nextRuling}
-            onPrevious={previousRuling}
+            onNext={nextEntry}
+            onPrevious={previousEntry}
             onRestart={restartJudgment}
-            onSeek={seekRuling}
-            onInspectSupport={inspectSupport}
+            onSeek={selectEntry}
             onSpeedChange={(speed) => setJudgment((current) => current ? { ...current, speed } : current)}
             onExit={closeJudgment}
             onNewRun={() => setModal("judge")}

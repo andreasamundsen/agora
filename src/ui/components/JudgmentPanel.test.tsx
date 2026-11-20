@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { reconcileDebate } from "../../core/model";
 import {
+  buildJudgmentRecord,
   buildJudgmentRun,
   solveJudgment,
   type ClashJudgment,
@@ -87,7 +88,13 @@ function panelFixture() {
   };
 }
 
-describe("JudgmentPanel case-line cue", () => {
+function orderFor(run: ReturnType<typeof buildJudgmentRun>, edgeId: string): number {
+  return buildJudgmentRecord(run).find((entry) =>
+    entry.kind === "support" ? entry.support.edgeId === edgeId : entry.verdict.edgeId === edgeId
+  )?.order ?? 0;
+}
+
+describe("JudgmentPanel unified record", () => {
   it("shows the opening support instead of the numbered ruling while a case line is active", () => {
     const { debate, run, snapshot } = panelFixture();
     const markup = renderToStaticMarkup(
@@ -95,6 +102,8 @@ describe("JudgmentPanel case-line cue", () => {
         debate={debate}
         run={run}
         step={0}
+        currentOrder={orderFor(run, "e_support")}
+        finished={false}
         playing={false}
         speed={1}
         snapshot={snapshot}
@@ -106,7 +115,7 @@ describe("JudgmentPanel case-line cue", () => {
         onPrevious={() => {}}
         onRestart={() => {}}
         onSeek={() => {}}
-        onInspectSupport={() => {}}
+
         onSpeedChange={() => {}}
         onExit={() => {}}
         onNewRun={() => {}}
@@ -120,9 +129,12 @@ describe("JudgmentPanel case-line cue", () => {
     expect(markup).toContain("Strong support");
     expect(markup).toContain("The support directly carries the thesis.");
     expect(markup).toContain("3 links · 2 rulings · 1 support");
-    expect(markup).toContain("A case line is being introduced; the first ruling follows.");
+    expect(markup).toContain("This support contributes to the pro case.");
     expect(markup).not.toContain("Ruling 01");
     expect(markup).not.toContain("One ruling at a time.");
+    const supportRow = markup.match(/<button[^>]*record-row--support[^>]*>/)?.[0] ?? "";
+    expect(supportRow).toContain("is-current");
+    expect(supportRow).not.toContain("is-future");
   });
 
   it("keeps a support row future until its case-line cue starts", () => {
@@ -132,6 +144,8 @@ describe("JudgmentPanel case-line cue", () => {
         debate={debate}
         run={run}
         step={0}
+        currentOrder={0}
+        finished={false}
         playing={false}
         speed={1}
         snapshot={snapshot}
@@ -142,7 +156,7 @@ describe("JudgmentPanel case-line cue", () => {
         onPrevious={() => {}}
         onRestart={() => {}}
         onSeek={() => {}}
-        onInspectSupport={() => {}}
+
         onSpeedChange={() => {}}
         onExit={() => {}}
         onNewRun={() => {}}
@@ -153,8 +167,8 @@ describe("JudgmentPanel case-line cue", () => {
 
     const supportRow = markup.match(/<button[^>]*record-row--support[^>]*>/)?.[0] ?? "";
     expect(supportRow).toContain("is-future");
-    expect(supportRow).toContain("disabled");
     expect(supportRow).not.toContain("is-current");
+    expect(supportRow).not.toContain("disabled");
     expect(markup).not.toContain("Strong support");
   });
 
@@ -165,6 +179,8 @@ describe("JudgmentPanel case-line cue", () => {
         debate={debate}
         run={run}
         step={1}
+        currentOrder={orderFor(run, "e_objection2")}
+        finished={false}
         playing={false}
         speed={1}
         snapshot={snapshot}
@@ -175,7 +191,7 @@ describe("JudgmentPanel case-line cue", () => {
         onPrevious={() => {}}
         onRestart={() => {}}
         onSeek={() => {}}
-        onInspectSupport={() => {}}
+
         onSpeedChange={() => {}}
         onExit={() => {}}
         onNewRun={() => {}}
@@ -190,26 +206,72 @@ describe("JudgmentPanel case-line cue", () => {
     expect(currentRows[0]).not.toContain("record-row--support");
   });
 
-  it("lists every link and can pin a support at the end of the run", () => {
+  it("gives a final support its own card, then a separate completed judgment", () => {
+    const { debate, run, snapshot } = panelFixture();
+    const finalRun = { ...run, waves: [] };
+    const record = buildJudgmentRecord(finalRun);
+    const supportOrder = record.find((entry) => entry.kind === "support")?.order ?? 0;
+    expect(record[record.length - 1]?.kind).toBe("support");
+    expect(supportOrder).toBe(record.length);
+
+    const common = {
+      debate,
+      run: finalRun,
+      step: finalRun.verdicts.length,
+      playing: false,
+      speed: 1,
+      snapshot,
+      restored: [],
+      counts: snapshot.counts,
+      onTogglePlay: () => {},
+      onNext: () => {},
+      onPrevious: () => {},
+      onRestart: () => {},
+      onSeek: () => {},
+      onSpeedChange: () => {},
+      onExit: () => {},
+      onNewRun: () => {},
+      onOpenSettings: () => {},
+      onReport: () => {}
+    };
+
+    const supportBeat = renderToStaticMarkup(
+      <JudgmentPanel {...common} currentOrder={supportOrder} finished={false} caseLineId="e_support" />
+    );
+    expect(supportBeat).toContain("Case line");
+    expect(supportBeat).toContain("This support contributes to the pro case.");
+    expect(supportBeat).not.toContain("judgment-finale");
+    expect(supportBeat.match(/record-row[^>]*is-current/)).toHaveLength(1);
+
+    const finished = renderToStaticMarkup(
+      <JudgmentPanel {...common} currentOrder={record.length} finished />
+    );
+    expect(finished).toContain("judgment-finale");
+    expect(finished).not.toContain("ruling-card--case-line");
+    expect(finished).not.toMatch(/record-row[^>]*is-current/);
+  });
+
+  it("lists every link and selects a support without a competing ruling highlight", () => {
     const { debate, run, snapshot } = panelFixture();
     const markup = renderToStaticMarkup(
       <JudgmentPanel
         debate={debate}
         run={run}
         step={2}
+        currentOrder={orderFor(run, "e_support")}
+        finished={false}
         playing={false}
         speed={1}
         snapshot={snapshot}
         restored={[]}
         counts={snapshot.counts}
         caseLineId="e_support"
-        caseLinePinned
         onTogglePlay={() => {}}
         onNext={() => {}}
         onPrevious={() => {}}
         onRestart={() => {}}
         onSeek={() => {}}
-        onInspectSupport={() => {}}
+
         onSpeedChange={() => {}}
         onExit={() => {}}
         onNewRun={() => {}}
