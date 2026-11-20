@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Debate } from "../../core/model";
 import {
+  BURDEN_SHARE,
   clashEdges,
   STANDARD_LABEL,
   STANDARD_NOTE,
@@ -24,6 +25,8 @@ const WAIT_LINES = [
   "Weighing the objection",
   "Recording the ruling"
 ];
+
+const BURDEN_SHARE_LABEL = `${Math.round(BURDEN_SHARE * 5)}/5`;
 
 function ScalesMark({ animated = false }: { animated?: boolean }) {
   return (
@@ -187,11 +190,16 @@ export function JudgmentModal({
                   <option key={value} value={value}>{STANDARD_LABEL[value]}</option>
                 ))}
               </select>
-              <span className="field-hint">{STANDARD_NOTE[standard]}</span>
+              <span className="field-hint">
+                {STANDARD_NOTE[standard]}
+                {standard === "preponderance"
+                  ? ""
+                  : ` The winning side must lead by at least two points and hold ${BURDEN_SHARE_LABEL} of the weighted case.`}
+              </span>
             </label>
 
             <div className="field">
-              <span className="field-label">How strict is the bench?</span>
+              <span className="field-label">Evidence bar <em>separate from the burden</em></span>
               <div className="judge-segmented">
                 {(["strict", "balanced", "generous"] as JudgeStrictness[]).map((value) => (
                   <button
@@ -204,7 +212,9 @@ export function JudgmentModal({
                   </button>
                 ))}
               </div>
-              <span className="field-hint">{STRICTNESS_NOTE[strictness]}</span>
+              <span className="field-hint">
+                {STRICTNESS_NOTE[strictness]} This sets the confidence needed to strike; the standard above sets the burden.
+              </span>
             </div>
           </div>
 

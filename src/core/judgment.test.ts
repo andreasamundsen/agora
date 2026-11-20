@@ -378,6 +378,99 @@ describe("judgment solver", () => {
     expect(snapshot.balance.con).toBe(1.5);
   });
 
+  it("requires both a 3/5 share and a two-point lead under a pro burden", () => {
+    const small = weightedDebate(3, 2);
+    const smallVerdicts = Array.from({ length: 2 }, (_, index) =>
+      verdict(`e_con${index}_thesis`, `con${index}`, "thesis", "weakens")
+    );
+    const smallAssessments = [
+      ...Array.from({ length: 3 }, (_, index) =>
+        assess(`e_pro${index}_thesis`, "pro", "weak", `pro-line-${index}`)
+      ),
+      ...Array.from({ length: 2 }, (_, index) =>
+        assess(`e_con${index}_thesis`, "con", "marginal", `con-line-${index}`)
+      )
+    ];
+    const smallSnapshot = solveJudgment(small, smallVerdicts, "pro", smallAssessments);
+    expect(smallSnapshot.balance.margin).toBe(1);
+    expect(smallSnapshot.balance.threshold).toBe(2);
+    expect(smallSnapshot.outcome).toBe("unestablished");
+
+    const proportional = weightedDebate(3, 4);
+    const proportionalVerdicts = Array.from({ length: 4 }, (_, index) =>
+      verdict(`e_con${index}_thesis`, `con${index}`, "thesis", "weakens")
+    );
+    const proportionalAssessments = [
+      ...Array.from({ length: 3 }, (_, index) =>
+        assess(`e_pro${index}_thesis`, "pro", "moderate", `pro-line-${index}`)
+      ),
+      ...Array.from({ length: 4 }, (_, index) =>
+        assess(`e_con${index}_thesis`, "con", "marginal", `con-line-${index}`)
+      )
+    ];
+    const proportionalSnapshot = solveJudgment(
+      proportional,
+      proportionalVerdicts,
+      "pro",
+      proportionalAssessments
+    );
+    expect(proportionalSnapshot.balance.margin).toBe(2);
+    expect(proportionalSnapshot.balance.threshold).toBe(2);
+    expect(proportionalSnapshot.outcome).toBe("stands");
+  });
+
+  it("scales the required lead above the two-point floor on a large record", () => {
+    const debate = weightedDebate(11, 9);
+    const verdicts = Array.from({ length: 9 }, (_, index) =>
+      verdict(`e_con${index}_thesis`, `con${index}`, "thesis", "weakens")
+    );
+    const assessments = [
+      ...Array.from({ length: 11 }, (_, index) =>
+        assess(`e_pro${index}_thesis`, "pro", "weak", `pro-line-${index}`)
+      ),
+      ...Array.from({ length: 9 }, (_, index) =>
+        assess(`e_con${index}_thesis`, "con", "marginal", `con-line-${index}`)
+      )
+    ];
+    const snapshot = solveJudgment(debate, verdicts, "pro", assessments);
+    expect(snapshot.balance.margin).toBe(2);
+    expect(snapshot.balance.threshold).toBe(4);
+    expect(snapshot.outcome).toBe("unestablished");
+  });
+
+  it("applies the same proportional lead to a con burden", () => {
+    const close = weightedDebate(3, 4);
+    const closeVerdicts = Array.from({ length: 4 }, (_, index) =>
+      verdict(`e_con${index}_thesis`, `con${index}`, "thesis", "weakens")
+    );
+    const closeAssessments = [
+      ...Array.from({ length: 3 }, (_, index) =>
+        assess(`e_pro${index}_thesis`, "pro", "weak", `pro-line-${index}`)
+      ),
+      ...Array.from({ length: 4 }, (_, index) =>
+        assess(`e_con${index}_thesis`, "con", "marginal", `con-line-${index}`)
+      )
+    ];
+    expect(solveJudgment(close, closeVerdicts, "con", closeAssessments).outcome).toBe("stands");
+
+    const clear = weightedDebate(4, 6);
+    const clearVerdicts = Array.from({ length: 6 }, (_, index) =>
+      verdict(`e_con${index}_thesis`, `con${index}`, "thesis", "weakens")
+    );
+    const clearAssessments = [
+      ...Array.from({ length: 4 }, (_, index) =>
+        assess(`e_pro${index}_thesis`, "pro", "weak", `pro-line-${index}`)
+      ),
+      ...Array.from({ length: 6 }, (_, index) =>
+        assess(`e_con${index}_thesis`, "con", "marginal", `con-line-${index}`)
+      )
+    ];
+    const snapshot = solveJudgment(clear, clearVerdicts, "con", clearAssessments);
+    expect(snapshot.balance.margin).toBe(-2);
+    expect(snapshot.balance.threshold).toBe(-2);
+    expect(snapshot.outcome).toBe("falls");
+  });
+
   it("lets a lopsided pro case carry a pro burden", () => {
     const debate = weightedDebate(10, 1);
     const verdicts = [verdict("e_con0_thesis", "con0", "thesis", "weakens")];

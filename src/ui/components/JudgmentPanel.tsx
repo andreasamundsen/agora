@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import type { Debate } from "../../core/model";
 import {
-  BURDEN_THRESHOLDS,
+  BURDEN_SHARE,
   CRITERION_LABEL,
   IMPACT_LABEL,
   OUTCOME_LABEL,
@@ -88,10 +88,15 @@ function formatPoints(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
 }
 
-function thresholdText(standard: JudgmentRun["standard"]): string {
-  if (standard === "pro") return `Pro must lead by at least ${formatPoints(BURDEN_THRESHOLDS.pro)} points.`;
-  if (standard === "con") return `Con must lead by at least ${formatPoints(BURDEN_THRESHOLDS.con)} points.`;
-  return `The margin must clear ±${formatPoints(BURDEN_THRESHOLDS.preponderance)} points.`;
+function thresholdText(balance: CaseBalance, standard: JudgmentRun["standard"]): string {
+  const share = `${Math.round(BURDEN_SHARE * 5)}/5`;
+  if (standard === "pro") {
+    return `Pro must lead by at least ${formatPoints(Math.abs(balance.threshold))} points and hold ${share} of the weighted case.`;
+  }
+  if (standard === "con") {
+    return `Con must lead by at least ${formatPoints(Math.abs(balance.threshold))} points and hold ${share} of the weighted case.`;
+  }
+  return `The margin must clear ±${formatPoints(balance.threshold)} points.`;
 }
 
 function BalanceCard({
@@ -134,7 +139,7 @@ function BalanceCard({
 
       <div className="balance-threshold">
         <span>Burden threshold</span>
-        <b>{thresholdText(standard)}</b>
+        <b>{thresholdText(balance, standard)}</b>
       </div>
 
       <details className="balance-lines">

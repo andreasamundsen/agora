@@ -56,6 +56,7 @@ export interface CaseBalance {
   pro: number;
   con: number;
   margin: number;
+  /** Signed minimum margin; negative under a con burden. */
   threshold: number;
   lines: CaseLineWeight[];
   assessed: boolean;
@@ -218,15 +219,15 @@ export const STANDARD_NOTE: Record<StandardOfProof, string> = {
 };
 
 export const STRICTNESS_LABEL: Record<JudgeStrictness, string> = {
-  strict: "Strict",
-  balanced: "Balanced",
-  generous: "Generous"
+  strict: "High",
+  balanced: "Medium",
+  generous: "Low"
 };
 
 export const STRICTNESS_NOTE: Record<JudgeStrictness, string> = {
   strict: "Only a high-confidence ruling can strike an argument.",
   balanced: "High or medium confidence can strike an argument.",
-  generous: "The judge's ruling stands, even when it is unsure."
+  generous: "Even a low-confidence ruling can strike an argument."
 };
 
 export const QUALITY_LABEL: Record<ArgumentQuality, string> = {
@@ -274,12 +275,15 @@ export function meetsEvidenceBar(
   return CONFIDENCE_RANK[confidence] >= CONFIDENCE_RANK[required];
 }
 
-/** Initial burden calibration. These are points, not probabilities. */
+/** Minimum burden lead. A pro or con burden also requires a 3/5 share. */
 export const BURDEN_THRESHOLDS: Record<StandardOfProof, number> = {
   pro: 2,
   con: 2,
   preponderance: 0.5
 };
+
+/** The weighted share required under a pro or con burden. */
+export const BURDEN_SHARE = 0.6;
 
 /**
  * The motion card speaks in outcomes, not in ordinary argument statuses. It
@@ -576,14 +580,15 @@ export function solveJudgment(
   } else if (balance.pro <= 0) {
     outcome = "unestablished";
   } else if (standard === "pro") {
+    const required = Math.abs(balance.threshold);
     outcome =
-      balance.margin >= BURDEN_THRESHOLDS.pro
+      balance.margin >= required
         ? "stands"
-        : balance.margin <= -BURDEN_THRESHOLDS.con
+        : balance.margin <= -required
           ? "falls"
           : "unestablished";
   } else if (standard === "con") {
-    outcome = balance.margin <= -BURDEN_THRESHOLDS.con ? "falls" : "stands";
+    outcome = balance.margin <= balance.threshold ? "falls" : "stands";
   } else {
     outcome =
       balance.margin > BURDEN_THRESHOLDS.preponderance
@@ -778,12 +783,17 @@ export function buildCaseBalance(input: {
   const pro = round2(lines.filter((line) => line.side === "pro").reduce((sum, line) => sum + line.weight, 0));
   const con = round2(lines.filter((line) => line.side === "con").reduce((sum, line) => sum + line.weight, 0));
   const margin = round2(pro - con);
-  const threshold =
-    input.standard === "pro"
-      ? BURDEN_THRESHOLDS.pro
-      : input.standard === "con"
-        ? -BURDEN_THRESHOLDS.con
-        : BURDEN_THRESHOLDS.preponderance;
+  const total = round2(pro + con);
+  // A pro or con burden needs a 3/5 share of the weighted case, with a
+  // two-point floor so a tiny record cannot carry a "must establish" burden.
+  // Preponderance keeps its small absolute deadband.
+  const requiredMargin = input.standard === "preponderance"
+    ? BURDEN_THRESHOLDS.preponderance
+    : Math.max(
+        BURDEN_THRESHOLDS[input.standard],
+        round2(total * (2 * BURDEN_SHARE - 1))
+      );
+  const threshold = input.standard === "con" ? -requiredMargin : requiredMargin;
 
   return {
     pro,
@@ -1341,7 +1351,11 @@ export function judgmentMarkdown(debate: Debate, run: JudgmentRun): string {
     lines.push(`- **Pro case:** ${run.balance.pro} points`);
     lines.push(`- **Con case:** ${run.balance.con} points`);
     lines.push(`- **Margin:** ${run.balance.margin >= 0 ? "+" : ""}${run.balance.margin} points`);
-    lines.push(`- **Threshold:** ${run.balance.threshold >= 0 ? "+" : ""}${run.balance.threshold} points`);
+    lines.push(
+      run.standard === "preponderance"
+        ? `- **Threshold:** ±${run.balance.threshold} points`
+        : `- **Threshold:** ${run.standard === "pro" ? "Pro" : "Con"} must lead by at least ${Math.abs(run.balance.threshold)} points and hold a 3/5 share of the weighted case`
+    );
     lines.push(`- **Basis:** ${run.balance.assessed ? "judge-rated case lines" : "structural weights"}`);
     lines.push("");
     for (const line of run.balance.lines) {
