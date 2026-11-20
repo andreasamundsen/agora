@@ -260,6 +260,11 @@ export const RATING_CONFIDENCE_FACTOR: Record<JudgmentConfidence, number> = {
   low: 0.5
 };
 
+/** Neutral fallback when a substantive case-line assessment is missing. */
+const STRUCTURAL_QUALITY: ArgumentQuality = "moderate";
+const STRUCTURAL_IMPACT: AttackImpact = "material";
+const STRUCTURAL_CONFIDENCE: JudgmentConfidence = "medium";
+
 const CONFIDENCE_RANK: Record<JudgmentConfidence, number> = {
   low: 0,
   medium: 1,
@@ -403,7 +408,7 @@ export function solveJudgment(
   const thesis = nodeById(debate, debate.thesisId);
   let thesisStatus = statuses[debate.thesisId] ?? "contested";
   const verdictByEdge = new Map(verdicts.map((verdict) => [verdict.edgeId, verdict]));
-  const assessmentByEdge = new Map(assessments.map((item) => [item.edgeId, item]));
+  const rawAssessmentByEdge = new Map(assessments.map((item) => [item.edgeId, item]));
   const setThesisStatus = (next: ArgumentStatus) => {
     if (thesisStatus === next) return;
     for (const list of [standing, defeated, contested]) {
@@ -457,6 +462,22 @@ export function solveJudgment(
       );
     })
     .map((edge) => edge.id);
+
+  // The weighing pass must cover every eligible case line. If it does not,
+  // discard the partial set: a proof, hard defeat, or weighted comparison must
+  // not mix a model-rated line with a structural default.
+  const lineSupportEdges = supportEdges.filter(
+    (edge) => liveSupports.includes(edge.id) || statuses[edge.from] === "contested"
+  );
+  const lineAttackEdges = liveAttacks
+    .map((edgeId) => debate.edges.find((edge) => edge.id === edgeId))
+    .filter((edge): edge is DebateEdge => edge !== undefined && isClashEdge(edge));
+  const completeAssessments =
+    lineSupportEdges.length + lineAttackEdges.length > 0 &&
+    lineSupportEdges.every((edge) => rawAssessmentByEdge.get(edge.id)?.side === "pro") &&
+    lineAttackEdges.every((edge) => rawAssessmentByEdge.get(edge.id)?.side === "con");
+  const effectiveAssessments = completeAssessments ? assessments : [];
+  const assessmentByEdge = new Map(effectiveAssessments.map((item) => [item.edgeId, item]));
 
   // Weakened is a condition, not another structural status. It records that a
   // surviving node was explicitly damaged by a live weakens ruling. It is
@@ -556,8 +577,7 @@ export function solveJudgment(
 
   const balance = buildCaseBalance({
     debate,
-    verdicts,
-    assessments,
+    assessments: effectiveAssessments,
     statuses,
     liveSupports,
     liveAttacks,
@@ -638,12 +658,6 @@ function clusterKey(value: string | undefined, fallback: string): string {
   return normalized || fallback;
 }
 
-function fallbackImpact(verdict: ClashVerdict | undefined): AttackImpact {
-  if (verdict === "defeats") return "decisive";
-  if (verdict === "undecided") return "material";
-  return "material";
-}
-
 /**
  * Turn the surviving direct case lines into a weighted balance. Only direct
  * supports and direct attacks on the thesis are case lines; replies earn
@@ -655,7 +669,6 @@ function fallbackImpact(verdict: ClashVerdict | undefined): AttackImpact {
  */
 export function buildCaseBalance(input: {
   debate: Debate;
-  verdicts: ClashJudgment[];
   assessments: CaseLineAssessment[];
   statuses: Record<string, ArgumentStatus>;
   liveSupports: string[];
@@ -665,22 +678,45 @@ export function buildCaseBalance(input: {
   strictness: JudgeStrictness;
 }): CaseBalance {
   const assessmentByEdge = new Map(input.assessments.map((item) => [item.edgeId, item]));
-  const rulingByEdge = new Map(input.verdicts.map((item) => [item.edgeId, item]));
   const clean = new Set(input.cleanSupports);
   const lines: CaseLineWeight[] = [];
   const supportEdges = input.debate.edges.filter(
     (edge) => edge.type === "support" && edge.to === input.debate.thesisId
   );
+  const eligibleSupportEdges = supportEdges.filter((edge) => {
+    const source = nodeById(input.debate, edge.from);
+    if (!source) return false;
+    const sourceStatus = input.statuses[source.id];
+    if (sourceStatus !== "standing" && sourceStatus !== "contested") return false;
+    return sourceStatus === "contested" || input.liveSupports.includes(edge.id);
+  });
+  const eligibleAttackEdges = input.liveAttacks.flatMap((edgeId) => {
+    const edge = input.debate.edges.find((candidate) => candidate.id === edgeId);
+    if (!edge || !isClashEdge(edge)) return [];
+    const source = nodeById(input.debate, edge.from);
+    if (!source) return [];
+    const sourceStatus = input.statuses[source.id];
+    if (!sourceStatus || sourceStatus === "defeated") return [];
+    return [edge];
+  });
+  // If the weighing pass omitted any eligible line, ignore the entire partial
+  // set and use one neutral structural baseline for both sides. Mixing rated
+  // and unrated lines would make the two sides incomparable.
+  const completeAssessments =
+    eligibleSupportEdges.length + eligibleAttackEdges.length > 0 &&
+    eligibleSupportEdges.every((edge) => assessmentByEdge.get(edge.id)?.side === "pro") &&
+    eligibleAttackEdges.every((edge) => assessmentByEdge.get(edge.id)?.side === "con");
+  const assessmentFor = (edgeId: string): CaseLineAssessment | undefined =>
+    completeAssessments ? assessmentByEdge.get(edgeId) : undefined;
 
-  for (const edge of supportEdges) {
+  for (const edge of eligibleSupportEdges) {
     const source = nodeById(input.debate, edge.from);
     if (!source) continue;
     const sourceStatus = input.statuses[source.id];
     if (sourceStatus !== "standing" && sourceStatus !== "contested") continue;
-    if (sourceStatus === "standing" && !input.liveSupports.includes(edge.id)) continue;
-    const assessment = assessmentByEdge.get(edge.id);
-    const quality = assessment?.side === "pro" ? assessment.quality ?? "moderate" : "moderate";
-    const confidenceLabel = assessment?.side === "pro" ? assessment.confidence : "high";
+    const assessment = assessmentFor(edge.id);
+    const quality = assessment?.side === "pro" ? assessment.quality ?? STRUCTURAL_QUALITY : STRUCTURAL_QUALITY;
+    const confidenceLabel = assessment?.side === "pro" ? assessment.confidence : STRUCTURAL_CONFIDENCE;
     // A contested support is already carrying the uncertainty of its source.
     // Do not apply the additional pressure discount on top of the half-weight.
     const pressure = sourceStatus === "contested" ? 1 : clean.has(edge.id) ? 1 : 0.6;
@@ -710,22 +746,19 @@ export function buildCaseBalance(input: {
     });
   }
 
-  for (const edgeId of input.liveAttacks) {
-    const edge = input.debate.edges.find((candidate) => candidate.id === edgeId);
-    if (!edge || !isClashEdge(edge)) continue;
+  for (const edge of eligibleAttackEdges) {
     const source = nodeById(input.debate, edge.from);
     if (!source) continue;
     const sourceStatus = input.statuses[source.id];
     if (!sourceStatus || sourceStatus === "defeated") continue;
-    const assessment = assessmentByEdge.get(edgeId);
+    const edgeId = edge.id;
+    const assessment = assessmentFor(edgeId);
     const impact =
       assessment?.side === "con"
-        ? assessment.impact ?? "material"
-        : fallbackImpact(rulingByEdge.get(edgeId)?.verdict);
+        ? assessment.impact ?? STRUCTURAL_IMPACT
+        : STRUCTURAL_IMPACT;
     const confidenceLabel =
-      assessment?.side === "con"
-        ? assessment.confidence
-        : rulingByEdge.get(edgeId)?.confidence ?? "medium";
+      assessment?.side === "con" ? assessment.confidence : STRUCTURAL_CONFIDENCE;
     const base = IMPACT_POINTS[impact];
     const confidence = RATING_CONFIDENCE_FACTOR[confidenceLabel];
     const survival = sourceStatus === "standing" ? 1 : 0.5;
@@ -801,7 +834,7 @@ export function buildCaseBalance(input: {
     margin,
     threshold,
     lines,
-    assessed: lines.length > 0 && lines.every((line) => assessmentByEdge.has(line.edgeId))
+    assessed: completeAssessments
   };
 }
 

@@ -116,7 +116,10 @@ describe("judgment solver", () => {
       debate,
       [verdict("e_objection_thesis", "objection", "thesis")],
       "preponderance",
-      [assess("e_objection_thesis", "con", "decisive", "objection-line")]
+      [
+        assess("e_support_thesis", "pro", "moderate", "support-line"),
+        assess("e_objection_thesis", "con", "decisive", "objection-line")
+      ]
     );
     expect(snapshot.thesisStatus).toBe("defeated");
     expect(snapshot.outcome).toBe("falls");
@@ -204,7 +207,7 @@ describe("judgment solver", () => {
       verdict("e_rebuttal_objection", "rebuttal", "objection"),
       verdict("e_objection_rebuttal", "objection", "rebuttal")
     ];
-    expect(solveJudgment(debate, verdicts, "preponderance").outcome).toBe("undecided");
+    expect(solveJudgment(debate, verdicts, "preponderance").outcome).toBe("stands");
     expect(solveJudgment(debate, verdicts, "pro").outcome).toBe("unestablished");
     expect(solveJudgment(debate, verdicts, "con").outcome).toBe("stands");
   });
@@ -314,7 +317,7 @@ describe("judgment solver", () => {
     expect(snapshot.statuses.objection).toBe("defeated");
     expect(snapshot.liveAttacks).toHaveLength(0);
     expect(snapshot.cleanSupports).toEqual(["e_support_thesis"]);
-    expect(snapshot.outcome).toBe("stands");
+    expect(snapshot.outcome).toBe("unestablished");
   });
 
   it("treats a damaged support as pressure on the pro burden", () => {
@@ -325,9 +328,67 @@ describe("judgment solver", () => {
     const verdicts = [verdict("e_objection_support", "objection", "support", "weakens")];
     const pro = solveJudgment(debate, verdicts, "pro");
     expect(pro.outcome).toBe("unestablished");
-    expect(pro.balance.pro).toBe(1.2);
+    expect(pro.balance.pro).toBe(0.9);
     expect(solveJudgment(debate, verdicts, "preponderance").outcome).toBe("stands");
     expect(solveJudgment(debate, verdicts, "con").outcome).toBe("stands");
+  });
+
+  it("uses the same neutral fallback for unassessed pro and con lines", () => {
+    const debate = debateWith([
+      { from: "support", to: "thesis", type: "support" },
+      { from: "objection", to: "thesis", type: "attack" }
+    ]);
+    const verdicts = [verdict("e_objection_thesis", "objection", "thesis", "weakens")];
+    const snapshot = solveJudgment(debate, verdicts, "preponderance");
+    const proLine = snapshot.balance.lines.find((line) => line.side === "pro");
+    const conLine = snapshot.balance.lines.find((line) => line.side === "con");
+
+    expect(proLine).toMatchObject({
+      quality: "moderate",
+      confidenceLabel: "medium",
+      weight: 1.5
+    });
+    expect(conLine).toMatchObject({
+      impact: "material",
+      confidenceLabel: "medium",
+      weight: 1.5
+    });
+    expect(snapshot.balance).toMatchObject({ pro: 1.5, con: 1.5, margin: 0, assessed: false });
+    expect(snapshot.outcome).toBe("undecided");
+  });
+
+  it("does not turn a fallback defeat into decisive weight", () => {
+    const debate = debateWith([
+      { from: "support", to: "thesis", type: "support" },
+      { from: "objection", to: "thesis", type: "attack" }
+    ]);
+    const snapshot = solveJudgment(
+      debate,
+      [verdict("e_objection_thesis", "objection", "thesis", "defeats")],
+      "preponderance"
+    );
+    const conLine = snapshot.balance.lines.find((line) => line.side === "con");
+    expect(conLine).toMatchObject({ impact: "material", confidenceLabel: "medium", weight: 1.5 });
+    expect(snapshot.hardDefeats).toEqual([]);
+    expect(snapshot.proofs).toEqual([]);
+    expect(snapshot.withheldHardDefeats).toEqual(["e_objection_thesis"]);
+  });
+
+  it("uses the neutral fallback for the whole balance when an assessment is partial", () => {
+    const debate = debateWith([
+      { from: "support", to: "thesis", type: "support" },
+      { from: "objection", to: "thesis", type: "attack" }
+    ]);
+    const verdicts = [verdict("e_objection_thesis", "objection", "thesis", "weakens")];
+    const snapshot = solveJudgment(debate, verdicts, "preponderance", [
+      assess("e_support_thesis", "pro", "strong", "support-line", "high")
+    ]);
+    const proLine = snapshot.balance.lines.find((line) => line.side === "pro");
+    const conLine = snapshot.balance.lines.find((line) => line.side === "con");
+    expect(proLine).toMatchObject({ quality: "moderate", confidenceLabel: "medium", weight: 1.5 });
+    expect(conLine).toMatchObject({ impact: "material", confidenceLabel: "medium", weight: 1.5 });
+    expect(snapshot.balance.assessed).toBe(false);
+    expect(snapshot.proofs).toEqual([]);
   });
 
   it("gives a contested pro support half weight instead of dropping it", () => {
@@ -369,7 +430,10 @@ describe("judgment solver", () => {
         verdict("e_objection_rebuttal", "objection", "rebuttal")
       ],
       "preponderance",
-      [assess("e_objection_thesis", "con", "decisive", "con-line")]
+      [
+        assess("e_support_thesis", "pro", "moderate", "support-line"),
+        assess("e_objection_thesis", "con", "decisive", "con-line")
+      ]
     );
     expect(snapshot.statuses.objection).toBe("contested");
     const line = snapshot.balance.lines.find((candidate) => candidate.edgeId === "e_objection_thesis");
@@ -728,7 +792,7 @@ describe("judgment solver", () => {
     );
     expect(snapshot.liveAttacks).toHaveLength(0);
     expect(snapshot.irrelevant).toEqual(["objection"]);
-    expect(snapshot.outcome).toBe("stands");
+    expect(snapshot.outcome).toBe("unestablished");
   });
 
   it("keeps a shared reply normal when one outgoing clash still lands", () => {

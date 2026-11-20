@@ -425,12 +425,13 @@ async function assessCaseLines(
     if (!assessed.size) throw new Error("The weighing pass did not rate any case line.");
     if (assessed.size < sides.size) {
       warnings.push(
-        `The weighing pass rated ${assessed.size} of ${sides.size} case lines. Unrated lines use the structural fallback.`
+        `The weighing pass rated ${assessed.size} of ${sides.size} case lines. The whole balance uses the symmetric structural fallback.`
       );
+      return [];
     }
     return [...assessed.values()];
   } catch (error) {
-    warnings.push(`The weighing pass could not rate the case lines: ${providerError(error)}. Structural weights were used.`);
+    warnings.push(`The weighing pass could not rate the case lines: ${providerError(error)}. Symmetric structural weights were used.`);
     return [];
   }
 }
