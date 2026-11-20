@@ -1029,6 +1029,7 @@ export default function App() {
             snapshot={judgmentSnapshot}
             restored={effectRevealed ? restored : []}
             counts={visibleCounts}
+            caseLineId={judgment.caseLineId}
             onTogglePlay={toggleJudgmentPlay}
             onNext={nextRuling}
             onPrevious={previousRuling}

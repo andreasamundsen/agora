@@ -225,7 +225,8 @@ export function JudgmentPanel({
   onExit,
   onNewRun,
   onOpenSettings,
-  onReport
+  onReport,
+  caseLineId
 }: {
   debate: Debate;
   run: JudgmentRun;
@@ -235,6 +236,7 @@ export function JudgmentPanel({
   snapshot: JudgmentSnapshot;
   restored: string[];
   counts: JudgmentSnapshot["counts"];
+  caseLineId?: string;
   onTogglePlay: () => void;
   onNext: () => void;
   onPrevious: () => void;
@@ -249,6 +251,10 @@ export function JudgmentPanel({
   const total = run.verdicts.length;
   const complete = step >= total;
   const current = step > 0 ? run.verdicts[step - 1] : undefined;
+  const caseLine = caseLineId ? debate.edges.find((edge) => edge.id === caseLineId) : undefined;
+  const caseLineWave = caseLine
+    ? run.waves.find((wave) => wave.rootEdgeId === caseLine.id)?.label
+    : undefined;
   const waveFor = useMemo(() => {
     const map = new Map<string, string>();
     for (const wave of run.waves) for (const id of wave.verdictIds) map.set(id, wave.label);
@@ -313,7 +319,32 @@ export function JudgmentPanel({
           </section>
         )}
 
-        {current && !complete && (
+        {caseLine && !complete && (
+          <article className="ruling-card ruling-card--case-line" key={`case-line-${caseLine.id}`}>
+            <div className="ruling-head">
+              <span className="ruling-index">Case line</span>
+              <span className="ruling-wave">{caseLineWave}</span>
+            </div>
+            <div className="ruling-verdict ruling-verdict--case-line">
+              <span>Support</span>
+              <i>The stem opens this case</i>
+            </div>
+            <div className="ruling-clash">
+              <div className="ruling-party">
+                <span>Support</span>
+                <b>{titleFor(debate, caseLine.from)}</b>
+              </div>
+              <div className="ruling-arrow ruling-arrow--support" aria-hidden="true">→</div>
+              <div className="ruling-party ruling-party--target">
+                <span>Toward</span>
+                <b>{titleFor(debate, caseLine.to)}</b>
+              </div>
+            </div>
+            <p className="case-line-note">A case line is being introduced. The first ruling follows.</p>
+          </article>
+        )}
+
+        {current && !complete && !caseLine && (
           <article className={`ruling-card ruling-card--${current.verdict}`} key={current.edgeId}>
             <div className="ruling-head">
               <span className="ruling-index">Ruling {String(step).padStart(2, "0")} <i>/ {String(total).padStart(2, "0")}</i></span>
@@ -406,7 +437,7 @@ export function JudgmentPanel({
             </div>
             <ol>
               {run.verdicts.map((verdict, index) => {
-                const isCurrent = index === step - 1;
+                const isCurrent = !caseLine && index === step - 1;
                 const isFuture = index >= step;
                 return (
                   <li key={verdict.edgeId}>

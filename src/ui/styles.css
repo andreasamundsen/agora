@@ -2325,6 +2325,7 @@ button:disabled { cursor: not-allowed; }
 .ruling-card--weakens { border-top-color: var(--gold); }
 .ruling-card--undecided { border-top-color: var(--under); }
 .ruling-card--irrelevant { border-top-color: var(--line-strong); }
+.ruling-card--case-line { border-top-color: var(--pro); }
 .ruling-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .ruling-index {
   font-family: var(--mono);
@@ -2362,6 +2363,18 @@ button:disabled { cursor: not-allowed; }
 .ruling-verdict--weakens span { color: var(--gold-deep); }
 .ruling-verdict--undecided span { color: var(--under); }
 .ruling-verdict--irrelevant span { color: var(--muted); }
+.ruling-verdict--case-line span { color: var(--pro-deep); }
+.ruling-verdict--case-line i { color: var(--pro-deep); }
+.ruling-arrow--support { color: var(--pro-deep); }
+.case-line-note {
+  margin: 11px 0 0;
+  padding-top: 9px;
+  border-top: 1px dashed var(--line);
+  font-family: var(--serif);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
 .ruling-clash {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr);
