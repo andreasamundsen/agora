@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { DebateStore, DebateReadError } from "./store";
 import { askDebate, authorDebate } from "./llm";
-import { judgeDebate, MAX_LINKS } from "./judge";
+import { judgeDebate, JudgeCancelledError, MAX_LINKS } from "./judge";
 import { ArgdownImportError, importArgdown } from "./argdown-import";
 import { toArgdown } from "../core/argdown";
 import { message } from "../core/model";
@@ -9,6 +9,7 @@ import { getSettings, isReady, isReasoningEffort, publicSettings, saveSettings, 
 import { providerUrlProblem } from "../shared/provider-url";
 import { testProviderConnection } from "./provider-test";
 import { listProviderModels } from "./provider-models";
+import type { JudgeProgressEvent } from "../shared/judge-progress";
 
 function unreadableDebate(res: Response): Response {
   return res.status(422).json({
@@ -118,8 +119,63 @@ export function createApi(store: DebateStore): Router {
           error: `This map has ${linkCount} argument links. The bench can hear at most ${MAX_LINKS} in one sitting.`
         });
       }
-      const run = await judgeDebate(debate, { model, standard, strictness });
-      res.json({ run });
+
+      if (req.body?.stream !== true) {
+        const run = await judgeDebate(debate, { model, standard, strictness });
+        return res.json({ run });
+      }
+
+      // The progress stream carries work status only; verdicts arrive in the
+      // final event after the full run exists.
+      res.status(200);
+      res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
+      res.setHeader("Cache-Control", "no-cache, no-transform");
+      res.setHeader("X-Accel-Buffering", "no");
+      res.flushHeaders?.();
+
+      let closed = false;
+      const controller = new AbortController();
+      const onClose = () => {
+        if (!res.writableEnded) {
+          closed = true;
+          controller.abort();
+        }
+      };
+      res.on("close", onClose);
+
+      const writeEvent = (event: JudgeProgressEvent) => {
+        if (closed || res.writableEnded || res.destroyed) return;
+        try {
+          res.write(`${JSON.stringify(event)}\n`);
+        } catch {
+          closed = true;
+          controller.abort();
+        }
+      };
+
+      try {
+        const run = await judgeDebate(debate, {
+          model,
+          standard,
+          strictness,
+          onProgress: writeEvent,
+          signal: controller.signal
+        });
+        writeEvent({ type: "done", run });
+        if (!res.writableEnded) res.end();
+      } catch (error) {
+        if (error instanceof JudgeCancelledError || controller.signal.aborted) {
+          if (!res.writableEnded) res.end();
+          return;
+        }
+        writeEvent({
+          type: "error",
+          error: error instanceof Error ? error.message : "The bench could not return a judgment."
+        });
+        if (!res.writableEnded) res.end();
+      } finally {
+        res.off("close", onClose);
+      }
     } catch (error) {
       if (error instanceof DebateReadError) return unreadableDebate(res);
       next(error);

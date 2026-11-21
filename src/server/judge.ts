@@ -14,6 +14,11 @@ import {
 import { getSettings, isReady, type StoredSettings } from "./settings";
 import { callModel, parseJsonObject } from "./llm";
 import { CLUSTER_RULES, LINK_RULES } from "../shared/instructions";
+import {
+  JUDGE_LINK_CONCURRENCY,
+  type JudgeLinkProgress,
+  type JudgeProgressEvent
+} from "../shared/judge-progress";
 
 export const MAX_LINKS = 80;
 
@@ -21,6 +26,20 @@ export interface JudgeOptions {
   model?: string;
   standard: StandardOfProof;
   strictness: JudgeStrictness;
+  /** Progress is presentation-only; it never carries a verdict or rating. */
+  onProgress?: (event: JudgeProgressEvent) => void;
+  signal?: AbortSignal;
+}
+
+export class JudgeCancelledError extends Error {
+  constructor() {
+    super("The judgment was cancelled.");
+    this.name = "JudgeCancelledError";
+  }
+}
+
+function ensureActive(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new JudgeCancelledError();
 }
 
 const SupportLinkSchema = z.object({
@@ -194,11 +213,16 @@ function enforceStrictness(judgment: ClashJudgment, strictness: JudgeStrictness)
   };
 }
 
-async function mapLimit<T, R>(items: T[], limit: number, run: (item: T, index: number) => Promise<R>): Promise<R[]> {
+async function mapLimit<T, R>(
+  items: T[],
+  limit: number,
+  run: (item: T, index: number) => Promise<R>,
+  shouldStop?: () => boolean
+): Promise<R[]> {
   const results = new Array<R>(items.length);
   let cursor = 0;
   const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (true) {
+    while (!shouldStop?.()) {
       const index = cursor;
       cursor += 1;
       if (index >= items.length) return;
@@ -279,9 +303,44 @@ async function assessLink(
 async function assessAllLinks(
   debate: Debate,
   settings: StoredSettings,
-  strictness: JudgeStrictness
+  strictness: JudgeStrictness,
+  options: Pick<JudgeOptions, "onProgress" | "signal"> = {}
 ): Promise<LinkAssessment[]> {
-  return mapLimit(debate.edges, 4, (edge) => assessLink(debate, edge, settings, strictness));
+  const total = debate.edges.length;
+  let completed = 0;
+  return mapLimit(
+    debate.edges,
+    JUDGE_LINK_CONCURRENCY,
+    async (edge, index) => {
+      ensureActive(options.signal);
+      const link: JudgeLinkProgress = {
+        edgeId: edge.id,
+        index,
+        total,
+        type: edge.type
+      };
+      const startedAt = Date.now();
+      options.onProgress?.({ type: "link-start", link, startedAt });
+      try {
+        const assessment = await assessLink(debate, edge, settings, strictness);
+        ensureActive(options.signal);
+        completed += 1;
+        const completedAt = Date.now();
+        options.onProgress?.({
+          type: "link-done",
+          link,
+          completed,
+          durationMs: completedAt - startedAt,
+          completedAt
+        });
+        return assessment;
+      } catch (error) {
+        if (options.signal?.aborted) throw new JudgeCancelledError();
+        throw error;
+      }
+    },
+    () => Boolean(options.signal?.aborted)
+  );
 }
 
 export async function clusterArguments(
@@ -335,6 +394,7 @@ export async function clusterArguments(
 }
 
 export async function judgeDebate(debate: Debate, options: JudgeOptions): Promise<ReturnType<typeof buildJudgmentRun>> {
+  ensureActive(options.signal);
   const settings = getSettings();
   const model = options.model?.trim() || settings.model;
   const judgeSettings: StoredSettings = { ...settings, model };
@@ -358,9 +418,18 @@ export async function judgeDebate(debate: Debate, options: JudgeOptions): Promis
   if (engine === "llm") {
     // Clustering is independent: it runs before any link ruling and sees only
     // argument text, never verdicts, strengths, or edge data.
+    options.onProgress?.({ type: "phase", phase: "clustering", totalLinks: debate.edges.length });
     clusters = await clusterArguments(debate, judgeSettings, warnings);
-    links = await assessAllLinks(debate, judgeSettings, options.strictness);
+    ensureActive(options.signal);
+    options.onProgress?.({ type: "phase", phase: "assessing", totalLinks: debate.edges.length });
+    links = await assessAllLinks(debate, judgeSettings, options.strictness, {
+      onProgress: options.onProgress,
+      signal: options.signal
+    });
+    ensureActive(options.signal);
+    options.onProgress?.({ type: "phase", phase: "resolving", totalLinks: debate.edges.length });
   } else {
+    options.onProgress?.({ type: "phase", phase: "local", totalLinks: debate.edges.length });
     links = debate.edges.map((edge) => (edge.type === "support" ? localSupport(edge) : localRuling(edge)));
   }
 
@@ -368,6 +437,7 @@ export async function judgeDebate(debate: Debate, options: JudgeOptions): Promis
     warnings.push("There are no argument links on this map, so there is nothing for the bench to assess.");
   }
 
+  ensureActive(options.signal);
   const corroborated = solveJudgment(
     debate,
     links,

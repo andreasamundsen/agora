@@ -19,8 +19,9 @@ import {
   fetchDebates,
   fetchSettings,
   importArgdown,
-  judgeDebate,
+  judgeDebateStream,
   sendChat,
+  type JudgeStreamOptions,
   type UiSettings
 } from "./api";
 import { DebateGraph } from "./components/DebateGraph";
@@ -375,9 +376,10 @@ export default function App() {
     setModal("judge");
   }, [debate, stage, closeStage]);
 
-  const conveneJudgment = useCallback(async (input: JudgeRunInput) => {
+  const conveneJudgment = useCallback(async (input: JudgeRunInput, options: JudgeStreamOptions = {}) => {
     if (!debate) throw new Error("Open a debate before convening the bench.");
-    const response = await judgeDebate(debate.id, input);
+    const response = await judgeDebateStream(debate.id, input, options);
+    if (options.signal?.aborted) return;
     setRestored([]);
     setRevealedEffects([]);
     setStage(null);

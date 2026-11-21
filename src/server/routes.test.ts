@@ -98,6 +98,45 @@ describe("debate routes", () => {
     expect(body.message).toContain("Local only");
   });
 
+  it("streams judge progress and the final run as NDJSON", async () => {
+    const store = new DebateStore(dir);
+    const debate = reconcileDebate({
+      id: "streamed-judgment",
+      motion: "Should cities fund night buses?",
+      thesisId: "thesis",
+      nodes: [
+        { id: "thesis", kind: "statement", title: "Night buses", text: "Cities should fund night buses." },
+        {
+          id: "support",
+          kind: "argument",
+          title: "Night workers need it",
+          text: "Night workers finish after the last regular bus.",
+          stance: "pro",
+          premises: ["Those workers finish after midnight."],
+          conclusion: "There is an unmet transport need."
+        }
+      ],
+      edges: [{ id: "edge-support", from: "support", to: "thesis", type: "support" }]
+    });
+    await store.save(debate);
+    await start(store);
+
+    const response = await fetch(`${base}/api/debates/${debate.id}/judge`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ standard: "preponderance", strictness: "balanced", stream: true })
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("application/x-ndjson");
+    const events = (await response.text())
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as { type: string; phase?: string; run?: { engine: string } });
+    expect(events[0]).toMatchObject({ type: "phase", phase: "local" });
+    expect(events.at(-1)).toMatchObject({ type: "done", run: { engine: "local" } });
+  });
+
   it("answers a chamber question without changing the map", async () => {
     const store = new DebateStore(dir);
     const debate = reconcileDebate({

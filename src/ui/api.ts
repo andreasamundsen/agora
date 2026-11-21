@@ -4,6 +4,7 @@ import type {
   JudgmentRun,
   StandardOfProof
 } from "../core/judgment";
+import type { JudgeProgressEvent } from "../shared/judge-progress";
 import type { ThinkingLevel } from "../shared/thinking";
 
 export type ReasoningEffort = ThinkingLevel;
@@ -120,6 +121,79 @@ export function judgeDebate(
     method: "POST",
     body: JSON.stringify(input)
   });
+}
+
+export interface JudgeStreamOptions {
+  onProgress?: (event: JudgeProgressEvent) => void;
+  signal?: AbortSignal;
+}
+
+/**
+ * Consume the judge's NDJSON progress stream. Progress events contain work
+ * status only; the final `done` event carries the completed judgment run.
+ */
+export async function judgeDebateStream(
+  id: string,
+  input: { model?: string; standard: StandardOfProof; strictness: JudgeStrictness },
+  options: JudgeStreamOptions = {}
+): Promise<{ run: JudgmentRun }> {
+  const response = await fetch(`/api/debates/${encodeURIComponent(id)}/judge`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...input, stream: true }),
+    signal: options.signal
+  });
+
+  if (!response.ok) {
+    const raw = await response.text();
+    let message = `Request failed (${response.status})`;
+    try {
+      const body = raw ? (JSON.parse(raw) as { error?: unknown }) : null;
+      if (typeof body?.error === "string" && body.error.trim()) message = body.error;
+    } catch {
+      // Keep the status-based message when the error body is not JSON.
+    }
+    throw new ApiError(message, response.status);
+  }
+
+  if (!response.body) throw new ApiError("The bench did not open a progress stream.", 500);
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let completedRun: JudgmentRun | null = null;
+
+  const handleLine = (line: string) => {
+    if (!line.trim()) return;
+    const event = JSON.parse(line) as JudgeProgressEvent;
+    if (event.type === "done") {
+      completedRun = event.run;
+      return;
+    }
+    if (event.type === "error") throw new ApiError(event.error, 500);
+    options.onProgress?.(event);
+  };
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let newline = buffer.indexOf("\n");
+      while (newline >= 0) {
+        handleLine(buffer.slice(0, newline));
+        buffer = buffer.slice(newline + 1);
+        newline = buffer.indexOf("\n");
+      }
+    }
+    buffer += decoder.decode();
+    if (buffer.trim()) handleLine(buffer);
+  } finally {
+    reader.releaseLock();
+  }
+
+  if (!completedRun) throw new ApiError("The bench ended before delivering a judgment.", 500);
+  return { run: completedRun };
 }
 
 export async function downloadArgdown(id: string, filename: string): Promise<void> {

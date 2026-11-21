@@ -10,7 +10,8 @@ vi.mock("./llm", async (importOriginal) => {
   return { ...actual, callModel: callModelMock };
 });
 
-import { judgeDebate } from "./judge";
+import { judgeDebate, JudgeCancelledError } from "./judge";
+import type { JudgeProgressEvent } from "../shared/judge-progress";
 
 beforeEach(() => {
   vi.stubEnv("AGORA_PACKAGED", "0");
@@ -69,6 +70,32 @@ function nightBusDebate(includeReply = false) {
       { id: "edge-attack", from: "attack", to: "thesis", type: "attack" },
       ...replyEdges
     ]
+  });
+}
+
+function manySupports(count: number) {
+  return reconcileDebate({
+    id: "many-supports",
+    motion: "Should the city fund many small repairs?",
+    thesisId: "thesis",
+    nodes: [
+      { id: "thesis", kind: "statement", title: "Fund repairs", text: "The city should fund small repairs." },
+      ...Array.from({ length: count }, (_, index) => ({
+        id: `support-${index}`,
+        kind: "argument" as const,
+        title: `Support ${index + 1}`,
+        text: `Reason ${index + 1} supports the motion.`,
+        stance: "pro" as const,
+        premises: [`Premise ${index + 1}.`],
+        conclusion: `Conclusion ${index + 1}.`
+      }))
+    ],
+    edges: Array.from({ length: count }, (_, index) => ({
+      id: `edge-support-${index}`,
+      from: `support-${index}`,
+      to: "thesis",
+      type: "support" as const
+    }))
   });
 }
 
@@ -181,5 +208,67 @@ describe("local link assessment orchestration", () => {
     ).rejects.toThrow(/could not assess/);
     // One clustering call, then two attempts for each of the two links.
     expect(callModelMock).toHaveBeenCalledTimes(5);
+  });
+
+  it("reports phases and real link completions without leaking verdicts", async () => {
+    callModelMock.mockImplementation(successfulModel());
+    const events: JudgeProgressEvent[] = [];
+
+    await judgeDebate(nightBusDebate(), {
+      standard: "preponderance",
+      strictness: "balanced",
+      onProgress: (event) => events.push(event)
+    });
+
+    expect(events[0]).toMatchObject({ type: "phase", phase: "clustering", totalLinks: 2 });
+    expect(events[1]).toMatchObject({ type: "phase", phase: "assessing", totalLinks: 2 });
+    expect(events.at(-1)).toMatchObject({ type: "phase", phase: "resolving", totalLinks: 2 });
+
+    const starts = events.filter((event) => event.type === "link-start");
+    const completed = events.filter((event) => event.type === "link-done");
+    expect(starts).toHaveLength(2);
+    expect(completed).toHaveLength(2);
+    expect(completed.map((event) => event.completed).sort()).toEqual([1, 2]);
+    expect(completed.every((event) => event.durationMs >= 0)).toBe(true);
+    expect(JSON.stringify(events)).not.toContain("The support establishes an unmet need.");
+  });
+
+  it("does not start a cancelled judgment", async () => {
+    callModelMock.mockImplementation(successfulModel());
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      judgeDebate(nightBusDebate(), {
+        standard: "preponderance",
+        strictness: "balanced",
+        signal: controller.signal
+      })
+    ).rejects.toBeInstanceOf(JudgeCancelledError);
+    expect(callModelMock).not.toHaveBeenCalled();
+  });
+
+  it("stops scheduling new link work when cancelled mid-run", async () => {
+    callModelMock.mockImplementation(successfulModel());
+    const controller = new AbortController();
+    const events: JudgeProgressEvent[] = [];
+
+    await expect(
+      judgeDebate(manySupports(6), {
+        standard: "preponderance",
+        strictness: "balanced",
+        signal: controller.signal,
+        onProgress: (event) => {
+          events.push(event);
+          if (event.type === "link-done" && event.completed === 1) controller.abort();
+        }
+      })
+    ).rejects.toBeInstanceOf(JudgeCancelledError);
+
+    // One cluster call plus the first batch of four links; the fifth and sixth
+    // links are never scheduled after the abort.
+    expect(callModelMock).toHaveBeenCalledTimes(5);
+    expect(events.filter((event) => event.type === "link-start")).toHaveLength(4);
+    expect(events.filter((event) => event.type === "link-done")).toHaveLength(1);
   });
 });

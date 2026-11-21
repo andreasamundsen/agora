@@ -2855,9 +2855,95 @@ button:disabled { cursor: not-allowed; }
 .bench-scales.is-weighing { animation: scales-weigh 4.2s ease-in-out infinite; transform-origin: 50% 8%; }
 .bench-wait-copy h3 { margin: 5px 0 7px; font-family: var(--serif); font-size: 30px; font-weight: 500; letter-spacing: -0.02em; }
 .bench-wait-copy p { margin: 0 0 17px; max-width: 390px; font-size: 11.5px; line-height: 1.55; color: var(--muted); }
+.bench-progress { max-width: 390px; }
 .bench-wait-track { height: 2px; background: var(--line); overflow: hidden; max-width: 390px; }
 .bench-wait-track span { display: block; height: 100%; background: var(--gold); transition: width 0.8s ease; }
-.bench-wait-foot { display: flex; justify-content: space-between; gap: 12px; max-width: 390px; margin-top: 8px; font-size: 8.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+.bench-wait-track.is-indeterminate { position: relative; }
+.bench-wait-track.is-indeterminate .bench-wait-sweep {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 38%;
+  animation: bench-sweep 1.7s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+}
+.bench-link-track {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(2px, 1fr));
+  gap: 2px;
+  margin-top: 7px;
+}
+.bench-link-pip {
+  height: 4px;
+  background: var(--line);
+  border-radius: 2px;
+  transition: background 0.25s ease, opacity 0.25s ease;
+}
+.bench-link-pip.is-done { background: var(--gold); }
+.bench-link-pip.is-active { background: var(--gold-deep); animation: bench-pip 1.25s ease-in-out infinite; }
+.bench-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 7px;
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.bench-link-list { display: grid; gap: 5px; max-width: 390px; margin-top: 13px; }
+.bench-link-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 5px 0 5px 9px;
+  border-left: 2px solid var(--line-strong);
+  animation: bench-link-in 0.3s ease both;
+}
+.bench-link-type {
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-size: 7.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.bench-link-type.is-support { color: var(--pro); }
+.bench-link-type.is-attack { color: var(--con); }
+.bench-link-type.is-undercut { color: var(--under); }
+.bench-link-path {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 10px;
+  color: var(--muted);
+}
+.bench-link-path b,
+.bench-link-path span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bench-link-path b { max-width: 44%; font-family: var(--serif); font-weight: 600; color: var(--ink-soft); }
+.bench-link-path i { flex: 0 0 auto; font-style: normal; color: var(--faint); }
+.bench-link-empty { margin: 0; font-size: 10px; color: var(--faint); }
+.bench-wait-foot { display: flex; justify-content: space-between; gap: 12px; max-width: 390px; margin-top: 10px; font-size: 8.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+
+@keyframes bench-sweep {
+  0% { transform: translateX(-105%); }
+  55%, 100% { transform: translateX(275%); }
+}
+@keyframes bench-pip {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+@keyframes bench-link-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
 @keyframes seal-in {
   from { opacity: 0; transform: rotate(-8deg) scale(1.35); }
@@ -2927,6 +3013,9 @@ button:disabled { cursor: not-allowed; }
   .app.is-judging .canvas-sub { display: none; }
   .bench-wait { grid-template-columns: 1fr; text-align: center; gap: 16px; }
   .bench-wait-mark { margin: 0 auto; }
+  .bench-progress,
+  .bench-link-list { margin-left: auto; margin-right: auto; }
+  .bench-link-row { text-align: left; }
   .judge-model-row { grid-template-columns: 1fr; }
   .judge-provider { margin-top: 0; }
 }

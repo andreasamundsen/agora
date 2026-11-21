@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Debate } from "../../core/model";
 import {
   BURDEN_SHARE,
@@ -10,7 +10,12 @@ import {
   type JudgeStrictness,
   type StandardOfProof
 } from "../../core/judgment";
-import type { UiSettings } from "../api";
+import {
+  estimateJudgeRemainingMs,
+  type JudgeProgressEvent,
+  type JudgeProgressPhase
+} from "../../shared/judge-progress";
+import type { JudgeStreamOptions, UiSettings } from "../api";
 import { Modal } from "./Modals";
 
 export interface JudgeRunInput {
@@ -19,14 +24,21 @@ export interface JudgeRunInput {
   strictness: JudgeStrictness;
 }
 
-const WAIT_LINES = [
-  "Reading the attacker",
-  "Testing the inference",
-  "Weighing the objection",
-  "Recording the ruling"
-];
-
 const BURDEN_SHARE_LABEL = `${Math.round(BURDEN_SHARE * 5)}/5`;
+
+const LINK_TYPE_LABEL: Record<"support" | "attack" | "undercut", string> = {
+  support: "supports",
+  attack: "attacks",
+  undercut: "undercuts"
+};
+
+function formatRemaining(ms: number): string {
+  const seconds = Math.max(1, Math.ceil(ms / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return rest ? `${minutes}m ${rest}s` : `${minutes}m`;
+}
 
 function ScalesMark({ animated = false }: { animated?: boolean }) {
   return (
@@ -48,7 +60,7 @@ export function JudgmentModal({
 }: {
   debate: Debate;
   settings: UiSettings | null;
-  onRun: (input: JudgeRunInput) => Promise<void>;
+  onRun: (input: JudgeRunInput, options: JudgeStreamOptions) => Promise<void>;
   onClose: () => void;
   onOpenSettings: () => void;
 }) {
@@ -58,11 +70,21 @@ export function JudgmentModal({
   const [submitting, setSubmitting] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [phase, setPhase] = useState<JudgeProgressPhase>("clustering");
+  const [completed, setCompleted] = useState(0);
+  const [total, setTotal] = useState(debate.edges.length);
+  const [active, setActive] = useState<{ edgeId: string; index: number }[]>([]);
+  const [doneIndexes, setDoneIndexes] = useState<number[]>([]);
+  const [etaMs, setEtaMs] = useState<number | null>(null);
+  const durationsRef = useRef<number[]>([]);
+  const abortRef = useRef<AbortController | null>(null);
+  const cancelledRef = useRef(false);
 
   const clashes = useMemo(() => clashEdges(debate), [debate]);
   const links = debate.edges;
   const ready = Boolean(settings?.ready);
-  const estimate = ready ? `about ${Math.max(16, Math.ceil(links.length / 4) * 6 + 6)} seconds` : "a few seconds locally";
+  const edgeById = useMemo(() => new Map(debate.edges.map((edge) => [edge.id, edge])), [debate.edges]);
+  const nodeTitleById = useMemo(() => new Map(debate.nodes.map((node) => [node.id, node.title])), [debate.nodes]);
 
   useEffect(() => {
     if (!submitting) return;
@@ -71,39 +93,157 @@ export function JudgmentModal({
     return () => window.clearInterval(timer);
   }, [submitting]);
 
+  const handleProgress = useCallback((event: JudgeProgressEvent) => {
+    if (cancelledRef.current) return;
+    switch (event.type) {
+      case "phase":
+        setPhase(event.phase);
+        setTotal(event.totalLinks);
+        if (event.phase === "assessing" || event.phase === "local") {
+          setCompleted(0);
+          setActive([]);
+          setDoneIndexes([]);
+          setEtaMs(null);
+          durationsRef.current = [];
+        }
+        if (event.phase === "resolving") {
+          setActive([]);
+          setCompleted(event.totalLinks);
+          setDoneIndexes(Array.from({ length: event.totalLinks }, (_, index) => index));
+          setEtaMs(0);
+        }
+        break;
+      case "link-start":
+        setActive((current) =>
+          current.some((link) => link.edgeId === event.link.edgeId)
+            ? current
+            : [...current, { edgeId: event.link.edgeId, index: event.link.index }]
+        );
+        break;
+      case "link-done": {
+        durationsRef.current = [...durationsRef.current, event.durationMs];
+        setActive((current) => current.filter((link) => link.edgeId !== event.link.edgeId));
+        setDoneIndexes((current) =>
+          current.includes(event.link.index) ? current : [...current, event.link.index]
+        );
+        setCompleted(event.completed);
+        setTotal(event.link.total);
+        const remaining = Math.max(0, event.link.total - event.completed);
+        setEtaMs(estimateJudgeRemainingMs(durationsRef.current, remaining));
+        break;
+      }
+      default:
+        break;
+    }
+  }, []);
+
   const submit = async () => {
     if (submitting || links.length === 0) return;
+    const controller = new AbortController();
+    abortRef.current = controller;
+    cancelledRef.current = false;
     setSubmitting(true);
     setError(null);
+    setPhase("clustering");
+    setCompleted(0);
+    setTotal(links.length);
+    setActive([]);
+    setDoneIndexes([]);
+    setEtaMs(null);
+    durationsRef.current = [];
     try {
-      await onRun({
-        model: model.trim() || undefined,
-        standard,
-        strictness
-      });
+      await onRun(
+        {
+          model: model.trim() || undefined,
+          standard,
+          strictness
+        },
+        { signal: controller.signal, onProgress: handleProgress }
+      );
     } catch (caught) {
+      if (cancelledRef.current || controller.signal.aborted) return;
       setError(caught instanceof Error ? caught.message : "The bench could not return a judgment.");
       setSubmitting(false);
+    } finally {
+      if (abortRef.current === controller) abortRef.current = null;
     }
   };
 
-  const waitLine = WAIT_LINES[Math.min(WAIT_LINES.length - 1, Math.floor(seconds / 4))];
+  const cancel = () => {
+    cancelledRef.current = true;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setSubmitting(false);
+    setActive([]);
+    setEtaMs(null);
+    setError("Judgment cancelled.");
+  };
+
   const elapsed = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+  const activeLinks = active.slice(0, 4);
+  const progressPct = total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 0;
+  const etaLabel =
+    phase === "assessing"
+      ? etaMs === null
+        ? "Estimating after the first link"
+        : etaMs > 0
+          ? `About ${formatRemaining(etaMs)} remaining`
+          : "Finishing the record"
+      : phase === "clustering"
+        ? "Estimating after the first link"
+        : phase === "local"
+          ? "Structural review"
+          : "Finishing the record";
+  const phaseTitle =
+    phase === "clustering"
+      ? "Grouping the arguments"
+      : phase === "assessing"
+        ? "Reading the links"
+        : phase === "local"
+          ? "Building the structural record"
+          : "Resolving the record";
+  const phaseCopy =
+    phase === "clustering"
+      ? "The bench is grouping related arguments before it assesses any link."
+      : phase === "assessing"
+        ? completed >= total
+          ? "All links assessed. Resolving the record."
+          : activeLinks.length
+            ? `${completed} of ${total} link${total === 1 ? "" : "s"} assessed. ${activeLinks.length} link${activeLinks.length === 1 ? " is" : "s are"} in flight.`
+            : `${completed} of ${total} link${total === 1 ? "" : "s"} assessed. Starting the next links.`
+        : phase === "local"
+          ? "No judge model is connected. The structural record is being assembled."
+          : "The link assessments are complete. The engine is applying the standard of proof.";
+  const modalTitle = submitting
+    ? phase === "clustering"
+      ? "The bench is grouping"
+      : phase === "local"
+        ? "The bench is reviewing"
+        : phase === "resolving"
+          ? "The bench is resolving"
+          : "The bench is reading"
+    : "Convene the bench";
 
   return (
     <Modal
       eyebrow={submitting ? "Judgment in session" : "Judgment"}
-      title={submitting ? "The bench is reading" : "Convene the bench"}
+      title={modalTitle}
       onClose={onClose}
       busy={submitting}
       wide="lg"
       actions={
-        submitting ? undefined : (
+        submitting ? (
+          <div className="modal-action-group">
+            <button type="button" className="btn btn--quiet" onClick={cancel}>
+              Cancel judgment
+            </button>
+          </div>
+        ) : (
           <>
             <div className="modal-note">
               {links.length === 0
                 ? "This map has no argument links. Add a support or objection in the chamber first."
-                : `${links.length} link${links.length === 1 ? "" : "s"} to assess${clashes.length ? ` · ${clashes.length} ruling${clashes.length === 1 ? "" : "s"} to play` : ""} · ${estimate}`}
+                : `${links.length} link${links.length === 1 ? "" : "s"} to assess${clashes.length ? ` · ${clashes.length} ruling${clashes.length === 1 ? "" : "s"} to play` : ""} · ${ready ? "progress and a measured estimate appear after the first link returns" : "the structural review runs immediately"}`}
             </div>
             <div className="modal-action-group">
               <button type="button" className="btn btn--quiet" onClick={onClose}>Cancel</button>
@@ -120,14 +260,54 @@ export function JudgmentModal({
           <div className="bench-wait-mark"><ScalesMark animated /></div>
           <div className="bench-wait-copy">
             <div className="eyebrow">Convened · {elapsed}</div>
-            <h3>{waitLine}</h3>
-            <p>
-              {links.length} argument link{links.length === 1 ? "" : "s"} on the record. The judge assesses one link at a
-              time; playback rules the conflicts.
-            </p>
-            <div className="bench-wait-track">
-              <span style={{ width: `${Math.min(94, 8 + (seconds / Math.max(12, links.length * 2.4)) * 86)}%` }} />
+            <h3>{phaseTitle}</h3>
+            <p>{phaseCopy}</p>
+            <div className="bench-progress">
+              <div className={`bench-wait-track ${phase === "clustering" || phase === "local" ? "is-indeterminate" : ""}`}>
+                {phase === "clustering" || phase === "local" ? (
+                  <span className="bench-wait-sweep" />
+                ) : (
+                  <span style={{ width: `${progressPct}%` }} />
+                )}
+              </div>
+              <div className="bench-link-track" aria-hidden="true">
+                {Array.from({ length: total }, (_, index) => (
+                  <span
+                    key={index}
+                    className={`bench-link-pip${doneIndexes.includes(index) ? " is-done" : activeLinks.some((link) => link.index === index) ? " is-active" : ""}`}
+                  />
+                ))}
+              </div>
+              <div className="bench-progress-meta">
+                <span>{completed} / {total}</span>
+                <span>{etaLabel}</span>
+              </div>
             </div>
+            {phase === "assessing" && (
+              <div className="bench-link-list">
+                {activeLinks.length ? (
+                  activeLinks.map((activeLink) => {
+                    const edge = edgeById.get(activeLink.edgeId);
+                    const source = edge ? nodeTitleById.get(edge.from) ?? "Untitled argument" : "Argument link";
+                    const target = edge ? nodeTitleById.get(edge.to) ?? "Untitled argument" : "";
+                    return (
+                      <div className="bench-link-row" key={activeLink.edgeId}>
+                        <span className={`bench-link-type is-${edge?.type ?? "support"}`}>
+                          {LINK_TYPE_LABEL[edge?.type ?? "support"]}
+                        </span>
+                        <span className="bench-link-path" title={`${source} → ${target}`}>
+                          <b>{source}</b>
+                          <i>→</i>
+                          <span>{target}</span>
+                        </span>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="bench-link-empty">Starting the first links…</p>
+                )}
+              </div>
+            )}
             <div className="bench-wait-foot">
               <span>{ready ? model.trim() || settings?.model || "Configured judge" : "Local structural review"}</span>
               <span>{STANDARD_LABEL[standard]}</span>
