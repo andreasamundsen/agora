@@ -8,7 +8,7 @@ It is built in the spirit of a learning harness: the model is not there to agree
 
 ## Status
 
-Agora is an early public beta. The source is available under the **MIT License**. The Windows build is intentionally unsigned, has no auto-update, and has no dedicated website yet. Gemini and Claude have been live-tested against real accounts. Read [`SECURITY.md`](SECURITY.md) before installing.
+Agora is an early public beta. The source is available under the **MIT License**. The Windows build is intentionally unsigned, has no auto-update, and has no dedicated website yet. OpenAI, DeepSeek, Claude, and Gemini have been live-tested against real accounts. Compatibility is strongest with current model IDs; older or retired models may fail, and **Max** thinking is not consistently reliable. xAI/Grok has not yet been live-tested. Read [`SECURITY.md`](SECURITY.md) before installing.
 
 ## Install on Windows
 
@@ -154,6 +154,8 @@ Thinking controls are a capability allowlist, not a live probe of the provider. 
 
 The table is deliberately conservative. A model that is not listed still works for authoring, chamber questions, and judgment; it runs with the provider’s default request shape and no thinking control. A newly released model ID is also treated as unknown until Agora’s capability rules are updated. Model IDs returned by **Refresh models** are identifiers only; the provider does not advertise thinking capabilities in that list.
 
+Compatibility is tested against current model families, not every ID a provider has ever offered. **Newer models are the supported path.** Older or retired IDs may fail even when the provider still lists them, and a thinking level of **Max** can fail or time out on some models. If that happens, use **Provider default** or a lower thinking level. xAI/Grok uses the OpenAI-compatible path but has not been live-tested yet.
+
 For Claude, 4.6 and later use adaptive thinking with output effort; 3.7 through 4.5 use a thinking-token budget. For Gemini, 2.5 uses `thinkingBudget`; Gemini 3 and later use `thinkingLevel`, with **Max** only on models that accept XHIGH. **Off** is hidden where a model cannot disable thinking. Temperature is not sent while thinking is active; for models without a thinking control, temperature is the available generation control when a model ID is entered.
 
 Custom endpoints do not get thinking controls because their parameter support cannot be verified. Use the endpoint’s default behavior.
@@ -278,7 +280,7 @@ See [`SECURITY.md`](SECURITY.md) for the current beta's security limitations, in
 - The chamber can answer general questions from the selected model's training knowledge, but it does not browse or retrieve live web data.
 - Single-user, stored locally. Model calls go to the provider you configure; there is no authentication, collaboration, or cloud sync.
 - Argdown import is graph-first. Formatting details that have no graph meaning are not preserved.
-- The Windows beta is unsigned, Windows x64 only, and has no auto-update or dedicated website. Claude has not been live-tested. The packaged Electron version has upstream security advisories; see `SECURITY.md`.
+- The Windows beta is unsigned, Windows x64 only, and has no auto-update or dedicated website. Provider compatibility is focused on current model IDs; older or retired models and some **Max** thinking settings may fail or time out. xAI/Grok has not been live-tested. The packaged Electron version has upstream security advisories; see `SECURITY.md`.
 
 ## Why the name
 

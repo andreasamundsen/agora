@@ -198,6 +198,8 @@ Agora opens with two demo debates and a local scaffold, but real argument genera
 5. Paste your own API key and press **Save & Test**.
 6. Close Settings and try **New debate**, the chat, or **Judge**.
 
+Compatibility note: the tested path is current model IDs. Older or retired IDs may fail even when the provider still lists them, and **Max** thinking can fail or time out on some models; try **Provider default** or a lower level. xAI/Grok has not been live-tested yet.
+
 Provider calls go directly from your machine to the provider you choose. When you connect a model, the motion, argument map, chat messages, and judgment context you submit are sent to that provider; Agora does not proxy them through a server of its own. Your key is stored locally as plain JSON, so use a key you can rotate. Agora has no telemetry, crash reporting, analytics, or auto-update.
 
 ## What to try

@@ -36,7 +36,7 @@ Agora is an early public beta. This page describes the current build honestly so
 - Windows only for the packaged build.
 - No third-party security audit or penetration test has been completed for this beta.
 - The current beta packages **Electron 40.10.2**. That Electron line has known upstream security advisories; the renderer hardening above reduces exposure but does not eliminate it. A runtime upgrade is planned before a stable release. Treat this beta as early software, not a hardened build.
-- Claude support has not yet been verified against a live Claude account; Gemini has been live-tested. Other provider/model combinations may behave differently.
+- OpenAI, DeepSeek, Claude, and Gemini have been live-tested against real accounts; xAI/Grok has not. Provider compatibility is strongest with current model IDs; older or retired models and some **Max** thinking settings may fail or time out. Other provider/model combinations may behave differently.
 - Dependency audits of production runtime dependencies are run at release time; development/test tooling is not shipped in the installer, but its reports may still appear when running `npm audit` in a source checkout.
 - The app is provided **as-is**, under the MIT License, without warranty. See `LICENSE`.
 
