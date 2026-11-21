@@ -3,10 +3,11 @@ import { Debate, DebateEdge, DebateNode, Speaker, Stance } from "./model";
 /**
  * Staging engine.
  *
- * A debate is not a slideshow: the sequence matters. We perform a seeded
- * random walk over the argument graph, always introducing a node that is
- * connected to something already said, preferring genuine clashes and
- * alternating sides. Same seed -> same performance; a new seed -> a new cut.
+ * A debate is not a slideshow: the sequence matters. We order the arguments
+ * tied directly to the motion into alternating sides, then drain each root's
+ * replies before moving to the next root. This is the same branch rhythm the
+ * bench uses, but the stage seed is fresh for every cut. Same seed -> same
+ * performance; a new seed -> a new cut.
  */
 
 export type TurnKind = "opening" | "statement" | "support" | "attack" | "undercut" | "closing";
@@ -171,6 +172,135 @@ function turnHeading(node: DebateNode, edge: DebateEdge | undefined, target: Deb
   return `${speaker} ${verb} ${targetName(target, 44)}`;
 }
 
+interface StageLink {
+  node: DebateNode;
+  edge: DebateEdge;
+  target: DebateNode;
+  direction: "out" | "in";
+}
+
+function stageRank(value: string, seed: number): number {
+  let hash = 2166136261;
+  const input = `${seed}|${value}`;
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function sortByStageSeed<T>(items: T[], key: (item: T) => string, seed: number): T[] {
+  return [...items].sort(
+    (a, b) => stageRank(key(a), seed) - stageRank(key(b), seed) || key(a).localeCompare(key(b))
+  );
+}
+
+/**
+ * Order the substantive nodes the way the bench plays a record: direct roots
+ * alternate sides, and each root's replies are drained before the next root
+ * begins. Unlike the bench's stable debate id, the stage seed is fresh for
+ * every cut, so the same shape produces a different performance each time.
+ */
+function planStage(debate: Debate, thesis: DebateNode, seed: number): StageLink[] {
+  const byId = new Map(debate.nodes.map((node) => [node.id, node]));
+  const visited = new Set<string>([thesis.id]);
+  const plan: StageLink[] = [];
+
+  const add = (node: DebateNode, edge: DebateEdge, target: DebateNode, direction: "out" | "in"): boolean => {
+    if (node.id === thesis.id || visited.has(node.id) || plan.length >= MAX_SUBSTANTIVE) return false;
+    visited.add(node.id);
+    plan.push({ node, edge, target, direction });
+    return true;
+  };
+
+  const childrenByTarget = new Map<string, DebateEdge[]>();
+  for (const edge of debate.edges) {
+    if (edge.from === edge.to || edge.from === thesis.id) continue;
+    const list = childrenByTarget.get(edge.to) ?? [];
+    list.push(edge);
+    childrenByTarget.set(edge.to, list);
+  }
+
+  const drain = (parentId: string) => {
+    if (plan.length >= MAX_SUBSTANTIVE) return;
+    const children = sortByStageSeed(childrenByTarget.get(parentId) ?? [], (edge) => edge.id, seed);
+    for (const edge of children) {
+      if (plan.length >= MAX_SUBSTANTIVE) return;
+      const child = byId.get(edge.from);
+      const target = byId.get(edge.to);
+      if (!child || !target || visited.has(child.id)) continue;
+      if (add(child, edge, target, "out")) drain(child.id);
+    }
+  };
+
+  const directByNode = new Map<string, DebateEdge[]>();
+  for (const edge of debate.edges) {
+    if (edge.to !== thesis.id || edge.from === thesis.id) continue;
+    const list = directByNode.get(edge.from) ?? [];
+    list.push(edge);
+    directByNode.set(edge.from, list);
+  }
+
+  const bySide: Record<Stance, StageLink[]> = { pro: [], con: [], neutral: [] };
+  for (const [nodeId, direct] of directByNode) {
+    const node = byId.get(nodeId);
+    if (!node) continue;
+    const support = sortByStageSeed(direct.filter((edge) => edge.type === "support"), (edge) => edge.id, seed)[0];
+    const clash = sortByStageSeed(direct.filter((edge) => edge.type !== "support"), (edge) => edge.id, seed)[0];
+    const edge = support ?? clash;
+    if (!edge) continue;
+    const side: Stance = node.stance === "pro" || node.stance === "con" ? node.stance : support ? "pro" : "con";
+    bySide[side].push({ node, edge, target: thesis, direction: "out" });
+  }
+  for (const side of ["pro", "con", "neutral"] as const) {
+    bySide[side] = sortByStageSeed(bySide[side], (item) => item.node.id, seed);
+  }
+
+  const orderedRoots: StageLink[] = [];
+  const startSide: "pro" | "con" = stageRank("case-order", seed) % 2 === 0 ? "pro" : "con";
+  let turn: "pro" | "con" = startSide;
+  while (bySide.pro.length || bySide.con.length) {
+    if (turn === "pro" && bySide.pro.length) orderedRoots.push(bySide.pro.shift()!);
+    else if (turn === "con" && bySide.con.length) orderedRoots.push(bySide.con.shift()!);
+    else if (bySide.pro.length) orderedRoots.push(bySide.pro.shift()!);
+    else if (bySide.con.length) orderedRoots.push(bySide.con.shift()!);
+    turn = turn === "pro" ? "con" : "pro";
+  }
+  orderedRoots.push(...bySide.neutral);
+
+  for (const root of orderedRoots) {
+    if (plan.length >= MAX_SUBSTANTIVE) break;
+    if (visited.has(root.node.id)) continue;
+    if (add(root.node, root.edge, root.target, root.direction)) drain(root.node.id);
+  }
+
+  // A disconnected or merely awkward graph should still stage every reachable
+  // claim. Roots and branches normally cover it; this is the safety net.
+  const leftovers = sortByStageSeed(
+    debate.nodes.filter((node) => node.id !== thesis.id && !visited.has(node.id)),
+    (node) => node.id,
+    seed
+  );
+  for (const node of leftovers) {
+    if (plan.length >= MAX_SUBSTANTIVE) break;
+    const edges = sortByStageSeed(
+      debate.edges.filter((edge) => edge.from === node.id || edge.to === node.id),
+      (edge) => edge.id,
+      seed
+    );
+    const edge =
+      edges.find((candidate) => candidate.from === node.id && visited.has(candidate.to)) ??
+      edges.find((candidate) => candidate.to === node.id && visited.has(candidate.from));
+    if (!edge) continue;
+    const outgoing = edge.from === node.id;
+    const target = byId.get(outgoing ? edge.to : edge.from);
+    if (!target) continue;
+    if (add(node, edge, target, outgoing ? "out" : "in")) drain(node.id);
+  }
+
+  return plan;
+}
+
 export function stageDebate(debate: Debate, seed = randomSeed()): StagedDebate {
   const rand = mulberry32(seed);
   const byId = new Map(debate.nodes.map((n) => [n.id, n]));
@@ -241,85 +371,8 @@ export function stageDebate(debate: Debate, seed = randomSeed()): StagedDebate {
   revealed.add(thesis.id);
   order.push(thesis.id);
 
-  const edgesByNode = new Map<string, DebateEdge[]>();
-  for (const node of debate.nodes) edgesByNode.set(node.id, []);
-  for (const edge of debate.edges) {
-    edgesByNode.get(edge.from)?.push(edge);
-    edgesByNode.get(edge.to)?.push(edge);
-  }
-
-  let lastStance: Stance = "neutral";
-  let lastNodeId = thesis.id;
-  let substantive = 0;
-  let forced = 0;
-
-  while (substantive < MAX_SUBSTANTIVE) {
-    const candidates: {
-      node: DebateNode;
-      edge: DebateEdge;
-      target: DebateNode;
-      direction: "out" | "in";
-      weight: number;
-    }[] = [];
-
-    for (const node of debate.nodes) {
-      if (revealed.has(node.id)) continue;
-      let best: { edge: DebateEdge; target: DebateNode; direction: "out" | "in"; weight: number } | null = null;
-      for (const edge of edgesByNode.get(node.id) ?? []) {
-        const from = byId.get(edge.from);
-        const to = byId.get(edge.to);
-        if (!from || !to) continue;
-        const outgoing = edge.from === node.id;
-        const target = outgoing ? to : from;
-        if (!revealed.has(target.id)) continue;
-        const base = edge.type === "attack" ? 4.2 : edge.type === "undercut" ? 3.4 : 1.25;
-        const random = 0.65 + rand() * 0.85;
-        let weight = (outgoing ? base : base * 0.45) * random;
-        if (target.id === lastNodeId) weight *= 2.1;
-        candidates.push({ node, edge, target, direction: outgoing ? "out" : "in", weight });
-        if (!best || weight > best.weight) best = { edge, target, direction: outgoing ? "out" : "in", weight };
-      }
-      if (!best) continue;
-      // If the candidate only has an incoming edge, lower it further so the
-      // debate prefers arguments that act on what has already been said.
-      if (best.direction === "in") best.weight *= 0.55;
-    }
-
-    // Collapse to one best link per candidate.
-    const bestByNode = new Map<string, (typeof candidates)[number]>();
-    for (const candidate of candidates) {
-      const current = bestByNode.get(candidate.node.id);
-      if (!current || candidate.weight > current.weight) bestByNode.set(candidate.node.id, candidate);
-    }
-    let pool = [...bestByNode.values()];
-    if (!pool.length) break;
-
-    // The first two substantive turns guarantee one clash from each side.
-    if (forced < 2) {
-      const wanted: Stance = forced === 0 ? "con" : "pro";
-      const preferred = pool.filter((c) => c.node.stance === wanted);
-      if (preferred.length) pool = preferred;
-      forced += 1;
-    } else {
-      for (const candidate of pool) {
-        if (lastStance !== "neutral" && candidate.node.stance !== "neutral" && candidate.node.stance !== lastStance) {
-          candidate.weight *= 1.55;
-        }
-        if (candidate.node.stance === "neutral") candidate.weight *= 0.35;
-      }
-    }
-
-    const total = pool.reduce((sum, candidate) => sum + candidate.weight, 0);
-    let roll = rand() * total;
-    let chosen = pool[pool.length - 1]!;
-    for (const candidate of pool) {
-      roll -= candidate.weight;
-      if (roll <= 0) {
-        chosen = candidate;
-        break;
-      }
-    }
-
+  const plan = planStage(debate, thesis, seed);
+  for (const chosen of plan) {
     const node = chosen.node;
     const target = chosen.target;
     const speech = node.kind === "argument" ? argumentSpeech(node, rand) : sentence(node.text || node.title);
@@ -340,9 +393,6 @@ export function stageDebate(debate: Debate, seed = randomSeed()): StagedDebate {
     });
     revealed.add(node.id);
     order.push(node.id);
-    lastStance = node.stance;
-    lastNodeId = node.id;
-    substantive += 1;
   }
 
   const spoken = debate.nodes.filter((node) => revealed.has(node.id));

@@ -57,6 +57,21 @@ interface JudgmentState {
 
 /** One visible beat of the judgment playback: every ruling and every stem cue. */
 const PLAYBACK_BEAT_MS = 3600;
+/** Give the speech engine a moment to start before falling back to the clock. */
+const SPEECH_START_GRACE_MS = 4000;
+/** A short visual pause after the utterance ends, before the next turn. */
+const SPEECH_GAP_MS = 450;
+
+/**
+ * Generous upper bound for a spoken turn. `onend` is the normal trigger; this
+ * only keeps the stage moving if a browser engine reports neither start nor
+ * end. Speech rate is clamped, so a very short utterance still gets a beat.
+ */
+function speechSafetyDelay(text: string, rate: number): number {
+  const words = text.trim().split(/\s+/).filter(Boolean).length;
+  const safeRate = Math.max(0.5, Math.min(2, rate));
+  return Math.min(90_000, Math.max(6_000, 2_500 + (words * 460) / safeRate));
+}
 
 const ACTIVE_KEY = "agora.active";
 
@@ -562,6 +577,10 @@ export default function App() {
 
   useEffect(() => {
     if (!stage?.playing) return;
+    const speechSupported = typeof window !== "undefined" && "speechSynthesis" in window;
+    // With voice on, the utterance's end event owns the beat. The timer is
+    // only the fallback for browsers that cannot speak at all.
+    if (stage.voice && speechSupported) return;
     const turn = stage.transcript.turns[stage.index];
     if (!turn) return;
     const delay = (turn.duration + 650) / stage.speed;
@@ -573,7 +592,7 @@ export default function App() {
       });
     }, delay);
     return () => window.clearTimeout(timer);
-  }, [stage?.playing, stage?.index, stage?.speed, stage?.transcript]);
+  }, [stage?.playing, stage?.index, stage?.speed, stage?.transcript, stage?.voice]);
 
   useEffect(() => {
     if (!stage || typeof window === "undefined" || !("speechSynthesis" in window)) return;
@@ -582,6 +601,39 @@ export default function App() {
     if (!stage.voice || !stage.playing) return;
     const turn = stage.transcript.turns[stage.index];
     if (!turn) return;
+
+    let cancelled = false;
+    let advanced = false;
+    let fallbackTimer: number | null = null;
+    let gapTimer: number | null = null;
+
+    const clearTimers = () => {
+      if (fallbackTimer !== null) window.clearTimeout(fallbackTimer);
+      if (gapTimer !== null) window.clearTimeout(gapTimer);
+      fallbackTimer = null;
+      gapTimer = null;
+    };
+
+    const advance = () => {
+      if (cancelled || advanced) return;
+      advanced = true;
+      clearTimers();
+      // Let the final syllable land before the next turn changes the card.
+      gapTimer = window.setTimeout(() => {
+        if (cancelled) return;
+        setStage((current) => {
+          if (!current || !current.playing) return current;
+          if (current.index >= current.transcript.turns.length - 1) return { ...current, playing: false };
+          return { ...current, index: current.index + 1 };
+        });
+      }, SPEECH_GAP_MS);
+    };
+
+    const scheduleFallback = (delay: number) => {
+      if (fallbackTimer !== null) window.clearTimeout(fallbackTimer);
+      fallbackTimer = window.setTimeout(advance, delay);
+    };
+
     const utterance = new SpeechSynthesisUtterance(turn.text);
     utterance.rate = Math.min(1.7, 0.96 * stage.speed);
     utterance.pitch = turn.speaker === "challenger" ? 0.94 : turn.speaker === "advocate" ? 1.04 : 1;
@@ -589,8 +641,29 @@ export default function App() {
     if (voices.length) {
       utterance.voice = turn.speaker === "challenger" ? voices[Math.min(1, voices.length - 1)]! : voices[0]!;
     }
-    synth.speak(utterance);
-    return () => synth.cancel();
+    utterance.onstart = () => {
+      if (cancelled) return;
+      scheduleFallback(speechSafetyDelay(turn.text, utterance.rate));
+    };
+    utterance.onend = advance;
+    utterance.onerror = advance;
+
+    // If the engine never starts, do not strand the stage on one turn.
+    scheduleFallback(SPEECH_START_GRACE_MS);
+    try {
+      synth.speak(utterance);
+    } catch {
+      advance();
+    }
+
+    return () => {
+      cancelled = true;
+      clearTimers();
+      utterance.onstart = null;
+      utterance.onend = null;
+      utterance.onerror = null;
+      synth.cancel();
+    };
   }, [stage?.voice, stage?.playing, stage?.index, stage?.speed, stage?.transcript]);
 
   useEffect(() => {

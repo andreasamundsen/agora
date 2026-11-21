@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { claimFromPrompt, slugId } from "./model";
+import type { Debate, DebateEdge, DebateNode } from "./model";
 import { seedDebates } from "./demo";
 import { stageDebate } from "./stage";
 import { toArgdown } from "./argdown";
@@ -47,6 +48,57 @@ describe("staging", () => {
   it("gives turns enough reading time", () => {
     const staged = stageDebate(debate, 7);
     for (const turn of staged.turns) expect(turn.duration).toBeGreaterThanOrEqual(3200);
+  });
+
+  it("drains one root's reply branch before starting the next root", () => {
+    const node = (id: string, stance: DebateNode["stance"]): DebateNode => ({
+      id,
+      kind: "argument",
+      title: id,
+      text: `${id} claim`,
+      stance,
+      speaker: stance === "con" ? "challenger" : "advocate",
+      tags: [],
+      group: "",
+      premises: [`${id} premise`],
+      conclusion: `${id} conclusion`
+    });
+    const edge = (id: string, from: string, to: string, type: DebateEdge["type"]): DebateEdge => ({
+      id,
+      from,
+      to,
+      type
+    });
+    const branchDebate: Debate = {
+      id: "stage-branch-test",
+      motion: "A branch test motion",
+      thesisId: "thesis",
+      thesisText: "A branch test motion",
+      nodes: [
+        { ...node("thesis", "neutral"), kind: "statement", speaker: "you", title: "The motion" },
+        node("root-a", "pro"),
+        node("a1", "con"),
+        node("a2", "pro"),
+        node("root-b", "con"),
+        node("b1", "pro")
+      ],
+      edges: [
+        edge("e-root-a", "root-a", "thesis", "support"),
+        edge("e-a1", "a1", "root-a", "attack"),
+        edge("e-a2", "a2", "a1", "support"),
+        edge("e-root-b", "root-b", "thesis", "attack"),
+        edge("e-b1", "b1", "root-b", "attack")
+      ],
+      origin: "seed",
+      chat: [],
+      createdAt: 0,
+      updatedAt: 0
+    };
+
+    const staged = stageDebate(branchDebate, 1234);
+    const proFirst = ["thesis", "root-a", "a1", "a2", "root-b", "b1"];
+    const conFirst = ["thesis", "root-b", "b1", "root-a", "a1", "a2"];
+    expect([proFirst, conFirst]).toContainEqual(staged.order);
   });
 });
 

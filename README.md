@@ -80,9 +80,9 @@ The chamber is a conversation with the cartographer about the map, or about anyt
 
 ### The stage
 
-`Stage Debate` turns the map into a performance. The order is a seeded random walk through the graph: the motion opens, you state your position, advocates and challengers take turns, rebuttals surface where they connect, and the moderator closes. Each run samples a new sequence; `Cut a new sequence` resamples without leaving the stage. The camera follows the argument being made.
+`Stage Debate` turns the map into a performance. The order is a seeded branch walk through the graph: arguments directly tied to the motion alternate sides, and each branch is drained before the next root begins. The motion opens, you state your position, advocates and challengers take turns, rebuttals surface where they connect, and the moderator closes. Each run samples a new sequence; `Cut a new sequence` resamples without leaving the stage. The camera follows the argument being made.
 
-Stage controls: `Space` play/pause, `←`/`→` previous/next turn, a speed selector, the optional **Read turns aloud** browser voice, and `Esc` to close. The stage records nothing; it is a way of reading the map aloud.
+Stage controls: `Space` play/pause, `←`/`→` previous/next turn, a speed selector, the optional **Read turns aloud** browser voice, and `Esc` to close. With voice on, the stage waits for the browser to finish each utterance before advancing; `Next` still moves on immediately. The stage records nothing; it is a way of reading the map aloud.
 
 ### The bench
 
@@ -199,7 +199,7 @@ src/
     model.ts            Debate/Node/Edge types, reconciliation, prompt cleanup
     argdown.ts          Debate → Argdown serializer
     layout.ts           deterministic case/thread graph layouts
-    stage.ts            seeded random-walk staging + speaker narration
+    stage.ts            seeded branch-walk staging + speaker narration
     judgment.ts         pure link assessments, grounded propagation, deterministic solver, summary, Markdown report
     demo.ts             two hand-authored reference debates
   server/
