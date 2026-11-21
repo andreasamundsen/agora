@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
 import type { Debate } from "../../core/model";
 import type { UiSettings, ReasoningEffort } from "../api";
 import { downloadArgdown, fetchArgdown, fetchProviderModels, saveSettings, testSettings } from "../api";
@@ -486,6 +486,176 @@ export function temperatureVisible(provider: string, model: string): boolean {
   return !thinkingCapability(provider, model).supported;
 }
 
+export function filterModelOptions(options: string[], query: string): string[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return options;
+  return options.filter((option) => option.toLowerCase().includes(needle));
+}
+
+function ModelCombobox({
+  options,
+  value,
+  onChange,
+  disabled,
+  placeholder
+}: {
+  options: string[];
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [filter, setFilter] = useState("");
+  const [highlight, setHighlight] = useState(0);
+  const [placement, setPlacement] = useState<"up" | "down">("up");
+  const rootRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const visible = filterModelOptions(options, filter);
+  const activeIndex = Math.min(highlight, Math.max(0, visible.length - 1));
+  const activeOption = visible[activeIndex];
+
+  const openMenu = () => {
+    if (disabled || options.length === 0) return;
+    setFilter("");
+    setHighlight(Math.max(0, options.indexOf(value)));
+    const rect = inputRef.current?.getBoundingClientRect();
+    setPlacement(rect && window.innerHeight - rect.bottom >= 290 ? "down" : "up");
+    setOpen(true);
+  };
+
+  const choose = (option: string) => {
+    onChange(option);
+    setFilter("");
+    setOpen(false);
+    setHighlight(0);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [open]);
+
+  useEffect(() => {
+    const menu = menuRef.current;
+    if (!open || !menu) return;
+    const active = menu.querySelector<HTMLElement>(`#agora-model-option-${activeIndex}`);
+    if (!active) return;
+    const top = active.offsetTop;
+    const bottom = top + active.offsetHeight;
+    if (top < menu.scrollTop) menu.scrollTop = top;
+    else if (bottom > menu.scrollTop + menu.clientHeight) menu.scrollTop = bottom - menu.clientHeight;
+  }, [open, activeIndex, visible.length]);
+
+  useEffect(() => {
+    if (disabled || options.length === 0) {
+      setOpen(false);
+      setFilter("");
+    }
+  }, [disabled, options.length]);
+
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      if (!open) openMenu();
+      else setHighlight((index) => Math.min(index + 1, visible.length - 1));
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      if (!open) openMenu();
+      else setHighlight((index) => Math.max(index - 1, 0));
+      return;
+    }
+    if (event.key === "Enter" && open && activeOption) {
+      event.preventDefault();
+      choose(activeOption);
+      return;
+    }
+    if (event.key === "Escape" && open) {
+      event.preventDefault();
+      event.stopPropagation();
+      setOpen(false);
+      return;
+    }
+    if (event.key === "Tab") setOpen(false);
+  };
+
+  return (
+    <div className="model-combobox" ref={rootRef}>
+      <input
+        ref={inputRef}
+        id="agora-model-input"
+        type="text"
+        className="field-input"
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={open}
+        aria-controls={open ? "agora-model-options" : undefined}
+        aria-activedescendant={open && activeOption ? `agora-model-option-${activeIndex}` : undefined}
+        autoComplete="off"
+        spellCheck={false}
+        placeholder={placeholder}
+        value={value}
+        disabled={disabled}
+        onFocus={openMenu}
+        onClick={() => { if (!open) openMenu(); }}
+        onChange={(event) => {
+          const next = event.target.value;
+          onChange(next);
+          setFilter(next);
+          setHighlight(0);
+          setOpen(options.length > 0);
+        }}
+        onKeyDown={onKeyDown}
+      />
+      {options.length > 0 && (
+        <button
+          type="button"
+          className="model-combobox-toggle"
+          aria-label={open ? "Hide model list" : "Show model list"}
+          aria-expanded={open}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => { if (open) setOpen(false); else openMenu(); }}
+        >
+          <span aria-hidden="true">▾</span>
+        </button>
+      )}
+      {open && options.length > 0 && (
+        <div
+          ref={menuRef}
+          id="agora-model-options"
+          className={`model-combobox-menu is-${placement}`}
+          role="listbox"
+        >
+          {visible.length > 0 ? visible.map((option, index) => (
+            <button
+              key={`${option}-${index}`}
+              id={`agora-model-option-${index}`}
+              type="button"
+              role="option"
+              tabIndex={-1}
+              aria-selected={option === value}
+              className={`model-combobox-option ${index === activeIndex ? "is-active" : ""}`}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => choose(option)}
+            >
+              {option}
+            </button>
+          )) : (
+            <span className="model-combobox-empty">No matching model IDs. Press Escape to type a custom ID.</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 const THINKING_LABELS: Record<ThinkingLevel, string> = {
   default: "Provider default",
@@ -744,21 +914,17 @@ export function SettingsModal({
             <span className="field-hint">Local provider. Requests stay on this machine.</span>
           )}
         </label>
-        <label className="field">
-          <span className="field-label">Model</span>
-          <input
-            type="text"
-            className="field-input"
-            list="agora-model-options"
-            placeholder={provider === "local" ? "" : "gpt-4o-mini"}
+        <div className="field">
+          <label className="field-label" htmlFor="agora-model-input">Model</label>
+          <ModelCombobox
+            key={provider}
+            options={modelOptions}
             value={model}
-            onChange={(event) => { setModel(event.target.value); setStatus(null); }}
+            onChange={(next) => { setModel(next); setStatus(null); }}
             disabled={provider === "local"}
+            placeholder={provider === "local" ? "" : "gpt-4o-mini"}
           />
-          <datalist id="agora-model-options">
-            {modelOptions.map((option) => <option key={option} value={option} />)}
-          </datalist>
-        </label>
+        </div>
       </div>
       {provider !== "local" && (
         <div className="key-row">

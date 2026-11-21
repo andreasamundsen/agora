@@ -1512,6 +1512,64 @@ button:disabled { cursor: not-allowed; }
 .field-input:focus, .field-textarea:focus { border-color: var(--ink-soft); box-shadow: 0 0 0 3px rgba(185,138,58,0.12); }
 .field-input::placeholder, .field-textarea::placeholder { color: var(--faint); }
 .field-input:disabled { background: var(--paper-deep); color: var(--muted); }
+.model-combobox { position: relative; }
+.model-combobox .field-input { padding-right: 36px; }
+.model-combobox-toggle {
+  position: absolute;
+  top: 50%;
+  right: 5px;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.model-combobox-toggle:hover { background: var(--paper-deep); color: var(--ink); }
+.model-combobox-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  max-height: min(280px, 40vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+  padding: 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--surface-strong);
+  box-shadow: var(--shadow-soft);
+}
+.model-combobox-menu.is-up { bottom: calc(100% + 6px); }
+.model-combobox-menu.is-down { top: calc(100% + 6px); }
+.model-combobox-option {
+  display: block;
+  width: 100%;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--ink-soft);
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.model-combobox-option:hover,
+.model-combobox-option.is-active { background: var(--paper-deep); color: var(--ink); }
+.model-combobox-option[aria-selected="true"] { color: var(--gold-deep); }
+.model-combobox-empty { display: block; padding: 8px 9px; font-size: 10px; line-height: 1.45; color: var(--muted); }
 .field-textarea { resize: vertical; min-height: 120px; font-family: var(--serif); font-size: 15px; }
 .field-textarea--large { height: clamp(100px, 17vh, 154px); min-height: 100px; font-size: 18px; line-height: 1.5; }
 .field-textarea--code { font-family: var(--mono); font-size: 12px; line-height: 1.6; min-height: clamp(180px, 30vh, 270px); white-space: pre; }

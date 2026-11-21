@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { presetDraft, temperatureVisible } from "./Modals";
+import { filterModelOptions, presetDraft, temperatureVisible } from "./Modals";
 
 const savedGoogle = {
   provider: "google",
@@ -49,5 +49,22 @@ describe("Settings temperature visibility", () => {
   it("hides temperature in no-model mode and before a model is entered", () => {
     expect(temperatureVisible("local", "gpt-4o-mini")).toBe(false);
     expect(temperatureVisible("openai", "")).toBe(false);
+  });
+});
+
+describe("Model suggestions", () => {
+  const options = ["gpt-4o-mini", "gpt-5", "o3", "gemini-4-hydrogen"];
+
+  it("shows the full list when the query is empty", () => {
+    expect(filterModelOptions(options, "")).toEqual(options);
+  });
+
+  it("filters case-insensitively by substring", () => {
+    expect(filterModelOptions(options, "GPT-")).toEqual(["gpt-4o-mini", "gpt-5"]);
+    expect(filterModelOptions(options, "hydrogen")).toEqual(["gemini-4-hydrogen"]);
+  });
+
+  it("returns no entries when nothing matches", () => {
+    expect(filterModelOptions(options, "not-a-model")).toEqual([]);
   });
 });
