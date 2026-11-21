@@ -66,6 +66,11 @@ const STATUS_LABEL: Record<ArgumentStatus | "unsupported", string> = {
   unsupported: "Unsupported"
 };
 
+/** The motion card speaks in outcomes; restoration is a record event, not a second status. */
+export function restoredBadgeVisible(isThesis: boolean, reinstated: boolean, irrelevant: boolean): boolean {
+  return reinstated && !isThesis && !irrelevant;
+}
+
 const GRAPH_VIEW_COOKIE = "agora_graph_view";
 const GRAPH_VIEW_MAX_AGE = 60 * 60 * 24 * 365;
 
@@ -637,6 +642,7 @@ function NodeCard({
           : displayStatus
             ? STATUS_LABEL[displayStatus]
             : null;
+  const showRestored = restoredBadgeVisible(isThesis, reinstated, irrelevantCard);
   return (
     <button
       type="button"
@@ -657,7 +663,7 @@ function NodeCard({
         caseLine ? "is-case-line" : "",
         judgmentRole ? `is-clash-${judgmentRole}` : "",
         motionProved ? "is-motion-proved" : "",
-        reinstated ? "is-reinstated" : ""
+        showRestored ? "is-reinstated" : ""
       ].join(" ")}
       style={{ left: card.x, top: card.y, width: card.width, height: card.height }}
       onClick={(event) => {
@@ -692,7 +698,7 @@ function NodeCard({
       <div className="node-title">{node.title}</div>
       {!isThesis && <div className="node-text">{node.text}</div>}
       {isThesis && <div className="node-text node-text--thesis">{node.text}</div>}
-      {reinstated && !irrelevantCard && <span className="node-restored">Restored</span>}
+      {showRestored && <span className="node-restored">Restored</span>}
     </button>
   );
 }

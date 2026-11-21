@@ -2164,12 +2164,6 @@ button:disabled { cursor: not-allowed; }
   text-transform: uppercase;
   animation: restored-tag 2.2s ease both;
 }
-.graph-node--thesis .node-restored {
-  bottom: 9px;
-  background: #f2d18a;
-  border-color: #f2d18a;
-  color: #3b2b0b;
-}
 
 .graph.is-judging .graph-edge.is-judged--weakens .edge-path { opacity: 0.32; }
 .graph.is-judging .graph-edge.is-judged--undecided .edge-path { opacity: 0.42; }
