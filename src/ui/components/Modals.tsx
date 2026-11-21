@@ -464,6 +464,22 @@ const PRESETS: { id: string; label: string; baseUrl: string; model: string; hint
   { id: "custom", label: "Custom", baseUrl: "", model: "", hint: "Any OpenAI-compatible chat-completions endpoint." }
 ];
 
+export function presetDraft(
+  id: string,
+  settings: Pick<UiSettings, "provider" | "baseUrl" | "model">
+): { baseUrl: string; model: string } | null {
+  const savedProvider = PRESETS.some((preset) => preset.id === settings.provider)
+    ? settings.provider
+    : "custom";
+  if (id === savedProvider) {
+    return { baseUrl: settings.baseUrl, model: settings.model };
+  }
+  if (id === "custom") return null;
+  const preset = PRESETS.find((item) => item.id === id);
+  return preset ? { baseUrl: preset.baseUrl, model: preset.model } : null;
+}
+
+
 const THINKING_LABELS: Record<ThinkingLevel, string> = {
   default: "Provider default",
   off: "Off",
@@ -541,10 +557,10 @@ export function SettingsModal({
 
   const choosePreset = (id: string) => {
     setProvider(id);
-    const preset = PRESETS.find((item) => item.id === id);
-    if (preset && id !== "custom") {
-      setBaseUrl(preset.baseUrl);
-      setModel(preset.model);
+    const draft = presetDraft(id, settings);
+    if (draft) {
+      setBaseUrl(draft.baseUrl);
+      setModel(draft.model);
     }
     setModelOptions([]);
     setModelListState("idle");
