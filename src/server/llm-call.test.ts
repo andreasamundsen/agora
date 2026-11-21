@@ -229,4 +229,62 @@ describe("callModel output budgets", () => {
     expect(bodies[0]?.reasoning_effort).toBe("xhigh");
     expect(bodies[0]?.temperature).toBeUndefined();
   });
+
+  it("dispatches Claude through the native Messages endpoint", async () => {
+    const urls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        urls.push(String(input));
+        return new Response(
+          JSON.stringify({ content: [{ type: "text", text: '{"reply":"ok"}' }], stop_reason: "end_turn" }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      })
+    );
+
+    await expect(
+      callModel(
+        {
+          ...openaiReasoningSettings,
+          provider: "anthropic",
+          baseUrl: "https://api.anthropic.com",
+          model: "claude-sonnet-4-6"
+        },
+        [{ role: "user", content: "map this" }]
+      )
+    ).resolves.toBe('{"reply":"ok"}');
+    expect(urls).toEqual(["https://api.anthropic.com/v1/messages"]);
+  });
+
+  it("dispatches Gemini through the native generateContent endpoint", async () => {
+    const urls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        urls.push(String(input));
+        return new Response(
+          JSON.stringify({
+            candidates: [{ finishReason: "STOP", content: { parts: [{ text: '{"reply":"ok"}' }] } }]
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      })
+    );
+
+    await expect(
+      callModel(
+        {
+          ...openaiReasoningSettings,
+          provider: "google",
+          baseUrl: "https://generativelanguage.googleapis.com",
+          model: "gemini-3.5-flash"
+        },
+        [{ role: "user", content: "map this" }]
+      )
+    ).resolves.toBe('{"reply":"ok"}');
+    expect(urls).toEqual([
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent"
+    ]);
+  });
 });

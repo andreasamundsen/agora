@@ -1,4 +1,10 @@
 import { modelsEndpoint, providerUrlProblem } from "../shared/provider-url";
+import {
+  ANTHROPIC_API_VERSION,
+  anthropicModelsEndpoint,
+  geminiModelsEndpoint,
+  providerProtocol
+} from "../shared/provider-protocol";
 import type { StoredSettings } from "./settings";
 
 export const PROVIDER_MODELS_TIMEOUT_MS = 15_000;
@@ -12,8 +18,8 @@ export interface ProviderModelsResult {
 type FetchLike = typeof fetch;
 
 interface ModelsPayload {
-  data?: { id?: unknown }[];
-  models?: { id?: unknown; name?: unknown }[];
+  data?: { id?: unknown; name?: unknown }[];
+  models?: { id?: unknown; name?: unknown; supportedGenerationMethods?: unknown }[];
 }
 
 /**
@@ -32,15 +38,32 @@ export async function listProviderModels(
     return { ok: false, models: [], message: "Add a base URL first." };
   }
 
-  const auth: Record<string, string> = settings.apiKey
-    ? { Authorization: `Bearer ${settings.apiKey}` }
-    : {};
+  const protocol = providerProtocol(settings.provider);
+  const headers: Record<string, string> =
+    protocol === "anthropic"
+      ? {
+          ...(settings.apiKey ? { Authorization: `Bearer ${settings.apiKey}` } : {}),
+          "anthropic-version": ANTHROPIC_API_VERSION
+        }
+      : protocol === "gemini"
+        ? settings.apiKey
+          ? { "x-goog-api-key": settings.apiKey }
+          : {}
+        : settings.apiKey
+          ? { Authorization: `Bearer ${settings.apiKey}` }
+          : {};
+  const endpoint =
+    protocol === "anthropic"
+      ? anthropicModelsEndpoint(settings.baseUrl)
+      : protocol === "gemini"
+        ? geminiModelsEndpoint(settings.baseUrl)
+        : modelsEndpoint(settings.baseUrl);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetchImpl(modelsEndpoint(settings.baseUrl), {
-      headers: auth,
+    const response = await fetchImpl(endpoint, {
+      headers,
       signal: controller.signal
     });
     if (!response.ok) {
@@ -53,17 +76,35 @@ export async function listProviderModels(
     }
 
     const payload = (await response.json().catch(() => ({}))) as ModelsPayload;
-    const entries = Array.isArray(payload.data)
-      ? payload.data
-      : Array.isArray(payload.models)
-        ? payload.models
-        : [];
+    const entries =
+      protocol === "anthropic" && Array.isArray(payload.data)
+        ? payload.data
+        : protocol === "gemini" && Array.isArray(payload.models)
+          ? payload.models
+          : Array.isArray(payload.data)
+            ? payload.data
+            : Array.isArray(payload.models)
+              ? payload.models
+              : [];
     const models = Array.from(
       new Set(
         entries
-          .map((entry) => (typeof entry.id === "string" ? entry.id : undefined))
-          .filter((id): id is string => Boolean(id && id.trim()))
-          .map((id) => id.trim())
+          .map((entry) => {
+            if (
+              protocol === "gemini" &&
+              "supportedGenerationMethods" in entry &&
+              Array.isArray(entry.supportedGenerationMethods) &&
+              !entry.supportedGenerationMethods.includes("generateContent")
+            ) {
+              return undefined;
+            }
+            const raw =
+              protocol === "gemini" && typeof entry.name === "string"
+                ? entry.name.replace(/^models\//, "")
+                : entry.id;
+            return typeof raw === "string" ? raw.trim() : undefined;
+          })
+          .filter((id): id is string => Boolean(id))
       )
     ).sort((a, b) => a.localeCompare(b));
 

@@ -459,6 +459,8 @@ const PRESETS: { id: string; label: string; baseUrl: string; model: string; hint
   { id: "openai", label: "OpenAI", baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini", hint: "An API key is required. Reasoning models show thinking controls." },
   { id: "deepseek", label: "DeepSeek", baseUrl: "https://api.deepseek.com", model: "deepseek-flash", hint: "DeepSeek V4.1 Flash. Thinking effort is configurable below." },
   { id: "xai", label: "xAI / Grok", baseUrl: "https://api.x.ai/v1", model: "grok-4.7", hint: "Grok through the OpenAI-compatible endpoint. Models load from your saved connection." },
+  { id: "anthropic", label: "Anthropic / Claude", baseUrl: "https://api.anthropic.com", model: "claude-sonnet-4-6", hint: "Native Claude Messages API. Thinking is set per model." },
+  { id: "google", label: "Google / Gemini", baseUrl: "https://generativelanguage.googleapis.com", model: "gemini-3.5-flash", hint: "Native Gemini API. Thinking level or budget is set per model." },
   { id: "custom", label: "Custom", baseUrl: "", model: "", hint: "Any OpenAI-compatible chat-completions endpoint." }
 ];
 
@@ -557,6 +559,9 @@ export function SettingsModal({
       setError(urlProblem);
       return;
     }
+    const effectiveEffort =
+      thinking.supported && !thinking.levels.includes(reasoningEffort) ? "default" : reasoningEffort;
+    if (effectiveEffort !== reasoningEffort) setReasoningEffort(effectiveEffort);
     if (alsoTest) setTesting(true);
     else setSaving(true);
     try {
@@ -565,7 +570,7 @@ export function SettingsModal({
         baseUrl: baseUrl.trim(),
         model: model.trim(),
         temperature,
-        reasoningEffort
+        reasoningEffort: effectiveEffort
       };
       if (apiKey.trim()) payload.apiKey = apiKey.trim();
       if (forgetKey) payload.apiKey = "";
@@ -630,7 +635,7 @@ export function SettingsModal({
       ) : (
         <>
       <p className="modal-lede">
-        Agora speaks to any OpenAI-compatible chat-completions endpoint. The local scaffolder is always available;
+        Agora supports OpenAI-compatible endpoints plus the native Claude and Gemini APIs. The local scaffolder is always available;
         a model makes the arguments topic-specific.
       </p>
       <p className="modal-note modal-note--privacy">
@@ -786,7 +791,7 @@ export function SettingsModal({
       {thinking.supported ? (
         <div className="field">
           <span className="field-label">
-            Thinking <em>{provider === "deepseek" ? "DeepSeek effort" : provider === "xai" ? "Grok effort" : "reasoning effort"}</em>
+            Thinking <em>{provider === "deepseek" ? "DeepSeek effort" : provider === "xai" ? "Grok effort" : provider === "anthropic" ? "Claude effort" : provider === "google" ? "Gemini thinking" : "reasoning effort"}</em>
           </span>
           <div className="judge-segmented">
             {thinking.levels.map((level) => (

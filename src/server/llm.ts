@@ -21,6 +21,9 @@ import { chatEndpoint, isLocalProvider, providerUrlProblem } from "../shared/pro
 import { AUTHORING_RULES as BASE_RULES, CHAMBER_RULES as ASK_RULES } from "../shared/instructions";
 import { getSettings, isReady, StoredSettings, ReasoningEffort } from "./settings";
 import { providerReasoningEffort, thinkingCapability } from "../shared/thinking";
+import { providerProtocol } from "../shared/provider-protocol";
+import { callAnthropic } from "./anthropic";
+import { callGemini } from "./gemini";
 
 /**
  * Authoring adapter. The rest of the app only sees Debate objects; whether
@@ -179,6 +182,9 @@ export async function callModel(
   const urlProblem = providerUrlProblem(settings.baseUrl, Boolean(settings.apiKey.trim()));
   if (urlProblem) throw new Error(urlProblem);
   if (!isReady(settings)) throw new Error("No model is configured.");
+  const protocol = providerProtocol(settings.provider);
+  if (protocol === "anthropic") return callAnthropic(settings, messages, options);
+  if (protocol === "gemini") return callGemini(settings, messages, options);
   const capability = thinkingCapability(settings.provider, settings.model);
   const thinkingModel = capability.supported;
   const thinkingEnabled = thinkingModel && settings.reasoningEffort !== "default" && settings.reasoningEffort !== "off";

@@ -62,16 +62,18 @@ Judgment controls: `Space` play/pause, `←`/`→` previous/next ruling, click a
 
 ## Connecting a model
 
-Open **Settings** (the gear). Agora speaks to any OpenAI-compatible `/chat/completions` endpoint:
+Open **Settings** (the gear). Agora supports OpenAI-compatible chat endpoints plus the native Claude and Gemini APIs:
 
 - **OpenAI** — `https://api.openai.com/v1`, e.g. `gpt-4o-mini` or a reasoning model
 - **DeepSeek** — `https://api.deepseek.com`, `deepseek-flash` (V4.1 Flash)
 - **xAI / Grok** — `https://api.x.ai/v1`, e.g. `grok-4.7`
+- **Anthropic / Claude** — `https://api.anthropic.com`, e.g. `claude-sonnet-4-6`; uses the native Messages API
+- **Google / Gemini** — `https://generativelanguage.googleapis.com`, e.g. `gemini-3.5-flash`; uses native `generateContent`
 - **Custom** — any compatible base URL and model, including a local OpenAI-compatible server if you use one
 
 The model field takes any model ID and also offers the IDs returned by the saved provider's model list. Use **Refresh models** after changing the provider or save the settings first; the list is read from the saved connection so the API key never has to leave the server.
 
-Thinking controls are model-aware. DeepSeek thinking has **Provider default / Off / Low / High / Max**; OpenAI reasoning models offer **Provider default / Low / Medium / High**; xAI Grok models offer **Provider default / Low / Medium / High / Max**. The app hides levels the selected model cannot use and sends xAI's **Max** as its highest supported effort. Temperature is not sent for a thinking-capable model. The app raises the output budget automatically when thinking is active so the JSON graph is not cut off. Custom endpoints do not get thinking controls because their parameter support cannot be verified.
+Thinking controls are model-aware. DeepSeek thinking has **Provider default / Off / Low / High / Max**; OpenAI reasoning models offer **Provider default / Low / Medium / High**; xAI Grok models offer **Provider default / Low / Medium / High / Max**. Claude 4.6 and later use adaptive thinking with **Provider default / Off / Low / Medium / High / Max**; older Claude thinking models use the same ladder as a token budget. **Off** is hidden on Claude models where thinking is always on, such as Opus 5.5 and Sonnet 5.5, because the API rejects a disabled request. Gemini 3 and later use thinking levels, while Gemini 2.5 uses a thinking budget; the app offers **Provider default / Low / Medium / High**, adds **Max** only where the Gemini model supports XHIGH, hides levels that model does not support, and hides **Off** where the model cannot disable thinking. Temperature is not sent while thinking is active. The app raises the output budget automatically when thinking is active so the JSON graph is not cut off. Custom endpoints do not get thinking controls because their parameter support cannot be verified.
 
 Local models may expose their chain of thought in a separate `reasoning_content` field and spend much of the completion budget there before writing the final JSON. Agora gives loopback providers a 12,000-token output floor and up to five minutes for a generation. If the model still returns only hidden reasoning, Agora reports that clearly instead of treating the empty final content as a map.
 
@@ -123,11 +125,16 @@ src/
     settings.ts         provider settings, environment fallbacks, public key status
     local-access.ts     loopback Host/Origin guard for the local API
     provider-test.ts    timeout-bounded provider connection test
+    provider-models.ts  model discovery for OpenAI-compatible, Claude, and Gemini
+    anthropic.ts        native Claude Messages transport and thinking mapping
+    gemini.ts           native Gemini generateContent transport and thinking mapping
     llm.ts              intake/extension prompts, zod validation, local fallback
     judge.ts            per-link model assessment, clustering call, local structural fallback
     argdown-import.ts   Argdown → Debate using @argdown/core
   shared/
     provider-url.ts     base URL normalization and provider URL validation
+    provider-protocol.ts native endpoint and auth-protocol selection
+    thinking.ts         thinking capability and provider wire mappings
   ui/
     App.tsx             workspace, library, chamber, stage controller, judgment controller
     components/         DebateGraph, ChatPanel, StagePanel, NodeInspector, JudgmentModal, JudgmentPanel, Modals
