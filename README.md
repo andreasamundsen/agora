@@ -32,7 +32,7 @@ npm start
 npm run dist
 ```
 
-This produces `release/Agora-Setup-0.1.56.exe`, a per-user Windows NSIS installer for the private beta. The installer is intentionally **unsigned** and does not auto-update. It bundles Electron and the compiled server, so testers do not need Node. This is a binary-only build: Agora's source files are not included in the installer.
+This produces `release/Agora-Setup-0.1.57.exe`, a per-user Windows NSIS installer for the private beta. The installer is intentionally **unsigned** and does not auto-update. It bundles Electron and the compiled server, so testers do not need Node. This is a binary-only build: Agora's source files are not included in the installer.
 
 `npm run electron` runs the desktop shell directly; `npm run pack` produces an unpacked build for inspection.
 

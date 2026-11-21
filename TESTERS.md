@@ -4,11 +4,19 @@ Agora is a local debate harness. You install it like a normal Windows app; no No
 
 ## Install
 
-1. Run `Agora-Setup-0.1.56.exe`.
+1. Run `Agora-Setup-0.1.57.exe`.
 2. Windows will warn that the publisher is unknown. This build is intentionally unsigned: choose **More info → Run anyway**.
 3. The installer is per-user and does not need administrator rights. Agora opens when it finishes.
 4. To upgrade, close Agora first, then run the newer installer over it. Your debates stay in `%APPDATA%\Agora\data`.
 5. The SHA-256 checksum should match the file supplied with the build. A matching hash is not a code signature; it only confirms the file has not changed.
+
+## What's new in 0.1.57
+
+- **Judge progress now follows the actual link work.** The loading modal shows the real completed-link count, a completed-link track, and the four argument links currently being assessed, including their relation type and source → target.
+- **The ETA is measured, not simulated.** It appears after the first link returns and is recalculated after every completion; the estimate is deliberately rough at first because four link calls run concurrently.
+- **The clustering phase is separate.** The modal shows an indeterminate “Grouping the arguments” phase before link progress begins.
+- **Cancel judgment stops scheduling new link calls.** Link calls already in flight may finish server-side, but no new links are started and the completed judgment is discarded.
+- The judge still assesses four links at a time. Progress events carry work status only; verdicts and reasoning arrive with the final judgment, and the deterministic solver and playback are unchanged.
 
 ## What's new in 0.1.56
 
