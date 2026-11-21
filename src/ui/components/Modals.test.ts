@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { presetDraft } from "./Modals";
+import { presetDraft, temperatureVisible } from "./Modals";
 
 const savedGoogle = {
   provider: "google",
@@ -32,5 +32,22 @@ describe("Settings provider presets", () => {
       baseUrl: "https://api.openai.com/v1",
       model: "gpt-4o-mini"
     })).toEqual({ baseUrl: "", model: "" });
+  });
+});
+
+describe("Settings temperature visibility", () => {
+  it("shows temperature for a non-thinking model", () => {
+    expect(temperatureVisible("openai", "gpt-4o-mini")).toBe(true);
+    expect(temperatureVisible("custom", "my-local-model")).toBe(true);
+  });
+
+  it("hides temperature for a thinking model", () => {
+    expect(temperatureVisible("google", "gemini-4-hydrogen")).toBe(false);
+    expect(temperatureVisible("openai", "o3")).toBe(false);
+  });
+
+  it("hides temperature in no-model mode and before a model is entered", () => {
+    expect(temperatureVisible("local", "gpt-4o-mini")).toBe(false);
+    expect(temperatureVisible("openai", "")).toBe(false);
   });
 });

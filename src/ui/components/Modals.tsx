@@ -480,6 +480,12 @@ export function presetDraft(
   return preset ? { baseUrl: preset.baseUrl, model: preset.model } : null;
 }
 
+/** Temperature is only meaningful when the selected model has no thinking control. */
+export function temperatureVisible(provider: string, model: string): boolean {
+  if (provider === "local" || !model.trim()) return false;
+  return !thinkingCapability(provider, model).supported;
+}
+
 
 const THINKING_LABELS: Record<ThinkingLevel, string> = {
   default: "Provider default",
@@ -832,26 +838,23 @@ export function SettingsModal({
         <span className="field-hint">{thinking.note}</span>
       ) : null}
 
-      <label className="field">
-        <span className="field-label">Temperature <em>{temperature.toFixed(2)}</em></span>
-        <input
-          type="range"
-          className="range"
-          min={0.2}
-          max={1.1}
-          step={0.05}
-          value={temperature}
-          disabled={thinking.supported || provider === "deepseek"}
-          onChange={(event) => setTemperature(Number(event.target.value))}
-        />
-        <span className="field-hint">
-          {thinking.supported
-            ? "Temperature is not sent for a thinking-capable model; use the thinking level instead."
-            : provider === "deepseek"
-              ? "DeepSeek Flash ignores temperature; use reasoning effort to control its depth."
-              : "Lower is more literal; higher produces more varied maps and rebuttals."}
-        </span>
-      </label>
+      {temperatureVisible(provider, model) && (
+        <label className="field">
+          <span className="field-label">Temperature <em>{temperature.toFixed(2)}</em></span>
+          <input
+            type="range"
+            className="range"
+            min={0.2}
+            max={1.1}
+            step={0.05}
+            value={temperature}
+            onChange={(event) => setTemperature(Number(event.target.value))}
+          />
+          <span className="field-hint">
+            Lower is more literal; higher produces more varied maps and rebuttals.
+          </span>
+        </label>
+      )}
 
       {status && (
         <div className={`settings-status ${status.ok ? "is-ok" : "is-bad"}`}>
