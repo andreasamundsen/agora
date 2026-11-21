@@ -140,13 +140,23 @@ Open **Settings** (the gear). Agora supports OpenAI-compatible chat endpoints pl
 
 The model field accepts any model ID and also offers IDs returned by the saved provider's model list. Use **Refresh models** after changing the provider, or save the settings first; the list is read from the saved connection so the API key never has to leave the server. Example IDs are starting points, not a guarantee that a provider still offers them.
 
-Thinking controls are model-aware:
+Thinking controls are a capability allowlist, not a live probe of the provider. A model ID gets a thinking control only when Agora knows the provider-specific parameter shape it accepts:
 
-- DeepSeek offers **Provider default / Off / Low / High / Max**; OpenAI reasoning models offer **Provider default / Low / Medium / High**; xAI Grok models offer **Provider default / Low / Medium / High / Max**.
-- Claude 4.6 and later use adaptive thinking with **Provider default / Off / Low / Medium / High / Max**; older Claude thinking models use the same ladder as a token budget. **Off** is hidden where thinking is always on.
-- Gemini 3 and later use thinking levels; Gemini 2.5 uses a thinking budget. Levels the model does not support are hidden, and **Off** is hidden where thinking cannot be disabled.
-- Temperature is not sent while thinking is active. The app raises the output budget automatically when thinking is active so the JSON graph is not cut off.
-- Custom endpoints do not get thinking controls because their parameter support cannot be verified.
+| Provider | Model IDs with thinking controls | Offered levels |
+|---|---|---|
+| OpenAI | `o1`–`o9` families, `gpt-5*`, `gpt-6*` | Provider default / Low / Medium / High |
+| DeepSeek | `deepseek-flash`, `deepseek-v4-flash`, `deepseek-v4-pro`, `deepseek-reasoner` | Provider default / Off / Low / High / Max |
+| xAI | IDs beginning `grok-` | Provider default / Low / Medium / High / Max |
+| Anthropic | Claude 3.7 and later IDs in named or legacy form (`claude-sonnet-4-6`, `claude-3-7-sonnet`) | Provider default / Off / Low / Medium / High / Max; **Off** is hidden when thinking is always on |
+| Google | Gemini 2.5 (`gemini-2.5-*`) uses a token budget; Gemini 3 and 4 (`gemini-3*`, `gemini-4*`) use thinking levels | Model-specific subset of Provider default / Off / Low / Medium / High / Max; the UI hides unsupported levels |
+| Custom | None | No thinking control |
+| No model | None | No thinking control |
+
+The table is deliberately conservative. A model that is not listed still works for authoring, chamber questions, and judgment; it runs with the provider’s default request shape and no thinking control. A newly released model ID is also treated as unknown until Agora’s capability rules are updated. Model IDs returned by **Refresh models** are identifiers only; the provider does not advertise thinking capabilities in that list.
+
+For Claude, 4.6 and later use adaptive thinking with output effort; 3.7 through 4.5 use a thinking-token budget. For Gemini, 2.5 uses `thinkingBudget`; Gemini 3 and later use `thinkingLevel`, with **Max** only on models that accept XHIGH. **Off** is hidden where a model cannot disable thinking. Temperature is not sent while thinking is active; for models without a thinking control, temperature is the available generation control when a model ID is entered.
+
+Custom endpoints do not get thinking controls because their parameter support cannot be verified. Use the endpoint’s default behavior.
 
 Local models may expose their chain of thought in a separate `reasoning_content` field and spend much of the completion budget there before writing the final JSON. Agora gives loopback providers a 12,000-token output floor and up to five minutes for a generation. If the model still returns only hidden reasoning, Agora reports that clearly instead of treating the empty final content as a map.
 
