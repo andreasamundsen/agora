@@ -82,7 +82,7 @@ The chamber is a conversation with the cartographer about the map, or about anyt
 
 `Stage Debate` turns the map into a performance. The order is a seeded random walk through the graph: the motion opens, you state your position, advocates and challengers take turns, rebuttals surface where they connect, and the moderator closes. Each run samples a new sequence; `Cut a new sequence` resamples without leaving the stage. The camera follows the argument being made.
 
-Stage controls: `Space` play/pause, `←`/`→` previous/next turn, a speed selector, optional browser speech, and `Esc` to close. The stage records nothing; it is a way of reading the map aloud.
+Stage controls: `Space` play/pause, `←`/`→` previous/next turn, a speed selector, the optional **Read turns aloud** browser voice, and `Esc` to close. The stage records nothing; it is a way of reading the map aloud.
 
 ### The bench
 
@@ -265,7 +265,7 @@ npm run build     # vite production build
 - There is **no telemetry, analytics, crash reporting, or auto-update**. The app does not phone home.
 - The desktop renderer is sandboxed with context isolation and a production Content-Security-Policy. It denies permission requests and keeps navigation inside the local app; the only external link (Argdown's site) opens in the default browser.
 - There is no authentication on the local API. It is intended for a single-user machine; do not expose it to a network you do not trust.
-- Speech synthesis uses the operating system's installed voices; Agora does not upload audio.
+- The optional **Read turns aloud** control uses the browser's speech-synthesis voices. Agora does not record or upload audio. Whether the browser synthesizes speech locally or through a network-backed voice depends on the browser and installed voice engine.
 
 See [`SECURITY.md`](SECURITY.md) for the current beta's security limitations, including the unsigned build and the packaged Electron version.
 
@@ -276,7 +276,7 @@ See [`SECURITY.md`](SECURITY.md) for the current beta's security limitations, in
 - Judgment is **one clustering call plus one model call per argument link** and is not cached; a map with many replies can take a while and cost accordingly.
 - A judgment run lives in the browser session as a sidecar. Export the report if you want the record to survive a reload.
 - Authoring and chamber responses are non-streaming. Judgment progress is streamed, but the model's ruling text is still delivered as part of the assessment rather than token by token.
-- Staging is a textual performance with optional browser speech, not audio mixing or avatars.
+- Staging is a textual performance with an optional browser voice, not audio mixing or avatars.
 - The chamber can answer general questions from the selected model's training knowledge, but it does not browse or retrieve live web data.
 - Single-user, stored locally. Model calls go to the provider you configure; there is no authentication, collaboration, or cloud sync.
 - Argdown import is graph-first. Formatting details that have no graph meaning are not preserved.
