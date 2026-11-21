@@ -8,14 +8,14 @@ It is built in the spirit of a learning harness: the model is not there to agree
 
 ## Status
 
-Agora is an early public beta. The source is available under the **MIT License**. The Windows build is intentionally unsigned, has no auto-update, and has no dedicated website yet. Gemini has been live-tested; the Claude path has not yet been verified against a live Claude account. Read [`SECURITY.md`](SECURITY.md) before installing.
+Agora is an early public beta. The source is available under the **MIT License**. The Windows build is intentionally unsigned, has no auto-update, and has no dedicated website yet. Gemini and Claude have been live-tested against real accounts. Read [`SECURITY.md`](SECURITY.md) before installing.
 
 ## Install on Windows
 
 Download from the [GitHub Releases](https://github.com/andreasamundsen/agora/releases) page:
 
-- `Agora-Setup-0.1.58.exe`
-- `Agora-Setup-0.1.58.exe.sha256`
+- `Agora-Setup-0.1.59.exe`
+- `Agora-Setup-0.1.59.exe.sha256`
 
 1. Back up `%APPDATA%\Agora\data` if you already have debates.
 2. Close Agora, then run the installer. It is per-user and does not require administrator rights.
@@ -23,7 +23,7 @@ Download from the [GitHub Releases](https://github.com/andreasamundsen/agora/rel
 4. Verify the download against the checksum from the same release:
 
    ```powershell
-   Get-FileHash .\Agora-Setup-0.1.58.exe -Algorithm SHA256
+   Get-FileHash .\Agora-Setup-0.1.59.exe -Algorithm SHA256
    ```
 
 A matching hash confirms the file has not changed; it is not a code signature. There is no auto-update, so a future beta is a manual download and install.

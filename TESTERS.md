@@ -4,11 +4,17 @@ Agora is a local debate harness. You install it like a normal Windows app; no No
 
 ## Install
 
-1. Download `Agora-Setup-0.1.58.exe` and its `.sha256` sidecar from the GitHub Releases page.
+1. Download `Agora-Setup-0.1.59.exe` and its `.sha256` sidecar from the GitHub Releases page.
 2. Windows will warn that the publisher is unknown. This build is intentionally unsigned: choose **More info → Run anyway**.
 3. The installer is per-user and does not need administrator rights. Agora opens when it finishes.
 4. To upgrade, close Agora first, then run the newer installer over it. Your debates stay in `%APPDATA%\Agora\data`.
 5. Verify the SHA-256 checksum against the value in the `.sha256` file from the same release. A matching hash is not a code signature; it only confirms the file has not changed.
+
+## What's new in 0.1.59
+
+- **Long model lists now scroll properly.** The model suggestions open in a bounded menu with its own scrollbar, wheel scrolling, and keyboard navigation instead of clipping at the bottom of the settings window.
+- **The picker opens on the selected model.** The current model is scrolled into view, typing filters the list, and clicking or pressing Enter selects a model. Free-text custom IDs still work.
+- This is a settings-interface change only. Debate generation, judgment, playback, and existing data are unchanged.
 
 ## What's new in 0.1.58
 
