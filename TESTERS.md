@@ -4,11 +4,19 @@ Agora is a local debate harness. You install it like a normal Windows app; no No
 
 ## Install
 
-1. Run `Agora-Setup-0.1.55.exe`.
+1. Run `Agora-Setup-0.1.56.exe`.
 2. Windows will warn that the publisher is unknown. This build is intentionally unsigned: choose **More info → Run anyway**.
 3. The installer is per-user and does not need administrator rights. Agora opens when it finishes.
 4. To upgrade, close Agora first, then run the newer installer over it. Your debates stay in `%APPDATA%\Agora\data`.
 5. The SHA-256 checksum should match the file supplied with the build. A matching hash is not a code signature; it only confirms the file has not changed.
+
+## What's new in 0.1.56
+
+- **Claude and Gemini now use their native APIs.** The Anthropic preset talks to the Messages API and the Google preset talks to Gemini `generateContent`; both use their own authentication, request shape, model list, and response parsing instead of the OpenAI compatibility layer.
+- **Claude thinking is model-aware.** Claude 4.6 and later use adaptive thinking with **Provider default / Off / Low / Medium / High / Max**; older thinking models use the same ladder as a token budget. **Off** is hidden on models where thinking cannot be disabled, such as Opus 5.5 and Sonnet 5.5.
+- **Gemini thinking follows the model.** Gemini 3 and later use thinking levels; Gemini 2.5 uses a thinking budget. The app offers the levels the selected model supports, adds **Max** only where XHIGH exists, and hides **Off** where disabling is not accepted.
+- **Model discovery is native for both.** Refresh models after saving the Claude or Gemini connection to load the provider's own model list.
+- Claude structured responses use Agora's JSON prompt contract and tolerant parser rather than a forced response-format field; Gemini requests JSON with `responseMimeType`.
 
 ## What's new in 0.1.55
 
@@ -163,10 +171,11 @@ Agora is a local debate harness. You install it like a normal Windows app; no No
 Agora opens with two demo debates and a local scaffold, but real argument generation needs a model.
 
 1. Open **Settings** (the gear, top right).
-2. Choose a provider: **DeepSeek**, **OpenAI**, or **Custom** for another OpenAI-compatible endpoint. The DeepSeek preset uses `deepseek-flash` (V4.1 Flash).
-3. For DeepSeek, choose a **Reasoning effort**: **Off**, **Low**, **High**, or **Max**. High is the default. Higher effort can improve hard judgments but takes longer and costs more. Temperature is intentionally disabled for DeepSeek.
-4. Paste your own API key and press **Save & Test**.
-5. Close Settings and try **New debate**, the chat, or **Judge**.
+2. Choose a provider: **DeepSeek**, **OpenAI**, **xAI / Grok**, **Anthropic / Claude**, **Google / Gemini**, or **Custom**. Claude and Gemini use their native APIs; Custom is for another OpenAI-compatible endpoint, including a local server.
+3. For DeepSeek, choose a **Reasoning effort**: **Provider default**, **Off**, **Low**, **High**, or **Max**. High is the default. Higher effort can improve hard judgments but takes longer and costs more. Temperature is intentionally disabled for DeepSeek.
+4. Other providers expose the thinking levels their selected model supports. Claude and Gemini controls are model-aware; a level the model cannot use is hidden rather than sent and rejected.
+5. Paste your own API key and press **Save & Test**.
+6. Close Settings and try **New debate**, the chat, or **Judge**.
 
 Provider calls go directly from your machine to the provider you choose. When you connect a model, the motion, argument map, chat messages, and judgment context you submit are sent to that provider; Agora does not proxy them through a server of its own. Your key is stored locally as plain JSON, so use a key you can rotate. Agora has no telemetry, crash reporting, analytics, or auto-update.
 
