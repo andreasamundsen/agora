@@ -25,4 +25,12 @@ describe("Settings provider presets", () => {
   it("leaves custom fields untouched", () => {
     expect(presetDraft("custom", savedGoogle)).toBeNull();
   });
+
+  it("keeps local mode fields blank even if stale values were saved", () => {
+    expect(presetDraft("local", {
+      provider: "local",
+      baseUrl: "https://api.openai.com/v1",
+      model: "gpt-4o-mini"
+    })).toEqual({ baseUrl: "", model: "" });
+  });
 });

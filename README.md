@@ -130,7 +130,7 @@ Open **Settings** (the gear). Agora supports OpenAI-compatible chat endpoints pl
 
 | Preset | Base URL | Transport |
 |---|---|---|
-| Local only | — | no model calls |
+| No model | — | no model calls |
 | OpenAI | `https://api.openai.com/v1` | OpenAI-compatible |
 | DeepSeek | `https://api.deepseek.com` | OpenAI-compatible |
 | xAI / Grok | `https://api.x.ai/v1` | OpenAI-compatible |

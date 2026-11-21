@@ -455,7 +455,7 @@ export function ExportModal({ debate, onClose }: { debate: Debate; onClose: () =
 /* ------------------------------------------------------------------ */
 
 const PRESETS: { id: string; label: string; baseUrl: string; model: string; hint: string }[] = [
-  { id: "local", label: "Local only", baseUrl: "", model: "", hint: "No model calls. Structural scaffolding only." },
+  { id: "local", label: "No model", baseUrl: "", model: "", hint: "No model calls. Local scaffolding and structural review only." },
   { id: "openai", label: "OpenAI", baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini", hint: "An API key is required. Reasoning models show thinking controls." },
   { id: "deepseek", label: "DeepSeek", baseUrl: "https://api.deepseek.com", model: "deepseek-flash", hint: "DeepSeek V4.1 Flash. Thinking effort is configurable below." },
   { id: "xai", label: "xAI / Grok", baseUrl: "https://api.x.ai/v1", model: "grok-4.7", hint: "Grok through the OpenAI-compatible endpoint. Models load from your saved connection." },
@@ -468,6 +468,7 @@ export function presetDraft(
   id: string,
   settings: Pick<UiSettings, "provider" | "baseUrl" | "model">
 ): { baseUrl: string; model: string } | null {
+  if (id === "local") return { baseUrl: "", model: "" };
   const savedProvider = PRESETS.some((preset) => preset.id === settings.provider)
     ? settings.provider
     : "custom";
@@ -501,8 +502,8 @@ export function SettingsModal({
   const initialPreset = PRESETS.find((preset) => preset.id === settings.provider) ?? PRESETS.find((preset) => preset.id === "custom")!;
   const initialProvider = PRESETS.some((preset) => preset.id === settings.provider) ? settings.provider : "custom";
   const [provider, setProvider] = useState(initialProvider);
-  const [baseUrl, setBaseUrl] = useState(settings.baseUrl);
-  const [model, setModel] = useState(settings.model);
+  const [baseUrl, setBaseUrl] = useState(initialProvider === "local" ? "" : settings.baseUrl);
+  const [model, setModel] = useState(initialProvider === "local" ? "" : settings.model);
   const [apiKey, setApiKey] = useState("");
   const [temperature, setTemperature] = useState(settings.temperature);
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>(settings.reasoningEffort ?? "high");
@@ -722,7 +723,7 @@ export function SettingsModal({
           <input
             type="text"
             className="field-input"
-            placeholder="https://api.openai.com/v1"
+            placeholder={provider === "local" ? "" : "https://api.openai.com/v1"}
             value={baseUrl}
             onChange={(event) => { setBaseUrl(event.target.value); setStatus(null); }}
             disabled={provider === "local"}
@@ -743,7 +744,7 @@ export function SettingsModal({
             type="text"
             className="field-input"
             list="agora-model-options"
-            placeholder="gpt-4o-mini"
+            placeholder={provider === "local" ? "" : "gpt-4o-mini"}
             value={model}
             onChange={(event) => { setModel(event.target.value); setStatus(null); }}
             disabled={provider === "local"}

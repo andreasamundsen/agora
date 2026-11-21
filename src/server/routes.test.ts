@@ -86,7 +86,7 @@ describe("debate routes", () => {
     expect(body.code).toBe("unreadable-debate");
   });
 
-  it("does not expose a provider model list in local-only mode", async () => {
+  it("does not expose a provider model list in no-model mode", async () => {
     const store = new DebateStore(dir);
     await start(store);
 
@@ -95,7 +95,7 @@ describe("debate routes", () => {
     const body = (await response.json()) as { ok: boolean; models: string[]; message: string };
     expect(body.ok).toBe(false);
     expect(body.models).toEqual([]);
-    expect(body.message).toContain("Local only");
+    expect(body.message).toContain("No model mode");
   });
 
   it("streams judge progress and the final run as NDJSON", async () => {

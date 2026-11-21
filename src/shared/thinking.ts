@@ -206,7 +206,7 @@ export function thinkingCapability(provider: string, model: string): ThinkingCap
     return {
       supported: false,
       levels: [],
-      note: "Local only does not call a model, so there is no thinking setting."
+      note: "No model mode does not call a model, so there is no thinking setting."
     };
   }
 
