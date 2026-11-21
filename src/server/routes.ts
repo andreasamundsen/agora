@@ -197,7 +197,7 @@ export function createApi(store: DebateStore): Router {
       const problem = providerUrlProblem(settings.baseUrl, Boolean(settings.apiKey.trim()));
       if (problem) return res.status(400).json({ error: problem });
       if (!isReady(settings)) {
-        return res.json({ ok: false, message: "Add a base URL and model first. Local servers such as LM Studio or Ollama do not need a key." });
+        return res.json({ ok: false, message: "Add a base URL and model first. Local servers do not need a key." });
       }
       res.json(await testProviderConnection(settings));
     } catch (error) {

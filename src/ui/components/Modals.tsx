@@ -456,8 +456,6 @@ const PRESETS: { id: string; label: string; baseUrl: string; model: string; hint
   { id: "local", label: "Local only", baseUrl: "", model: "", hint: "No model calls. Structural scaffolding only." },
   { id: "openai", label: "OpenAI", baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini", hint: "An API key is required." },
   { id: "deepseek", label: "DeepSeek", baseUrl: "https://api.deepseek.com", model: "deepseek-flash", hint: "DeepSeek V4.1 Flash. Thinking effort is configurable below." },
-  { id: "lmstudio", label: "LM Studio", baseUrl: "http://localhost:1234/v1", model: "local-model", hint: "Run the local server on port 1234. No key needed." },
-  { id: "ollama", label: "Ollama", baseUrl: "http://localhost:11434/v1", model: "llama3.2", hint: "Start Ollama with an OpenAI-compatible endpoint. No key needed." },
   { id: "custom", label: "Custom", baseUrl: "", model: "", hint: "Any OpenAI-compatible chat-completions endpoint." }
 ];
 
@@ -478,7 +476,8 @@ export function SettingsModal({
   onClose: () => void;
 }) {
   const initialPreset = PRESETS.find((preset) => preset.id === settings.provider) ?? PRESETS.find((preset) => preset.id === "custom")!;
-  const [provider, setProvider] = useState(settings.provider || "custom");
+  const initialProvider = PRESETS.some((preset) => preset.id === settings.provider) ? settings.provider : "custom";
+  const [provider, setProvider] = useState(initialProvider);
   const [baseUrl, setBaseUrl] = useState(settings.baseUrl);
   const [model, setModel] = useState(settings.model);
   const [apiKey, setApiKey] = useState("");

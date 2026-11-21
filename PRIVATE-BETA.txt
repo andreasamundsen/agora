@@ -26,7 +26,7 @@ Uninstalling removes the application but leaves your debates and settings behind
 
 NETWORK AND LOCAL SERVER
 Agora starts its own local server on 127.0.0.1 on a random port. The desktop window connects only to that local server. There is no remote Agora account, proxy, cloud sync, or telemetry service.
-When you connect a model, the motion, argument map, chat messages, and judgment context you submit are sent directly to the provider you configure. The provider's terms and retention policy apply. A local model such as LM Studio or Ollama keeps model work on your machine.
+When you connect a model, the motion, argument map, chat messages, and judgment context you submit are sent directly to the provider you configure. The provider's terms and retention policy apply. A local OpenAI-compatible provider configured through Custom keeps model work on your machine.
 The only external link in the app is to Argdown's website, and it opens in your browser.
 There is no auto-update. New builds must be installed manually.
 

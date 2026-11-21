@@ -66,9 +66,7 @@ Open **Settings** (the gear). Agora speaks to any OpenAI-compatible `/chat/compl
 
 - **OpenAI** — `https://api.openai.com/v1`, e.g. `gpt-4o-mini`
 - **DeepSeek** — `https://api.deepseek.com`, `deepseek-flash` (V4.1 Flash)
-- **LM Studio** — `http://127.0.0.1:1234/v1`, pick the model loaded there; no key needed
-- **Ollama** — `http://127.0.0.1:11434/v1`, e.g. `llama3.1`; no key needed
-- **Custom** — any compatible base URL and model
+- **Custom** — any compatible base URL and model, including a local OpenAI-compatible server if you use one
 
 DeepSeek Flash supports thinking. Its **Reasoning effort** control offers **Off / Low / High / Max**; High is the default. Higher effort can improve difficult judgments, but it costs more and takes longer. Temperature is disabled for DeepSeek because the model ignores it; use reasoning effort instead. The app raises the output budget automatically when thinking is active so the JSON graph is not cut off.
 
@@ -167,7 +165,7 @@ npm run build     # vite production build
 - API keys are stored server-side only. The browser receives `hasKey: true/false`; the key is never included in an API response or written to `agora.log`.
 - The desktop build stores settings as plain JSON and keeps them after uninstall. Use a key you can rotate; use **Forget saved key** in Settings before handing the machine on.
 - **When you connect a model, the motion, argument map, chat messages, and judgment context you submit are sent directly to the provider you configure.** There is no remote Agora service, account, proxy, or cloud sync. The provider's terms, retention policy, and jurisdiction govern that data; do not paste confidential material unless you accept that.
-- The local scaffolder and a local provider such as LM Studio/Ollama keep model work on this machine. The packaged app forces the local API to `127.0.0.1`.
+- The local scaffolder and a local OpenAI-compatible provider configured through **Custom** keep model work on this machine. The packaged app forces the local API to `127.0.0.1`.
 - There is **no telemetry, analytics, crash reporting, or auto-update**. The app does not phone home.
 - The desktop renderer is sandboxed with context isolation and a production Content-Security-Policy. It denies permission requests and keeps navigation inside the local app; the only external link (Argdown's site) opens in the default browser.
 - There is no authentication on the local API. It is intended for a single-user machine; do not expose it to a network you do not trust.
