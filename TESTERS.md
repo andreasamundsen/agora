@@ -4,11 +4,18 @@ Agora is a local debate harness. You install it like a normal Windows app; no No
 
 ## Install
 
-1. Download `Agora-Setup-0.1.59.exe` and its `.sha256` sidecar from the GitHub Releases page.
+1. Download `Agora-Setup-0.1.60.exe` and its `.sha256` sidecar from the GitHub Releases page.
 2. Windows will warn that the publisher is unknown. This build is intentionally unsigned: choose **More info → Run anyway**.
 3. The installer is per-user and does not need administrator rights. Agora opens when it finishes.
 4. To upgrade, close Agora first, then run the newer installer over it. Your debates stay in `%APPDATA%\Agora\data`.
 5. Verify the SHA-256 checksum against the value in the `.sha256` file from the same release. A matching hash is not a code signature; it only confirms the file has not changed.
+
+## What's new in 0.1.60
+
+- **The stage now follows the bench’s branch rhythm.** Arguments directly tied to the motion alternate sides, and each root’s reply chain is drained before the next root begins. A new cut still gets a fresh seed, so the performance changes without becoming arbitrary.
+- **Voice playback waits for the browser to finish speaking.** The fixed reading timer is disabled while **Read turns aloud** is on; the stage advances when the utterance ends, with a short pause and safety fallbacks if the speech engine never starts or never reports completion.
+- **Next remains immediate.** Manual navigation, pause/resume, speed changes, and the closing finale are unchanged.
+- The underlying map, judgment engine, and existing debate data are unchanged.
 
 ## What's new in 0.1.59
 

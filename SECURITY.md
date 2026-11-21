@@ -9,7 +9,7 @@ Agora is an early public beta. This page describes the current build honestly so
 - Each release includes a `.sha256` checksum. Verify it before running the installer:
 
   ```powershell
-  Get-FileHash .\Agora-Setup-0.1.59.exe -Algorithm SHA256
+  Get-FileHash .\Agora-Setup-0.1.60.exe -Algorithm SHA256
   ```
 
   Compare the result with the `.sha256` file attached to the same release. Do not trust a checksum copied from an issue or a chat message.
