@@ -1,14 +1,14 @@
-# Agora — private beta notes
+# Agora — public beta notes
 
-Agora is a local debate harness. You install it like a normal Windows app; no Node, npm, or terminal is needed. This is a binary-only private beta: Agora's source files are not included. See `PRIVATE-BETA.txt` for the handoff note and `BETA-TERMS.txt` for the evaluation terms.
+Agora is a local debate harness. You install it like a normal Windows app; no Node, npm, or terminal is needed. The source code is public in this repository under the MIT License; the installer is a compiled Windows build. The beta is intentionally unsigned and has no auto-update. See `SECURITY.md` for the current security, privacy, and data-handling limitations.
 
 ## Install
 
-1. Run `Agora-Setup-0.1.57.exe`.
+1. Download `Agora-Setup-0.1.57.exe` and its `.sha256` sidecar from the GitHub Releases page.
 2. Windows will warn that the publisher is unknown. This build is intentionally unsigned: choose **More info → Run anyway**.
 3. The installer is per-user and does not need administrator rights. Agora opens when it finishes.
 4. To upgrade, close Agora first, then run the newer installer over it. Your debates stay in `%APPDATA%\Agora\data`.
-5. The SHA-256 checksum should match the file supplied with the build. A matching hash is not a code signature; it only confirms the file has not changed.
+5. Verify the SHA-256 checksum against the value in the `.sha256` file from the same release. A matching hash is not a code signature; it only confirms the file has not changed.
 
 ## What's new in 0.1.57
 
@@ -204,15 +204,16 @@ Provider calls go directly from your machine to the provider you choose. When yo
 - If a debate file cannot be read, Agora leaves it in place and names it in a warning instead of deleting or overwriting it.
 - To reset completely, uninstall and delete `%APPDATA%\Agora`.
 
-This private beta stores settings locally as plain JSON. Use a key you can rotate, and do not use a shared production key.
+This public beta stores settings locally as plain JSON. Use a key you can rotate, and do not use a shared production key.
 
 ## Sending feedback
 
-There is no automatic feedback or auto-update. If something breaks, send:
+There is no automatic feedback or auto-update. If something breaks, open an issue at <https://github.com/andreasamundsen/agora/issues> with:
 
 - the version shown in Settings (bottom of the panel),
 - a short description of what you did,
-- `%APPDATA%\Agora\agora.log` (it contains local paths and the Windows username; review before sending),
 - an exported debate or judgment report if relevant.
+
+Do not paste API keys or unredacted logs into a public issue. `%APPDATA%\Agora\agora.log` can contain local paths and the Windows username; review it before sharing.
 
 To replace this build, run a newer installer over it. Your debates stay in `%APPDATA%\Agora\data`.

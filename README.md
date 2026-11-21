@@ -6,6 +6,10 @@ Agora turns a position into a map of arguments, lets you interrogate that map, e
 
 It is built in the spirit of a learning harness: the model is not there to agree with you. It builds the strongest case for your position, the strongest case against it, and the places where the two actually collide.
 
+## Public beta
+
+Agora is an early public beta. The source is available under the **MIT License**. The Windows build is intentionally unsigned, has no auto-update, and has no dedicated website yet; the installer and checksum are published on the GitHub Releases page. Read `SECURITY.md` before installing, and use a dedicated provider key you can rotate.
+
 ## Quick start
 
 Requirements: **Node 20+** (developed on Node 26) and npm.
@@ -26,17 +30,17 @@ npm start
 
 `npm start` serves the built app and the API from the same Node process. The server binds to `127.0.0.1` by default. Set `HOST=0.0.0.0` only if you deliberately want to expose it on your network. There is no authentication, and the loopback Host check blocks ordinary LAN clients; do not treat this as a secure multi-user server.
 
-### Desktop private beta build
+### Windows beta build
 
 ```bash
 npm run dist
 ```
 
-This produces `release/Agora-Setup-0.1.57.exe`, a per-user Windows NSIS installer for the private beta. The installer is intentionally **unsigned** and does not auto-update. It bundles Electron and the compiled server, so testers do not need Node. This is a binary-only build: Agora's source files are not included in the installer.
+This produces `release/Agora-Setup-0.1.57.exe`, a per-user Windows NSIS installer for the public beta. The installer is intentionally **unsigned** and does not auto-update. It bundles Electron and the compiled server, so users do not need Node. Download the tested installer and its `.sha256` sidecar from the GitHub Releases page; the source is this repository.
 
 `npm run electron` runs the desktop shell directly; `npm run pack` produces an unpacked build for inspection.
 
-The packaged app stores its data under `%APPDATA%\Agora\data`, not in the project's `data/` directory. This private beta keeps the existing settings format, so the API key is plain JSON inside `settings.json`; use a dedicated key you can rotate. `PRIVATE-BETA.txt` is the tester handoff, and `BETA-TERMS.txt` contains the evaluation terms.
+The packaged app stores its data under `%APPDATA%\Agora\data`, not in the project's `data/` directory. The beta keeps the existing settings format, so the API key is plain JSON inside `settings.json`; use a dedicated key you can rotate. See `SECURITY.md` for the current security and privacy limitations.
 
 The app works **before you connect a model**. Two reference debates are seeded on first run, and the local scaffolder can still author maps (labelled honestly as a scaffold). A connected model makes the arguments topic-specific.
 
@@ -197,3 +201,7 @@ npm run build     # vite production build
 ## Why the name
 
 The agora was the public square where a city argued with itself. The interface is deliberately editorial: warm paper, serif headings, ink for the motion, faded red for the challenge, and a dark wood stage for the performance. The map is the argument; the stage is the argument being made; the bench is the argument being judged.
+
+## License
+
+Agora is released under the **MIT License**. See `LICENSE`. The software is provided as-is, without warranty; the unsigned beta build is distributed in the same spirit.
