@@ -4,8 +4,9 @@ import type {
   JudgmentRun,
   StandardOfProof
 } from "../core/judgment";
+import type { ThinkingLevel } from "../shared/thinking";
 
-export type ReasoningEffort = "off" | "low" | "high" | "max";
+export type ReasoningEffort = ThinkingLevel;
 
 export interface UiSettings {
   provider: string;
@@ -99,6 +100,16 @@ export function saveSettings(input: {
 
 export function testSettings(): Promise<{ ok: boolean; message: string; latencyMs?: number }> {
   return request("/settings/test", { method: "POST" });
+}
+
+export interface ProviderModelsResult {
+  ok: boolean;
+  models: string[];
+  message?: string;
+}
+
+export function fetchProviderModels(): Promise<ProviderModelsResult> {
+  return request("/settings/models");
 }
 
 export function judgeDebate(

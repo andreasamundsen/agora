@@ -20,6 +20,7 @@ import { debateContext } from "../core/argdown";
 import { chatEndpoint, isLocalProvider, providerUrlProblem } from "../shared/provider-url";
 import { AUTHORING_RULES as BASE_RULES, CHAMBER_RULES as ASK_RULES } from "../shared/instructions";
 import { getSettings, isReady, StoredSettings, ReasoningEffort } from "./settings";
+import { providerReasoningEffort, thinkingCapability } from "../shared/thinking";
 
 /**
  * Authoring adapter. The rest of the app only sees Debate objects; whether
@@ -149,18 +150,18 @@ ${input.slice(0, 3000)}
 """`;
 }
 
-const DEEPSEEK_THINKING_MODELS = new Set(["deepseek-flash", "deepseek-v4-flash", "deepseek-v4-pro"]);
-
-export function supportsDeepSeekThinking(settings: Pick<StoredSettings, "provider" | "model">): boolean {
-  return settings.provider === "deepseek" && DEEPSEEK_THINKING_MODELS.has(settings.model);
-}
-
 const THINKING_TOKEN_BUDGET: Record<ReasoningEffort, number> = {
+  default: 16_384,
   off: 4200,
   low: 8192,
+  medium: 12_288,
   high: 16384,
   max: 32768
 };
+
+export function supportsDeepSeekThinking(settings: Pick<StoredSettings, "provider" | "model">): boolean {
+  return settings.provider === "deepseek" && thinkingCapability(settings.provider, settings.model).supported;
+}
 
 /**
  * Local models often expose their chain of thought in reasoning_content.
@@ -178,10 +179,11 @@ export async function callModel(
   const urlProblem = providerUrlProblem(settings.baseUrl, Boolean(settings.apiKey.trim()));
   if (urlProblem) throw new Error(urlProblem);
   if (!isReady(settings)) throw new Error("No model is configured.");
-  const thinkingModel = supportsDeepSeekThinking(settings);
-  const thinking = thinkingModel && settings.reasoningEffort !== "off";
+  const capability = thinkingCapability(settings.provider, settings.model);
+  const thinkingModel = capability.supported;
+  const thinkingEnabled = thinkingModel && settings.reasoningEffort !== "default" && settings.reasoningEffort !== "off";
   const localProvider = isLocalProvider(settings.baseUrl);
-  const maxTokens = thinking
+  const maxTokens = thinkingEnabled
     ? Math.max(
         options.maxTokens ?? 0,
         THINKING_TOKEN_BUDGET[settings.reasoningEffort],
@@ -190,23 +192,30 @@ export async function callModel(
     : localProvider
       ? Math.max(options.maxTokens ?? 0, LOCAL_OUTPUT_TOKEN_FLOOR)
       : options.maxTokens ?? 4200;
+  const tokenField = settings.provider === "openai" && thinkingModel ? "max_completion_tokens" : "max_tokens";
   const body: Record<string, unknown> = {
     model: settings.model,
     messages,
-    max_tokens: maxTokens
+    [tokenField]: maxTokens
   };
 
-  if (thinkingModel) {
-    body.thinking = { type: thinking ? "enabled" : "disabled" };
-    if (thinking) body.reasoning_effort = settings.reasoningEffort;
+  if (settings.provider === "deepseek" && thinkingModel && settings.reasoningEffort !== "default") {
+    body.thinking = { type: thinkingEnabled ? "enabled" : "disabled" };
+    if (thinkingEnabled) body.reasoning_effort = providerReasoningEffort(settings.provider, settings.reasoningEffort);
+  } else if (thinkingEnabled) {
+    const effort = providerReasoningEffort(settings.provider, settings.reasoningEffort);
+    if (effort) body.reasoning_effort = effort;
   }
-  if (!thinking) {
+
+  const sendTemperature =
+    !thinkingModel || (settings.provider === "deepseek" && settings.reasoningEffort === "off");
+  if (sendTemperature) {
     body.temperature = options.temperature ?? settings.temperature;
   }
 
   const send = async (useJsonMode: boolean): Promise<Response> => {
     const controller = new AbortController();
-    const timeoutMs = thinking ? 240_000 : localProvider ? 300_000 : 150_000;
+    const timeoutMs = thinkingEnabled ? 240_000 : localProvider ? 300_000 : 150_000;
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       return await fetch(chatEndpoint(settings.baseUrl), {

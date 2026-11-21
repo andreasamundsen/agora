@@ -8,6 +8,7 @@ import { message } from "../core/model";
 import { getSettings, isReady, isReasoningEffort, publicSettings, saveSettings, SettingsError } from "./settings";
 import { providerUrlProblem } from "../shared/provider-url";
 import { testProviderConnection } from "./provider-test";
+import { listProviderModels } from "./provider-models";
 
 function unreadableDebate(res: Response): Response {
   return res.status(422).json({
@@ -187,6 +188,20 @@ export function createApi(store: DebateStore): Router {
       res.json({ settings });
     } catch (error) {
       if (error instanceof SettingsError) return res.status(400).json({ error: error.message });
+      next(error);
+    }
+  });
+
+  api.get("/settings/models", async (_req, res, next) => {
+    try {
+      const settings = getSettings();
+      if (settings.provider === "local") {
+        return res.json({ ok: false, models: [], message: "Local only does not use a model list." });
+      }
+      const problem = providerUrlProblem(settings.baseUrl, Boolean(settings.apiKey.trim()));
+      if (problem) return res.status(400).json({ error: problem });
+      res.json(await listProviderModels(settings));
+    } catch (error) {
       next(error);
     }
   });

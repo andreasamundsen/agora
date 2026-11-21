@@ -64,11 +64,14 @@ Judgment controls: `Space` play/pause, `←`/`→` previous/next ruling, click a
 
 Open **Settings** (the gear). Agora speaks to any OpenAI-compatible `/chat/completions` endpoint:
 
-- **OpenAI** — `https://api.openai.com/v1`, e.g. `gpt-4o-mini`
+- **OpenAI** — `https://api.openai.com/v1`, e.g. `gpt-4o-mini` or a reasoning model
 - **DeepSeek** — `https://api.deepseek.com`, `deepseek-flash` (V4.1 Flash)
+- **xAI / Grok** — `https://api.x.ai/v1`, e.g. `grok-4.7`
 - **Custom** — any compatible base URL and model, including a local OpenAI-compatible server if you use one
 
-DeepSeek Flash supports thinking. Its **Reasoning effort** control offers **Off / Low / High / Max**; High is the default. Higher effort can improve difficult judgments, but it costs more and takes longer. Temperature is disabled for DeepSeek because the model ignores it; use reasoning effort instead. The app raises the output budget automatically when thinking is active so the JSON graph is not cut off.
+The model field takes any model ID and also offers the IDs returned by the saved provider's model list. Use **Refresh models** after changing the provider or save the settings first; the list is read from the saved connection so the API key never has to leave the server.
+
+Thinking controls are model-aware. DeepSeek thinking has **Provider default / Off / Low / High / Max**; OpenAI reasoning models offer **Provider default / Low / Medium / High**; xAI Grok models offer **Provider default / Low / Medium / High / Max**. The app hides levels the selected model cannot use and sends xAI's **Max** as its highest supported effort. Temperature is not sent for a thinking-capable model. The app raises the output budget automatically when thinking is active so the JSON graph is not cut off. Custom endpoints do not get thinking controls because their parameter support cannot be verified.
 
 Local models may expose their chain of thought in a separate `reasoning_content` field and spend much of the completion budget there before writing the final JSON. Agora gives loopback providers a 12,000-token output floor and up to five minutes for a generation. If the model still returns only hidden reasoning, Agora reports that clearly instead of treating the empty final content as a map.
 

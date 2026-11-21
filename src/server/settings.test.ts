@@ -64,12 +64,24 @@ describe("settings", () => {
 
   it("allows a local HTTP provider with a key", () => {
     const saved = saveSettings({
-      provider: "lmstudio",
+      provider: "custom",
       baseUrl: "http://localhost:1234/v1",
       model: "local-model",
-      apiKey: "local-key"
+      apiKey: "test-key"
     });
     expect(saved.ready).toBe(true);
     expect(fs.existsSync(path.join(tempDir, "settings.json"))).toBe(true);
+  });
+
+  it("persists the extended thinking ladder", () => {
+    const saved = saveSettings({
+      provider: "xai",
+      baseUrl: "https://api.x.ai/v1",
+      model: "grok-4.7",
+      apiKey: "test-key",
+      reasoningEffort: "medium"
+    });
+    expect(saved.reasoningEffort).toBe("medium");
+    expect(getSettings().reasoningEffort).toBe("medium");
   });
 });

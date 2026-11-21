@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { Debate } from "../../core/model";
 import type { UiSettings, ReasoningEffort } from "../api";
-import { downloadArgdown, fetchArgdown, saveSettings, testSettings } from "../api";
+import { downloadArgdown, fetchArgdown, fetchProviderModels, saveSettings, testSettings } from "../api";
 import { applyThemePreference, readThemePreference, type ThemePreference } from "../theme";
 import { isLocalProvider, providerHost, providerUrlProblem } from "../../shared/provider-url";
+import type { ThinkingLevel } from "../../shared/thinking";
+import { thinkingCapability } from "../../shared/thinking";
 import { InstructionPolicyViewer } from "./InstructionPolicyViewer";
 
 /* ------------------------------------------------------------------ */
@@ -454,17 +456,20 @@ export function ExportModal({ debate, onClose }: { debate: Debate; onClose: () =
 
 const PRESETS: { id: string; label: string; baseUrl: string; model: string; hint: string }[] = [
   { id: "local", label: "Local only", baseUrl: "", model: "", hint: "No model calls. Structural scaffolding only." },
-  { id: "openai", label: "OpenAI", baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini", hint: "An API key is required." },
+  { id: "openai", label: "OpenAI", baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini", hint: "An API key is required. Reasoning models show thinking controls." },
   { id: "deepseek", label: "DeepSeek", baseUrl: "https://api.deepseek.com", model: "deepseek-flash", hint: "DeepSeek V4.1 Flash. Thinking effort is configurable below." },
+  { id: "xai", label: "xAI / Grok", baseUrl: "https://api.x.ai/v1", model: "grok-4.7", hint: "Grok through the OpenAI-compatible endpoint. Models load from your saved connection." },
   { id: "custom", label: "Custom", baseUrl: "", model: "", hint: "Any OpenAI-compatible chat-completions endpoint." }
 ];
 
-const EFFORT_OPTIONS: { id: ReasoningEffort; label: string }[] = [
-  { id: "off", label: "Off" },
-  { id: "low", label: "Low" },
-  { id: "high", label: "High" },
-  { id: "max", label: "Max" }
-];
+const THINKING_LABELS: Record<ThinkingLevel, string> = {
+  default: "Provider default",
+  off: "Off",
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+  max: "Max"
+};
 
 export function SettingsModal({
   settings,
@@ -490,6 +495,37 @@ export function SettingsModal({
   const [error, setError] = useState<string | null>(null);
   const [forgetKey, setForgetKey] = useState(false);
   const [view, setView] = useState<"settings" | "instructions">("settings");
+  const [modelOptions, setModelOptions] = useState<string[]>([]);
+  const [modelListState, setModelListState] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [modelListMessage, setModelListMessage] = useState("");
+
+  const loadModels = async (force = false) => {
+    if (provider === "local") return;
+    if (!force && !settings.ready) return;
+    setModelListState("loading");
+    setModelListMessage("");
+    try {
+      const result = await fetchProviderModels();
+      setModelOptions(result.models);
+      setModelListState(result.ok ? "ready" : "error");
+      setModelListMessage(result.ok ? "" : result.message ?? "Could not load the model list.");
+    } catch (caught) {
+      setModelOptions([]);
+      setModelListState("error");
+      setModelListMessage(caught instanceof Error ? caught.message : "Could not load the model list.");
+    }
+  };
+
+  useEffect(() => {
+    if (settings.ready && settings.provider !== "local") void loadModels();
+  }, []);
+
+  useEffect(() => {
+    const capability = thinkingCapability(provider, model);
+    if (capability.supported && !capability.levels.includes(reasoningEffort)) {
+      setReasoningEffort("default");
+    }
+  }, [provider, model, reasoningEffort]);
 
   useEffect(() => {
     const scroller = document.querySelector(".modal-scroll");
@@ -499,6 +535,7 @@ export function SettingsModal({
   const urlProblem = providerUrlProblem(baseUrl, hasEffectiveKey);
   const providerIsLocal = isLocalProvider(baseUrl);
   const providerDestination = providerHost(baseUrl);
+  const thinking = thinkingCapability(provider, model);
 
   const choosePreset = (id: string) => {
     setProvider(id);
@@ -507,7 +544,9 @@ export function SettingsModal({
       setBaseUrl(preset.baseUrl);
       setModel(preset.model);
     }
-    if (id === "deepseek") setReasoningEffort("high");
+    setModelOptions([]);
+    setModelListState("idle");
+    setModelListMessage("");
     setStatus(null);
   };
 
@@ -540,6 +579,7 @@ export function SettingsModal({
       } else {
         setStatus({ ok: true, message: "Saved." });
       }
+      if (provider !== "local") void loadModels(true);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not save settings.");
     } finally {
@@ -681,13 +721,38 @@ export function SettingsModal({
           <input
             type="text"
             className="field-input"
+            list="agora-model-options"
             placeholder="gpt-4o-mini"
             value={model}
             onChange={(event) => { setModel(event.target.value); setStatus(null); }}
             disabled={provider === "local"}
           />
+          <datalist id="agora-model-options">
+            {modelOptions.map((option) => <option key={option} value={option} />)}
+          </datalist>
         </label>
       </div>
+      {provider !== "local" && (
+        <div className="key-row">
+          <span className="field-hint">
+            {modelListState === "loading"
+              ? "Loading model ids from the saved connection…"
+              : modelListState === "error"
+                ? modelListMessage
+                : modelOptions.length > 0
+                  ? `${modelOptions.length} models loaded from the saved connection. Type any model id manually if it is missing.`
+                  : "Model ids load from the saved connection. Enter one manually if the provider does not expose a list."}
+          </span>
+          <button
+            type="button"
+            className="text-link"
+            onClick={() => void loadModels(true)}
+            disabled={modelListState === "loading"}
+          >
+            {modelListState === "loading" ? "Loading…" : "Refresh models"}
+          </button>
+        </div>
+      )}
 
       <label className="field">
         <span className="field-label">
@@ -718,31 +783,32 @@ export function SettingsModal({
         </div>
       </label>
 
-      {provider === "deepseek" && (
+      {thinking.supported ? (
         <div className="field">
           <span className="field-label">
-            Reasoning effort <em>DeepSeek thinking</em>
+            Thinking <em>{provider === "deepseek" ? "DeepSeek effort" : provider === "xai" ? "Grok effort" : "reasoning effort"}</em>
           </span>
           <div className="judge-segmented">
-            {EFFORT_OPTIONS.map((option) => (
+            {thinking.levels.map((level) => (
               <button
                 type="button"
-                key={option.id}
-                className={`judge-segment ${reasoningEffort === option.id ? "is-selected" : ""}`}
-                aria-pressed={reasoningEffort === option.id}
-                onClick={() => { setReasoningEffort(option.id); setStatus(null); }}
+                key={level}
+                className={`judge-segment ${reasoningEffort === level ? "is-selected" : ""}`}
+                aria-pressed={reasoningEffort === level}
+                onClick={() => { setReasoningEffort(level); setStatus(null); }}
               >
-                {option.label}
+                {THINKING_LABELS[level]}
               </button>
             ))}
           </div>
           <span className="field-hint">
-            {reasoningEffort === "off"
-              ? "Thinking disabled. Fastest option; the authoring JSON uses the normal output budget."
-              : `Thinking enabled at ${reasoningEffort} effort. Higher effort takes longer and costs more, but can improve difficult judgments.`}
+            {thinking.note}
+            {thinking.levels.length < 6 ? " Only the levels this model accepts are shown." : ""}
           </span>
         </div>
-      )}
+      ) : provider !== "local" && model.trim() ? (
+        <span className="field-hint">{thinking.note}</span>
+      ) : null}
 
       <label className="field">
         <span className="field-label">Temperature <em>{temperature.toFixed(2)}</em></span>
@@ -753,13 +819,15 @@ export function SettingsModal({
           max={1.1}
           step={0.05}
           value={temperature}
-          disabled={provider === "deepseek"}
+          disabled={thinking.supported || provider === "deepseek"}
           onChange={(event) => setTemperature(Number(event.target.value))}
         />
         <span className="field-hint">
-          {provider === "deepseek"
-            ? "DeepSeek Flash ignores temperature; use reasoning effort to control its depth."
-            : "Lower is more literal; higher produces more varied maps and rebuttals."}
+          {thinking.supported
+            ? "Temperature is not sent for a thinking-capable model; use the thinking level instead."
+            : provider === "deepseek"
+              ? "DeepSeek Flash ignores temperature; use reasoning effort to control its depth."
+              : "Lower is more literal; higher produces more varied maps and rebuttals."}
         </span>
       </label>
 

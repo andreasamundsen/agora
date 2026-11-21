@@ -1,8 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { isLoopbackHostname, providerUrlProblem } from "../shared/provider-url";
+import { isThinkingLevel, THINKING_LEVELS, type ThinkingLevel } from "../shared/thinking";
 
-export type ReasoningEffort = "off" | "low" | "high" | "max";
+export type ReasoningEffort = ThinkingLevel;
 
 export class SettingsError extends Error {
   constructor(message: string) {
@@ -11,10 +12,10 @@ export class SettingsError extends Error {
   }
 }
 
-export const REASONING_EFFORTS: ReasoningEffort[] = ["off", "low", "high", "max"];
+export const REASONING_EFFORTS: ReasoningEffort[] = THINKING_LEVELS;
 
 export function isReasoningEffort(value: unknown): value is ReasoningEffort {
-  return value === "off" || value === "low" || value === "high" || value === "max";
+  return isThinkingLevel(value);
 }
 
 export interface StoredSettings {

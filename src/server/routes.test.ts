@@ -86,6 +86,18 @@ describe("debate routes", () => {
     expect(body.code).toBe("unreadable-debate");
   });
 
+  it("does not expose a provider model list in local-only mode", async () => {
+    const store = new DebateStore(dir);
+    await start(store);
+
+    const response = await fetch(`${base}/api/settings/models`);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { ok: boolean; models: string[]; message: string };
+    expect(body.ok).toBe(false);
+    expect(body.models).toEqual([]);
+    expect(body.message).toContain("Local only");
+  });
+
   it("answers a chamber question without changing the map", async () => {
     const store = new DebateStore(dir);
     const debate = reconcileDebate({

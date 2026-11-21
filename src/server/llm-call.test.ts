@@ -20,6 +20,33 @@ const remoteSettings: StoredSettings = {
   reasoningEffort: "off"
 };
 
+const openaiReasoningSettings: StoredSettings = {
+  provider: "openai",
+  baseUrl: "https://api.openai.com/v1",
+  model: "gpt-5",
+  apiKey: "test-key",
+  temperature: 0.7,
+  reasoningEffort: "high"
+};
+
+const xaiSettings: StoredSettings = {
+  provider: "xai",
+  baseUrl: "https://api.x.ai/v1",
+  model: "grok-4.7",
+  apiKey: "test-key",
+  temperature: 0.7,
+  reasoningEffort: "max"
+};
+
+const deepseekSettings: StoredSettings = {
+  provider: "deepseek",
+  baseUrl: "https://api.deepseek.com",
+  model: "deepseek-flash",
+  apiKey: "test-key",
+  temperature: 0.7,
+  reasoningEffort: "high"
+};
+
 function chatResponse(content: string, extra: Record<string, unknown> = {}): Response {
   return new Response(
     JSON.stringify({
@@ -107,5 +134,99 @@ describe("callModel output budgets", () => {
     await expect(callModel(localSettings, [{ role: "user", content: "map this" }])).rejects.toThrow(
       /hidden reasoning/i
     );
+  });
+
+  it("uses completion tokens and effort for an OpenAI reasoning model", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        bodies.push(JSON.parse(String(init?.body)));
+        return chatResponse('{"reply":"ok"}');
+      })
+    );
+
+    await callModel(openaiReasoningSettings, [{ role: "user", content: "map this" }], {
+      maxTokens: 1800
+    });
+
+    expect(bodies[0]?.max_completion_tokens).toBe(16_384);
+    expect(bodies[0]?.max_tokens).toBeUndefined();
+    expect(bodies[0]?.reasoning_effort).toBe("high");
+    expect(bodies[0]?.temperature).toBeUndefined();
+  });
+
+  it("keeps non-reasoning OpenAI models on the old request shape", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        bodies.push(JSON.parse(String(init?.body)));
+        return chatResponse('{"reply":"ok"}');
+      })
+    );
+
+    await callModel(
+      { ...openaiReasoningSettings, model: "gpt-4o-mini", reasoningEffort: "high" },
+      [{ role: "user", content: "map this" }],
+      { maxTokens: 1800 }
+    );
+
+    expect(bodies[0]?.max_tokens).toBe(1800);
+    expect(bodies[0]?.max_completion_tokens).toBeUndefined();
+    expect(bodies[0]?.reasoning_effort).toBeUndefined();
+    expect(bodies[0]?.temperature).toBe(0.7);
+  });
+
+  it("keeps DeepSeek thinking on its existing enabled/disabled request shape", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        bodies.push(JSON.parse(String(init?.body)));
+        return chatResponse('{"reply":"ok"}');
+      })
+    );
+
+    await callModel(deepseekSettings, [{ role: "user", content: "map this" }]);
+    expect(bodies[0]?.max_tokens).toBe(16_384);
+    expect(bodies[0]?.thinking).toEqual({ type: "enabled" });
+    expect(bodies[0]?.reasoning_effort).toBe("high");
+    expect(bodies[0]?.temperature).toBeUndefined();
+
+    vi.unstubAllGlobals();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        bodies.push(JSON.parse(String(init?.body)));
+        return chatResponse('{"reply":"ok"}');
+      })
+    );
+
+    await callModel(
+      { ...deepseekSettings, reasoningEffort: "off" },
+      [{ role: "user", content: "map this" }]
+    );
+    expect(bodies[1]?.max_tokens).toBe(4200);
+    expect(bodies[1]?.thinking).toEqual({ type: "disabled" });
+    expect(bodies[1]?.reasoning_effort).toBeUndefined();
+    expect(bodies[1]?.temperature).toBe(0.7);
+  });
+
+  it("maps xAI Max to xhigh without sending temperature", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        bodies.push(JSON.parse(String(init?.body)));
+        return chatResponse('{"reply":"ok"}');
+      })
+    );
+
+    await callModel(xaiSettings, [{ role: "user", content: "map this" }]);
+
+    expect(bodies[0]?.max_tokens).toBe(32_768);
+    expect(bodies[0]?.reasoning_effort).toBe("xhigh");
+    expect(bodies[0]?.temperature).toBeUndefined();
   });
 });
