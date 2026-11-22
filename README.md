@@ -12,17 +12,38 @@ Agora is an early public beta. The source is available under the **MIT License**
 
 ## Screenshots
 
-![The Agora workspace showing the debate library, a case-view argument map, and the chamber](docs/screenshots/workspace-case.jpg)
+Agora ships with two themes. The gallery leads with **Night Reading Room**; the light **Editorial paper** set is folded out below it.
+
+### Night Reading Room
+
+![The Agora workspace in dark mode, showing the debate library, a case-view argument map, and the chamber](docs/screenshots/workspace-case-dark.jpg)
 
 *The workspace: the library, the argument map, and the chamber. The map groups the case by side and keeps the motion at the centre.*
 
-![A thread-view argument map with replies attached to the claims they answer](docs/screenshots/map-thread.jpg)
+![A staged debate in dark mode with the argument map behind the speaker and the spoken turn below](docs/screenshots/stage-debate-dark.jpg)
+
+*The stage: the argument map follows the turn while the panel presents the case, the speaker, the score, and the next move.*
+
+![A thread-view argument map in dark mode with replies attached to the claims they answer](docs/screenshots/map-thread-dark.jpg)
 
 *Thread view: replies attach to the argument they answer, so a line of reasoning can be followed outward from the motion.*
 
-![A staged debate with the argument map behind the speaker and the spoken turn below](docs/screenshots/stage-debate.jpg)
+<details>
+<summary><strong>Editorial paper — light mode</strong></summary>
 
-*The stage: the argument map follows the turn while the panel presents the case, the speaker, the score, and the next move.*
+![The Agora workspace in light mode, showing the debate library, a case-view argument map, and the chamber](docs/screenshots/workspace-case.jpg)
+
+*The workspace in Editorial paper.*
+
+![A staged debate in light mode with the argument map behind the speaker and the spoken turn below](docs/screenshots/stage-debate.jpg)
+
+*The stage in Editorial paper.*
+
+![A thread-view argument map in light mode with replies attached to the claims they answer](docs/screenshots/map-thread.jpg)
+
+*Thread view in Editorial paper.*
+
+</details>
 
 ## Install on Windows
 
