@@ -284,3 +284,7 @@ html[data-theme="dark"]:not([data-palette]) .btn--judge.is-active {
 html[data-theme="dark"]:not([data-palette]) .btn--judge.is-active svg {
   color: var(--gold);
 }
+html[data-theme="dark"]:not([data-palette]) .graph-view-toggle button.is-active {
+  background: var(--night-action);
+  color: var(--night-action-ink);
+}
