@@ -29,9 +29,10 @@ interface ModalProps {
   actions?: ReactNode;
   wide?: "md" | "lg" | "xl";
   busy?: boolean;
+  className?: string;
 }
 
-export function Modal({ eyebrow, title, onClose, children, actions, wide = "md", busy }: ModalProps) {
+export function Modal({ eyebrow, title, onClose, children, actions, wide = "md", busy, className }: ModalProps) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !busy) onClose();
@@ -49,7 +50,7 @@ export function Modal({ eyebrow, title, onClose, children, actions, wide = "md",
     <div className={`modal-backdrop modal-backdrop--${wide}`} onMouseDown={(event) => {
       if (event.target === event.currentTarget && !busy) onClose();
     }}>
-      <div className={`modal modal--${wide}`} role="dialog" aria-modal="true" aria-label={title}>
+      <div className={`modal modal--${wide}${className ? ` ${className}` : ""}`} role="dialog" aria-modal="true" aria-label={title}>
         <header className="modal-head">
           <div>
             {eyebrow && <div className="eyebrow">{eyebrow}</div>}
@@ -801,6 +802,7 @@ export function SettingsModal({
       onClose={onClose}
       busy={saving || testing}
       wide="lg"
+      className="settings-modal"
       actions={
         view === "instructions" ? (
           <>

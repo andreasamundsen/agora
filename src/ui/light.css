@@ -80,6 +80,18 @@ html[data-theme="light"] .graph-view-toggle button.is-active {
   background: var(--action-bg);
   color: var(--action-ink);
 }
+html[data-theme="light"] .settings-modal .judge-segment.is-selected,
+html[data-theme="light"] .settings-modal .btn--primary {
+  background: var(--action-bg);
+  border-color: var(--action-bg);
+  color: var(--action-ink);
+  box-shadow: 0 1px 0 rgba(33, 29, 24, 0.12);
+}
+html[data-theme="light"] .settings-modal .btn--primary:hover:not(:disabled) {
+  background: var(--action-bg-hover);
+  border-color: var(--action-bg-hover);
+  color: var(--action-ink);
+}
 html[data-theme="light"] .stage-speed select {
   border-color: rgba(33, 29, 24, 0.2);
   color: var(--ink-soft);

@@ -288,3 +288,15 @@ html[data-theme="dark"]:not([data-palette]) .graph-view-toggle button.is-active 
   background: var(--night-action);
   color: var(--night-action-ink);
 }
+html[data-theme="dark"]:not([data-palette]) .settings-modal .judge-segment.is-selected,
+html[data-theme="dark"]:not([data-palette]) .settings-modal .btn--primary {
+  background: var(--night-action);
+  border-color: var(--night-action);
+  color: var(--night-action-ink);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.2);
+}
+html[data-theme="dark"]:not([data-palette]) .settings-modal .btn--primary:hover:not(:disabled) {
+  background: var(--night-action-hover);
+  border-color: var(--night-action-hover);
+  color: var(--night-action-ink);
+}
