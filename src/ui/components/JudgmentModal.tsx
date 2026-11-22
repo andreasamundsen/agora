@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Debate } from "../../core/model";
 import {
   BURDEN_SHARE,
+  BURDEN_THRESHOLDS,
   clashEdges,
+  PREPONDERANCE_BAND_SHARE,
   STANDARD_LABEL,
   STANDARD_NOTE,
   STRICTNESS_LABEL,
@@ -374,7 +376,7 @@ export function JudgmentModal({
               <span className="field-hint">
                 {STANDARD_NOTE[standard]}
                 {standard === "preponderance"
-                  ? ""
+                  ? ` A near-tie within ${Math.round(PREPONDERANCE_BAND_SHARE * 100)}% of the weighted record remains undecided; the minimum band is ${BURDEN_THRESHOLDS.preponderance} points.`
                   : ` The winning side must lead by at least two points and hold ${BURDEN_SHARE_LABEL} of the weighted case.`}
               </span>
             </label>

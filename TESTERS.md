@@ -4,11 +4,18 @@ Agora is a local debate harness. You install it like a normal Windows app; no No
 
 ## Install
 
-1. Download `Agora-Setup-0.1.61.exe` and its `.sha256` sidecar from the GitHub Releases page.
+1. Download `Agora-Setup-0.1.62.exe` and its `.sha256` sidecar from the GitHub Releases page.
 2. Windows will warn that the publisher is unknown. This build is intentionally unsigned: choose **More info → Run anyway**.
 3. The installer is per-user and does not need administrator rights. Agora opens when it finishes.
 4. To upgrade, close Agora first, then run the newer installer over it. Your debates stay in `%APPDATA%\Agora\data`.
 5. Verify the SHA-256 checksum against the value in the `.sha256` file from the same release. A matching hash is not a code signature; it only confirms the file has not changed.
+
+## What's new in 0.1.62
+
+- **Aurora is now a glossy black reading room with muted Peach Hour accents.** The paper is near-black, filled actions use a restrained peach → apricot → sun sweep, and the active library, motion card, and stage share the same warm light. Light and Night Reading Room are unchanged.
+- **Argument cards use Spring & Watermelon.** Support is a fresher spring green (`#7ee787`) and attack a clearer watermelon red (`#ff7a8a`), with matching dark card fills, borders, glows, badges, edges, and speaker dots. The peach action and gold judgment remain distinct.
+- **Preponderance near-ties scale with the weighted record.** The deadband is now `max(0.5, 0.05 × (P + C))`: 11–9 and 22–18 are decided, while 21–19 and 10.5–9.5 remain undecided at the boundary. Proof, hard defeat, and the other standards are unchanged.
+- Existing debates, settings, Argdown interchange, editing, Stage, and provider behavior are unchanged.
 
 ## What's new in 0.1.61
 

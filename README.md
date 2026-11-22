@@ -12,7 +12,7 @@ Agora is an early public beta. The source is available under the **MIT License**
 
 ## Screenshots
 
-Agora ships with three appearances. The gallery leads with **Aurora**, a cool low-light palette; **Night Reading Room** and the light **Editorial paper** set are folded out below it.
+Agora ships with three appearances. The gallery leads with **Aurora**, a glossy black low-light palette with muted peach accents; **Night Reading Room** and the light **Editorial paper** set are folded out below it.
 
 ### Aurora
 
@@ -66,8 +66,8 @@ Agora ships with three appearances. The gallery leads with **Aurora**, a cool lo
 
 Download from the [GitHub Releases](https://github.com/andreasamundsen/agora/releases) page:
 
-- `Agora-Setup-0.1.61.exe`
-- `Agora-Setup-0.1.61.exe.sha256`
+- `Agora-Setup-0.1.62.exe`
+- `Agora-Setup-0.1.62.exe.sha256`
 
 1. Back up `%APPDATA%\Agora\data` if you already have debates.
 2. Close Agora, then run the installer. It is per-user and does not require administrator rights.
@@ -75,7 +75,7 @@ Download from the [GitHub Releases](https://github.com/andreasamundsen/agora/rel
 4. Verify the download against the checksum from the same release:
 
    ```powershell
-   Get-FileHash .\Agora-Setup-0.1.61.exe -Algorithm SHA256
+   Get-FileHash .\Agora-Setup-0.1.62.exe -Algorithm SHA256
    ```
 
 A matching hash confirms the file has not changed; it is not a code signature. There is no auto-update, so a future beta is a manual download and install.
@@ -249,7 +249,13 @@ Let `P` be the total pro weight, `C` the total con weight, and `M = P − C`. Un
 requiredLead = max(2, 0.2 × (P + C))
 ```
 
-because a 3/5 share is equivalent to a 20% margin. Preponderance keeps its half-point deadband instead.
+because a 3/5 share is equivalent to a 20% margin. Preponderance uses a proportional deadband instead:
+
+```
+preponderanceBand = max(0.5, 0.05 × (P + C))
+```
+
+A side must clear the band on either side of zero. At a total of 20 points the band is ±1; an 11–9 record clears it and stands. At a total of 40 points the band is ±2; a 22–18 record clears it and stands, while a 21–19 record sits exactly on the boundary and remains undecided.
 
 The full outcome order is:
 
@@ -258,7 +264,7 @@ The full outcome order is:
 3. The thesis is defeated → **falls**.
 4. `P <= 0` → **unestablished**.
 5. Apply the selected standard:
-   - **Preponderance:** `M > +0.5` → stands; `M < -0.5` → falls; otherwise **undecided**.
+   - **Preponderance:** with `band = max(0.5, 0.05 × (P + C))`, `M > band` → stands; `M < -band` → falls; otherwise **undecided**.
    - **Pro:** `M >= requiredLead` → stands; `M <= -requiredLead` → falls; otherwise **unestablished**.
    - **Con:** `M <= -requiredLead` → falls; otherwise **stands**.
 
@@ -293,7 +299,7 @@ The bench uses the same provider and key as the rest of the app. Its **Judge mod
 
 ### Appearance
 
-Settings → Appearance switches between **System**, **Light**, **Dark**, and **Aurora**. System follows the Windows appearance setting. Light is **Editorial paper**, Dark is **Night Reading Room**, and Aurora is a cool low-light variant of the dark palette. The choice is remembered on this machine and applied before the interface paints, so the dark reading room does not flash paper-white at launch. The desktop window background follows the saved theme on the next launch.
+Settings → Appearance switches between **System**, **Light**, **Dark**, and **Aurora**. System follows the Windows appearance setting. Light is **Editorial paper**, Dark is **Night Reading Room**, and Aurora is a glossy black variant of the dark palette with muted peach accents. The choice is remembered on this machine and applied before the interface paints, so the dark reading room does not flash paper-white at launch. The desktop window background follows the saved theme on the next launch.
 
 ## Connecting a model
 
@@ -398,7 +404,7 @@ src/
     components/         DebateGraph, ChatPanel, StagePanel, NodeInspector, MapEditor, JudgmentModal, JudgmentPanel, Modals
     styles.css          editorial paper / library ink / shared stage
     dark.css            Night Reading Room — warm dark palette
-    aurora.css          Aurora — cool low-light palette
+    aurora.css          Aurora — glossy black with muted peach accents
     light.css           Editorial paper — daylight stage
     editor.css          map editor panel and draft controls
 ```
@@ -462,7 +468,7 @@ See [`SECURITY.md`](SECURITY.md) for the current beta's security limitations, in
 
 ## Why the name
 
-The agora was the public square where a city argued with itself. The interface is deliberately editorial: warm paper, serif headings, ink for the motion, faded red for the challenge, and a stage that follows the light: dark wood at night, daylight paper by day. Aurora keeps that structure while moving the light to a cool, low-light reading room. The map is the argument; the stage is the argument being made; the bench is the argument being judged.
+The agora was the public square where a city argued with itself. The interface is deliberately editorial: warm paper, serif headings, ink for the motion, faded red for the challenge, and a stage that follows the light: dark wood at night, daylight paper by day. Aurora keeps that structure while moving the light to a glossy black reading room with muted peach accents. The map is the argument; the stage is the argument being made; the bench is the argument being judged.
 
 ## License
 

@@ -885,7 +885,7 @@ export function SettingsModal({
           ))}
         </div>
         <span className="field-hint">
-          System follows the Windows appearance setting. Light is Editorial paper, Dark is Night Reading Room, and Aurora is a cool low-light palette. The choice applies immediately and is remembered.
+          System follows the Windows appearance setting. Light is Editorial paper, Dark is Night Reading Room, and Aurora is a glossy black palette with muted peach accents. The choice applies immediately and is remembered.
         </span>
       </div>
 

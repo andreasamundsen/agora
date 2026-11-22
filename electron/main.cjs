@@ -182,7 +182,7 @@ async function preferredWindowTheme() {
 async function createWindow() {
   const port = await freePort();
   const windowTheme = await preferredWindowTheme();
-  const windowBackground = windowTheme === "aurora" ? "#080b14" : windowTheme === "dark" ? "#15120e" : "#eee7da";
+  const windowBackground = windowTheme === "aurora" ? "#08090b" : windowTheme === "dark" ? "#15120e" : "#eee7da";
   log(`Starting Agora ${app.getVersion()} on 127.0.0.1:${port}`);
   log(`Data: ${dataPath()}`);
   serverProcess = startServer(port);

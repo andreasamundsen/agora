@@ -551,6 +551,132 @@ describe("judgment solver", () => {
     expect(proportionalSnapshot.outcome).toBe("stands");
   });
 
+  it("scales the preponderance deadband with the weighted record", () => {
+    const close = weightedDebate(21, 19);
+    const closeVerdicts = Array.from({ length: 19 }, (_, index) =>
+      verdict(`e_con${index}_thesis`, `con${index}`, "thesis", "weakens")
+    );
+    const closeAssessments = [
+      ...Array.from({ length: 21 }, (_, index) =>
+        assess(`e_pro${index}_thesis`, "pro", "weak", `pro-line-${index}`)
+      ),
+      ...Array.from({ length: 19 }, (_, index) =>
+        assess(`e_con${index}_thesis`, "con", "marginal", `con-line-${index}`)
+      )
+    ];
+    const closeSnapshot = solve(
+      close,
+      closeVerdicts,
+      "preponderance",
+      closeAssessments
+    );
+    expect(closeSnapshot.balance.pro).toBe(21);
+    expect(closeSnapshot.balance.con).toBe(19);
+    expect(closeSnapshot.balance.margin).toBe(2);
+    expect(closeSnapshot.balance.threshold).toBe(2);
+    expect(closeSnapshot.outcome).toBe("undecided");
+
+    const clear = weightedDebate(22, 18);
+    const clearVerdicts = Array.from({ length: 18 }, (_, index) =>
+      verdict(`e_con${index}_thesis`, `con${index}`, "thesis", "weakens")
+    );
+    const clearAssessments = [
+      ...Array.from({ length: 22 }, (_, index) =>
+        assess(`e_pro${index}_thesis`, "pro", "weak", `pro-line-${index}`)
+      ),
+      ...Array.from({ length: 18 }, (_, index) =>
+        assess(`e_con${index}_thesis`, "con", "marginal", `con-line-${index}`)
+      )
+    ];
+    const clearSnapshot = solve(
+      clear,
+      clearVerdicts,
+      "preponderance",
+      clearAssessments
+    );
+    expect(clearSnapshot.balance.margin).toBe(4);
+    expect(clearSnapshot.balance.threshold).toBe(2);
+    expect(clearSnapshot.outcome).toBe("stands");
+
+    const eleven = weightedDebate(11, 9);
+    const elevenVerdicts = Array.from({ length: 9 }, (_, index) =>
+      verdict(`e_con${index}_thesis`, `con${index}`, "thesis", "weakens")
+    );
+    const elevenAssessments = [
+      ...Array.from({ length: 11 }, (_, index) =>
+        assess(`e_pro${index}_thesis`, "pro", "weak", `pro-line-${index}`)
+      ),
+      ...Array.from({ length: 9 }, (_, index) =>
+        assess(`e_con${index}_thesis`, "con", "marginal", `con-line-${index}`)
+      )
+    ];
+    const elevenSnapshot = solve(
+      eleven,
+      elevenVerdicts,
+      "preponderance",
+      elevenAssessments
+    );
+    expect(elevenSnapshot.balance.margin).toBe(2);
+    expect(elevenSnapshot.balance.threshold).toBe(1);
+    expect(elevenSnapshot.outcome).toBe("stands");
+  });
+
+  it("keeps the half-point preponderance floor for a small record", () => {
+    const debate = weightedDebate(1, 0);
+    const snapshot = solve(debate, [], "preponderance", [
+      assess("e_pro0_thesis", "pro", "moderate", "pro-line", "medium")
+    ]);
+    expect(snapshot.balance.pro).toBe(1.5);
+    expect(snapshot.balance.threshold).toBe(0.5);
+    expect(snapshot.outcome).toBe("stands");
+  });
+
+  it("keeps the preponderance band symmetric for a con lead", () => {
+    const close = weightedDebate(19, 21);
+    const closeVerdicts = Array.from({ length: 21 }, (_, index) =>
+      verdict(`e_con${index}_thesis`, `con${index}`, "thesis", "weakens")
+    );
+    const closeAssessments = [
+      ...Array.from({ length: 19 }, (_, index) =>
+        assess(`e_pro${index}_thesis`, "pro", "weak", `pro-line-${index}`)
+      ),
+      ...Array.from({ length: 21 }, (_, index) =>
+        assess(`e_con${index}_thesis`, "con", "marginal", `con-line-${index}`)
+      )
+    ];
+    const closeSnapshot = solve(
+      close,
+      closeVerdicts,
+      "preponderance",
+      closeAssessments
+    );
+    expect(closeSnapshot.balance.margin).toBe(-2);
+    expect(closeSnapshot.balance.threshold).toBe(2);
+    expect(closeSnapshot.outcome).toBe("undecided");
+
+    const clear = weightedDebate(18, 22);
+    const clearVerdicts = Array.from({ length: 22 }, (_, index) =>
+      verdict(`e_con${index}_thesis`, `con${index}`, "thesis", "weakens")
+    );
+    const clearAssessments = [
+      ...Array.from({ length: 18 }, (_, index) =>
+        assess(`e_pro${index}_thesis`, "pro", "weak", `pro-line-${index}`)
+      ),
+      ...Array.from({ length: 22 }, (_, index) =>
+        assess(`e_con${index}_thesis`, "con", "marginal", `con-line-${index}`)
+      )
+    ];
+    const clearSnapshot = solve(
+      clear,
+      clearVerdicts,
+      "preponderance",
+      clearAssessments
+    );
+    expect(clearSnapshot.balance.margin).toBe(-4);
+    expect(clearSnapshot.balance.threshold).toBe(2);
+    expect(clearSnapshot.outcome).toBe("falls");
+  });
+
   it("scales the required lead above the two-point floor on a large record", () => {
     const debate = weightedDebate(11, 9);
     const verdicts = Array.from({ length: 9 }, (_, index) =>

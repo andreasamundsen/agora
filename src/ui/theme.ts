@@ -6,7 +6,7 @@ const COOKIE_NAME = "agora_theme";
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 const LIGHT_THEME_COLOR = "#eee7da";
 const DARK_THEME_COLOR = "#15120e";
-const AURORA_THEME_COLOR = "#080b14";
+const AURORA_THEME_COLOR = "#08090b";
 
 function systemTheme(): "light" | "dark" {
   return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";

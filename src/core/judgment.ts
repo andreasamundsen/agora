@@ -227,7 +227,7 @@ export const STANDARD_LABEL: Record<StandardOfProof, string> = {
 export const STANDARD_NOTE: Record<StandardOfProof, string> = {
   pro: "The motion must show a clear advantage over the surviving objections.",
   con: "The con case must show a clear advantage over the motion's support.",
-  preponderance: "The heavier surviving case wins; a near-tie remains undecided."
+  preponderance: "The heavier surviving case wins; a near-tie within the proportional band remains undecided."
 };
 
 export const STRICTNESS_LABEL: Record<JudgeStrictness, string> = {
@@ -292,7 +292,7 @@ export function meetsEvidenceBar(
   return CONFIDENCE_RANK[confidence] >= CONFIDENCE_RANK[required];
 }
 
-/** Minimum burden lead. A pro or con burden also requires a 3/5 share. */
+/** Minimum absolute lead. Pro and con use it as a floor; preponderance uses it as the band floor. */
 export const BURDEN_THRESHOLDS: Record<StandardOfProof, number> = {
   pro: 2,
   con: 2,
@@ -301,6 +301,9 @@ export const BURDEN_THRESHOLDS: Record<StandardOfProof, number> = {
 
 /** The weighted share required under a pro or con burden. */
 export const BURDEN_SHARE = 0.6;
+
+/** Preponderance uses a proportional deadband: 5% of the weighted case, with a floor. */
+export const PREPONDERANCE_BAND_SHARE = 0.05;
 
 /**
  * The motion card speaks in outcomes, not in ordinary argument statuses. It
@@ -632,10 +635,11 @@ export function solveJudgment(
   } else if (standard === "con") {
     outcome = balance.margin <= balance.threshold ? "falls" : "stands";
   } else {
+    const band = balance.threshold;
     outcome =
-      balance.margin > BURDEN_THRESHOLDS.preponderance
+      balance.margin > band
         ? "stands"
-        : balance.margin < -BURDEN_THRESHOLDS.preponderance
+        : balance.margin < -band
           ? "falls"
           : "undecided";
   }
@@ -849,9 +853,12 @@ export function buildCaseBalance(input: {
   const total = round2(pro + con);
   // A pro or con burden needs a 3/5 share of the weighted case, with a
   // two-point floor so a tiny record cannot carry a "must establish" burden.
-  // Preponderance keeps its small absolute deadband.
+  // Preponderance uses a proportional 5% band with a half-point floor.
   const requiredMargin = input.standard === "preponderance"
-    ? BURDEN_THRESHOLDS.preponderance
+    ? Math.max(
+        BURDEN_THRESHOLDS.preponderance,
+        round2(total * PREPONDERANCE_BAND_SHARE)
+      )
     : Math.max(
         BURDEN_THRESHOLDS[input.standard],
         round2(total * (2 * BURDEN_SHARE - 1))
