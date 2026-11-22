@@ -7,5 +7,5 @@
   document.documentElement.dataset.theme = resolved;
   document.documentElement.dataset.themePreference = preference;
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute("content", resolved === "dark" ? "#15120e" : "#f4efe4");
+  if (meta) meta.setAttribute("content", resolved === "dark" ? "#15120e" : "#eee7da");
 })();

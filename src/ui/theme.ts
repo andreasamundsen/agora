@@ -30,7 +30,7 @@ export function applyThemePreference(preference: ThemePreference, persist = true
   document.documentElement.dataset.theme = resolved;
   document.documentElement.dataset.themePreference = preference;
   const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
-  if (meta) meta.content = resolved === "dark" ? "#15120e" : "#f4efe4";
+  if (meta) meta.content = resolved === "dark" ? "#15120e" : "#eee7da";
   if (persist) {
     document.cookie = `${COOKIE_NAME}=${preference}; path=/; max-age=${COOKIE_MAX_AGE}; SameSite=Lax`;
   }
