@@ -4,6 +4,7 @@ import App from "./App";
 import { initTheme } from "./theme";
 import "./styles.css";
 import "./dark.css";
+import "./aurora.css";
 
 initTheme();
 

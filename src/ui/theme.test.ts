@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseThemePreference, resolveTheme } from "./theme";
+import { parseThemePreference, resolveTheme, themePalette } from "./theme";
 
 describe("theme preference", () => {
   it("defaults to system when no theme cookie exists", () => {
@@ -11,10 +11,12 @@ describe("theme preference", () => {
     expect(parseThemePreference("agora_theme=light")).toBe("light");
     expect(parseThemePreference("a=1; agora_theme=dark; b=2")).toBe("dark");
     expect(parseThemePreference("agora_theme=system")).toBe("system");
+    expect(parseThemePreference("agora_theme=aurora")).toBe("aurora");
   });
 
   it("ignores invalid theme cookies", () => {
     expect(parseThemePreference("agora_theme=sepia")).toBe("system");
+    expect(parseThemePreference("agora_theme=darkness")).toBe("system");
     expect(parseThemePreference("not_agora_theme=dark")).toBe("system");
   });
 
@@ -23,5 +25,12 @@ describe("theme preference", () => {
     expect(resolveTheme("system", false)).toBe("light");
     expect(resolveTheme("light", true)).toBe("light");
     expect(resolveTheme("dark", false)).toBe("dark");
+    expect(resolveTheme("aurora", false)).toBe("dark");
+  });
+
+  it("keeps Aurora as a dark palette variant", () => {
+    expect(themePalette("aurora")).toBe("aurora");
+    expect(themePalette("dark")).toBe("night");
+    expect(themePalette("light")).toBe("night");
   });
 });

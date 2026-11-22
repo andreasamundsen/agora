@@ -9,6 +9,14 @@ import type { ThinkingLevel } from "../../shared/thinking";
 import { thinkingCapability } from "../../shared/thinking";
 import { InstructionPolicyViewer } from "./InstructionPolicyViewer";
 
+const THEME_OPTIONS = ["system", "light", "dark", "aurora"] as const;
+const THEME_LABELS: Record<(typeof THEME_OPTIONS)[number], string> = {
+  system: "System",
+  light: "Light",
+  dark: "Dark",
+  aurora: "Aurora",
+};
+
 /* ------------------------------------------------------------------ */
 /* Shell                                                               */
 /* ------------------------------------------------------------------ */
@@ -859,7 +867,7 @@ export function SettingsModal({
           Appearance <em>saved on this machine</em>
         </span>
         <div className="judge-segmented appearance-segmented">
-          {(["system", "light", "dark"] as const).map((option) => (
+          {THEME_OPTIONS.map((option) => (
             <button
               type="button"
               key={option}
@@ -870,12 +878,12 @@ export function SettingsModal({
                 applyThemePreference(option);
               }}
             >
-              {option === "system" ? "System" : option === "light" ? "Light" : "Dark"}
+              {THEME_LABELS[option]}
             </button>
           ))}
         </div>
         <span className="field-hint">
-          System follows the Windows appearance setting. The choice applies immediately and is remembered.
+          System follows the Windows appearance setting. Light is Editorial paper, Dark is Night Reading Room, and Aurora is a cool low-light palette. The choice applies immediately and is remembered.
         </span>
       </div>
 

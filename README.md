@@ -12,21 +12,38 @@ Agora is an early public beta. The source is available under the **MIT License**
 
 ## Screenshots
 
-Agora ships with two themes. The gallery leads with **Night Reading Room**; the light **Editorial paper** set is folded out below it.
+Agora ships with three appearances. The gallery leads with **Aurora**, a cool low-light palette; **Night Reading Room** and the light **Editorial paper** set are folded out below it.
 
-### Night Reading Room
+### Aurora
 
-![The Agora workspace in dark mode, showing the debate library, a case-view argument map, and the chamber](docs/screenshots/workspace-case-dark.jpg)
+![The Agora workspace in the Aurora theme, showing the debate library, a case-view argument map, and the chamber](docs/screenshots/workspace-case-aurora.jpg)
 
-*The workspace: the library, the argument map, and the chamber. The map groups the case by side and keeps the motion at the centre.*
+*The workspace in Aurora: cool paper, neon-ink highlights, and the argument map at the centre.*
 
-![A staged debate in dark mode with the argument map behind the speaker and the spoken turn below](docs/screenshots/stage-debate-dark.jpg)
+![A staged debate in the Aurora theme with the argument map behind the speaker and the spoken turn below](docs/screenshots/stage-debate-aurora.jpg)
 
-*The stage: the argument map follows the turn while the panel presents the case, the speaker, the score, and the next move.*
+*The stage in Aurora: midnight light, a cool reading surface, and the same argument map following the turn.*
 
-![A thread-view argument map in dark mode with replies attached to the claims they answer](docs/screenshots/map-thread-dark.jpg)
+![A thread-view argument map in the Aurora theme with replies attached to the claims they answer](docs/screenshots/map-thread-aurora.jpg)
 
-*Thread view: replies attach to the argument they answer, so a line of reasoning can be followed outward from the motion.*
+*Thread view in Aurora: replies attach to the argument they answer, so a line of reasoning can be followed outward from the motion.*
+
+<details>
+<summary><strong>Night Reading Room — warm dark</strong></summary>
+
+![The Agora workspace in Night Reading Room, showing the debate library, a case-view argument map, and the chamber](docs/screenshots/workspace-case-dark.jpg)
+
+*The workspace in Night Reading Room.*
+
+![A staged debate in Night Reading Room with the argument map behind the speaker and the spoken turn below](docs/screenshots/stage-debate-dark.jpg)
+
+*The stage in Night Reading Room.*
+
+![A thread-view argument map in Night Reading Room with replies attached to the claims they answer](docs/screenshots/map-thread-dark.jpg)
+
+*Thread view in Night Reading Room.*
+
+</details>
 
 <details>
 <summary><strong>Editorial paper — light mode</strong></summary>
@@ -157,7 +174,7 @@ The bench uses the same provider and key as the rest of the app. Its **Judge mod
 
 ### Appearance
 
-Settings → Appearance switches between **System**, **Light**, and **Dark**. System follows the Windows appearance setting. The choice is remembered on this machine and applied before the interface paints, so the dark reading room does not flash paper-white at launch. The desktop window background follows the saved theme on the next launch.
+Settings → Appearance switches between **System**, **Light**, **Dark**, and **Aurora**. System follows the Windows appearance setting. Light is **Editorial paper**, Dark is **Night Reading Room**, and Aurora is a cool low-light variant of the dark palette. The choice is remembered on this machine and applied before the interface paints, so the dark reading room does not flash paper-white at launch. The desktop window background follows the saved theme on the next launch.
 
 ## Connecting a model
 
@@ -260,6 +277,8 @@ src/
     App.tsx             workspace, library, chamber, stage controller, judgment controller
     components/         DebateGraph, ChatPanel, StagePanel, NodeInspector, JudgmentModal, JudgmentPanel, Modals
     styles.css          editorial paper / library ink / dark wood stage
+    dark.css            Night Reading Room — warm dark palette
+    aurora.css          Aurora — cool low-light palette
 ```
 
 The domain layer is shared by server and browser. The graph layout and staging algorithm are deterministic given a seed, so the same map stages identically in a test and in the browser.
@@ -319,7 +338,7 @@ See [`SECURITY.md`](SECURITY.md) for the current beta's security limitations, in
 
 ## Why the name
 
-The agora was the public square where a city argued with itself. The interface is deliberately editorial: warm paper, serif headings, ink for the motion, faded red for the challenge, and a dark wood stage for the performance. The map is the argument; the stage is the argument being made; the bench is the argument being judged.
+The agora was the public square where a city argued with itself. The interface is deliberately editorial: warm paper, serif headings, ink for the motion, faded red for the challenge, and a dark wood stage for the performance. Aurora keeps that structure while moving the light to a cool, low-light reading room. The map is the argument; the stage is the argument being made; the bench is the argument being judged.
 
 ## License
 

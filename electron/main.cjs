@@ -171,7 +171,7 @@ function waitForServer(port, timeoutMs = 25000) {
 async function preferredWindowTheme() {
   try {
     const cookies = await session.defaultSession.cookies.get({ name: "agora_theme" });
-    const preference = cookies.find((cookie) => ["light", "dark"].includes(cookie.value))?.value;
+    const preference = cookies.find((cookie) => ["light", "dark", "aurora"].includes(cookie.value))?.value;
     if (preference) return preference;
   } catch {
     // Fall back to the Windows appearance setting.
@@ -182,6 +182,7 @@ async function preferredWindowTheme() {
 async function createWindow() {
   const port = await freePort();
   const windowTheme = await preferredWindowTheme();
+  const windowBackground = windowTheme === "aurora" ? "#080b14" : windowTheme === "dark" ? "#15120e" : "#eee7da";
   log(`Starting Agora ${app.getVersion()} on 127.0.0.1:${port}`);
   log(`Data: ${dataPath()}`);
   serverProcess = startServer(port);
@@ -192,7 +193,7 @@ async function createWindow() {
     height: 900,
     minWidth: 1100,
     minHeight: 700,
-    backgroundColor: windowTheme === "dark" ? "#15120e" : "#f4efe4",
+    backgroundColor: windowBackground,
     show: false,
     autoHideMenuBar: true,
     title: "Agora",
