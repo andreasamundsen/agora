@@ -188,4 +188,118 @@ describe("debate routes", () => {
     expect(body.debate.edges).toHaveLength(debate.edges.length);
     expect(body.debate.chat.some((entry) => entry.text.includes("2 arguments"))).toBe(true);
   });
+
+  it("saves an edited graph while preserving chat and origin", async () => {
+    const store = new DebateStore(dir);
+    const debate = reconcileDebate({
+      id: "editable-map",
+      motion: "Should cities fund night buses?",
+      thesisId: "thesis",
+      nodes: [
+        { id: "thesis", kind: "statement", title: "Night buses", text: "Cities should fund night buses." },
+        {
+          id: "support",
+          kind: "argument",
+          title: "Night workers need it",
+          text: "Night workers finish after the last regular bus.",
+          stance: "pro",
+          premises: ["Those workers finish after midnight."],
+          conclusion: "There is an unmet transport need."
+        }
+      ],
+      edges: [{ id: "edge-support", from: "support", to: "thesis", type: "support" }]
+    });
+    const saved = await store.save({
+      ...debate,
+      origin: "imported",
+      chat: [{ id: "chat-1", role: "user", text: "Keep this message.", at: 1 }]
+    });
+    await start(store);
+
+    const response = await fetch(`${base}/api/debates/${saved.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        motion: "Should cities fund all-night buses?",
+        thesisText: "Cities should fund all-night bus service.",
+        nodes: saved.nodes.map((node) => node.id === "support"
+          ? { ...node, title: "Night workers need a reliable ride home", text: "Night shifts end after the last regular bus." }
+          : node.id === "thesis"
+            ? { ...node, title: "Should cities fund all-night buses?", text: "Cities should fund all-night bus service." }
+            : node),
+        edges: saved.edges
+      })
+    });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { debate: typeof debate };
+    expect(body.debate.motion).toBe("Should cities fund all-night buses?");
+    expect(body.debate.nodes.find((node) => node.id === "support")?.title).toBe(
+      "Night workers need a reliable ride home"
+    );
+    const loaded = await store.get(saved.id);
+    expect(loaded?.chat).toHaveLength(1);
+    expect(loaded?.chat[0]?.text).toBe("Keep this message.");
+    expect(loaded?.origin).toBe("imported");
+  });
+
+  it("rejects an edit without a graph", async () => {
+    const store = new DebateStore(dir);
+    const debate = reconcileDebate({
+      id: "bad-edit",
+      motion: "A map",
+      thesisId: "thesis",
+      nodes: [{ id: "thesis", kind: "statement", title: "A map", text: "A map" }],
+      edges: []
+    });
+    await store.save(debate);
+    await start(store);
+
+    const response = await fetch(`${base}/api/debates/bad-edit`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ motion: "Only a title" })
+    });
+    expect(response.status).toBe(400);
+  });
+
+  it("rejects an edit that removes the motion or strands an argument", async () => {
+    const store = new DebateStore(dir);
+    const debate = reconcileDebate({
+      id: "integrity-edit",
+      motion: "A map",
+      thesisId: "thesis",
+      nodes: [
+        { id: "thesis", kind: "statement", title: "A map", text: "A map" },
+        { id: "support", kind: "argument", title: "A support", text: "A support", stance: "pro" }
+      ],
+      edges: [{ id: "support-edge", from: "support", to: "thesis", type: "support" }]
+    });
+    await store.save(debate);
+    await start(store);
+
+    const missingMotion = await fetch(`${base}/api/debates/integrity-edit`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        motion: "A map",
+        thesisText: "A map",
+        nodes: [debate.nodes.find((node) => node.id === "support")],
+        edges: []
+      })
+    });
+    expect(missingMotion.status).toBe(400);
+
+    const stranded = await fetch(`${base}/api/debates/integrity-edit`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        motion: "A map",
+        thesisText: "A map",
+        nodes: debate.nodes,
+        edges: []
+      })
+    });
+    expect(stranded.status).toBe(400);
+  });
 });

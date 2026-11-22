@@ -70,6 +70,18 @@ export function deleteDebate(id: string): Promise<{ ok: boolean }> {
   return request(`/debates/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
+export function saveDebate(id: string, debate: Debate): Promise<{ debate: Debate }> {
+  return request(`/debates/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      motion: debate.motion,
+      thesisText: debate.thesisText,
+      nodes: debate.nodes,
+      edges: debate.edges
+    })
+  });
+}
+
 export function sendChat(id: string, text: string): Promise<{ debate: Debate; engine: "llm" | "local"; warning?: string }> {
   return request(`/debates/${encodeURIComponent(id)}/chat`, { method: "POST", body: JSON.stringify({ text }) });
 }

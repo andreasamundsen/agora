@@ -1,0 +1,1005 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Agora — Edit mode prototype</title>
+<style>
+  :root {
+    --paper: #eee7da;
+    --paper-deep: #e5ddcc;
+    --surface: #f8f3e9;
+    --surface-strong: #fdf9f2;
+    --ink: #211d18;
+    --ink-soft: #4e473c;
+    --muted: #837767;
+    --faint: #a09482;
+    --line: #d9cfbc;
+    --line-strong: #c4b6a0;
+    --gold: #b98a3a;
+    --gold-deep: #8d6626;
+    --gold-soft: #f2e6cc;
+    --pro: #2f6b56;
+    --pro-soft: #e3efe8;
+    --con: #a53d31;
+    --con-soft: #f4e2dc;
+    --under: #6b4e9e;
+    --under-soft: #eee8f6;
+    --action: #4e473c;
+    --action-hover: #3f382f;
+    --action-ink: #fdf9f2;
+    --sans: "Segoe UI", "Inter", system-ui, -apple-system, sans-serif;
+    --serif: Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+    --mono: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background:
+      radial-gradient(ellipse at 14% 0%, rgba(185, 138, 58, 0.11), transparent 45%),
+      radial-gradient(ellipse at 90% 100%, rgba(165, 61, 49, 0.05), transparent 42%),
+      var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  button, input, textarea, select { font: inherit; }
+  button { cursor: pointer; }
+  button:disabled { cursor: default; }
+
+  .prototype-shell { min-height: 100vh; display: flex; flex-direction: column; }
+  .topbar {
+    height: 62px; flex: none; display: flex; align-items: center; gap: 22px;
+    padding: 0 20px; border-bottom: 1px solid var(--line);
+    background: rgba(250, 246, 237, 0.54);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; min-width: 170px; }
+  .brand-mark {
+    width: 30px; height: 30px; display: grid; place-items: center;
+    border: 1px solid var(--ink); border-radius: 50%;
+    font-family: var(--serif); font-size: 16px; color: var(--ink);
+  }
+  .brand-name { font-size: 12px; font-weight: 800; letter-spacing: 0.16em; }
+  .brand-sub { font-size: 7px; letter-spacing: 0.18em; color: var(--muted); margin-top: 1px; }
+  .manifesto {
+    flex: 1; text-align: center; color: var(--ink-soft);
+    font-family: var(--serif); font-style: italic; font-size: 13px;
+  }
+  .top-meta { display: flex; align-items: center; gap: 8px; }
+  .demo-pill {
+    border: 1px solid var(--gold); border-radius: 2px; padding: 5px 8px;
+    color: var(--gold-deep); font-size: 8px; font-weight: 800; letter-spacing: 0.12em;
+  }
+  .paper-pill { color: var(--muted); font-size: 9px; letter-spacing: 0.06em; }
+
+  .workspace {
+    flex: 1; min-height: 0; display: grid;
+    grid-template-columns: 210px minmax(0, 1fr) 315px; gap: 13px;
+    padding: 13px 16px 16px;
+  }
+  .library, .canvas, .inspector { min-height: 0; }
+  .library {
+    display: flex; flex-direction: column; gap: 10px;
+    border-right: 1px solid var(--line); padding-right: 13px;
+  }
+  .section-label {
+    color: var(--muted); font-size: 8px; font-weight: 800;
+    letter-spacing: 0.16em; text-transform: uppercase;
+  }
+  .library-head { display: flex; align-items: center; justify-content: space-between; }
+  .library-head h2 { margin: 0; font-family: var(--serif); font-size: 17px; font-weight: 400; }
+  .library-plus {
+    width: 24px; height: 24px; border: 1px solid var(--line-strong);
+    background: transparent; color: var(--ink-soft); font-size: 16px; line-height: 1;
+  }
+  .debate-card {
+    display: block; width: 100%; text-align: left; padding: 10px 10px 9px;
+    border: 1px solid var(--line); border-radius: 3px;
+    background: rgba(255, 253, 247, 0.35); color: var(--ink);
+  }
+  .debate-card.is-active { border-color: var(--gold); background: var(--surface-strong); }
+  .debate-card b { display: block; font-family: var(--serif); font-size: 12.5px; font-weight: 600; line-height: 1.25; }
+  .debate-card span { display: block; color: var(--muted); font-size: 9px; margin-top: 4px; }
+  .library-note { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line); color: var(--faint); font-size: 9px; line-height: 1.5; }
+
+  .canvas { display: flex; flex-direction: column; min-width: 0; }
+  .canvas-head { padding: 2px 3px 11px; }
+  .canvas-eyebrow { display: flex; align-items: center; gap: 7px; color: var(--faint); font-size: 8px; font-weight: 800; letter-spacing: 0.13em; }
+  .canvas-eyebrow .dot { color: var(--gold); }
+  .canvas-head h1 {
+    margin: 5px 0 3px; font-family: var(--serif); font-size: clamp(22px, 2.5vw, 34px);
+    line-height: 1.05; font-weight: 400; letter-spacing: -0.025em;
+  }
+  .canvas-sub { color: var(--muted); font-size: 10.5px; }
+  .map-frame {
+    position: relative; flex: 1; min-height: 606px; overflow: hidden;
+    border: 1px solid var(--line); background: rgba(255, 253, 247, 0.28);
+    box-shadow: 0 10px 30px -26px rgba(33, 29, 24, 0.4);
+    transition: border-color 160ms ease, box-shadow 160ms ease;
+  }
+  .is-editing .map-frame { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(185, 138, 58, 0.12), 0 10px 30px -26px rgba(33, 29, 24, 0.4); }
+  .map-scroll { position: absolute; inset: 0 0 42px; overflow: auto; display: flex; }
+  .map-canvas {
+    position: relative; flex: 0 0 auto; width: 700px; height: 600px; margin: auto;
+    background-image: radial-gradient(circle, rgba(33, 29, 24, 0.14) 0 1px, transparent 1.1px);
+    background-size: 20px 20px;
+    transform-origin: top left;
+  }
+  .edge-layer { position: absolute; inset: 0; overflow: visible; pointer-events: none; }
+  .edge {
+    fill: none; stroke-linecap: round; transition: opacity 120ms ease, stroke-width 120ms ease;
+  }
+  .edge--support { stroke: var(--pro); stroke-width: 1.5; }
+  .edge--attack { stroke: var(--con); stroke-width: 1.4; stroke-dasharray: 5 4; }
+  .edge--undercut { stroke: var(--under); stroke-width: 1.2; stroke-dasharray: 2 4; }
+  .edge:hover { opacity: 0.75; }
+  .edge-label { font-family: var(--mono); font-size: 6.5px; letter-spacing: 0.06em; fill: var(--faint); pointer-events: none; }
+  .node-layer { position: absolute; inset: 0; }
+  .node-card {
+    position: absolute; overflow: hidden; display: block; padding: 8px 9px 7px;
+    border: 1px solid var(--line-strong); border-radius: 4px;
+    background: var(--surface-strong); color: var(--ink);
+    box-shadow: 0 2px 0 rgba(33, 29, 24, 0.04), 0 12px 22px -20px rgba(33, 29, 24, 0.8);
+    text-align: left; transform: translateY(0);
+    transition: transform 120ms ease, box-shadow 120ms ease, outline-color 120ms ease;
+  }
+  .node-card:hover { transform: translateY(-1px); box-shadow: 0 3px 0 rgba(33, 29, 24, 0.04), 0 16px 28px -22px rgba(33, 29, 24, 0.8); }
+  .node-card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--gold); }
+  .node-card.stance-pro::before { background: var(--pro); }
+  .node-card.stance-con::before { background: var(--con); }
+  .node-card.stance-neutral::before { background: var(--gold); }
+  .node-card.is-selected { outline: 2px solid var(--gold); outline-offset: 2px; z-index: 4; }
+  .node-card.motion {
+    width: 200px; height: 92px; padding: 11px 12px 9px;
+    background: var(--ink); border-color: var(--ink); color: var(--paper);
+    box-shadow: 0 3px 0 rgba(0, 0, 0, 0.16), 0 20px 34px -22px rgba(33, 29, 24, 0.9);
+  }
+  .node-card.motion::before { background: var(--gold); }
+  .node-card.motion .node-title { color: var(--paper); }
+  .node-card.motion .node-text { color: rgba(238, 231, 218, 0.68); }
+  .node-card.motion.is-selected { outline-color: var(--gold); }
+  .node-eyebrow {
+    display: flex; align-items: center; justify-content: space-between; gap: 5px;
+    color: var(--muted); font-size: 6.5px; font-weight: 800; letter-spacing: 0.14em;
+  }
+  .node-card.motion .node-eyebrow { color: var(--gold); }
+  .node-kind { color: var(--faint); font-weight: 600; letter-spacing: 0.08em; }
+  .node-title {
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    margin-top: 4px; font-size: 10.5px; line-height: 1.24; font-weight: 700; letter-spacing: -0.01em;
+  }
+  .node-text {
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    margin-top: 4px; color: var(--muted); font-size: 8.8px; line-height: 1.28;
+  }
+  .map-hint { position: absolute; left: 13px; bottom: 15px; z-index: 3; color: var(--faint); font-size: 8px; letter-spacing: 0.08em; text-transform: uppercase; pointer-events: none; }
+  .map-controls {
+    position: absolute; right: 12px; bottom: 10px; z-index: 5;
+    display: flex; align-items: center; gap: 5px; padding: 4px;
+    border: 1px solid var(--line-strong); background: rgba(253, 249, 242, 0.94);
+    box-shadow: 0 6px 18px -14px rgba(33, 29, 24, 0.75);
+  }
+  .control-btn {
+    min-width: 24px; height: 24px; padding: 0 6px; border: 1px solid transparent;
+    background: transparent; color: var(--muted); font-size: 9px; font-weight: 700;
+  }
+  .control-btn:hover { border-color: var(--line); color: var(--ink); }
+  .control-sep { width: 1px; height: 15px; background: var(--line); margin: 0 2px; }
+  .control-readout { min-width: 30px; text-align: center; color: var(--muted); font-family: var(--mono); font-size: 8px; }
+  .view-toggle { display: flex; padding: 1px; border: 1px solid var(--line); background: rgba(255, 253, 247, 0.55); }
+  .view-toggle button { height: 21px; padding: 0 7px; border: 0; background: transparent; color: var(--muted); font-size: 8px; font-weight: 800; letter-spacing: 0.08em; }
+  .view-toggle button.is-active { background: var(--action); color: var(--action-ink); }
+  .view-toggle button:disabled { opacity: 0.45; cursor: not-allowed; }
+  .edit-toggle {
+    height: 25px; padding: 0 8px; border: 1px solid var(--action);
+    background: var(--action); color: var(--action-ink); font-size: 8px; font-weight: 800; letter-spacing: 0.06em;
+  }
+  .edit-toggle:hover { background: var(--action-hover); border-color: var(--action-hover); }
+  .edit-bar {
+    display: none; align-items: center; gap: 6px; position: absolute; top: 10px; left: 50%;
+    transform: translateX(-50%); z-index: 9; padding: 5px 6px 5px 10px;
+    border: 1px solid var(--line-strong); background: var(--surface-strong);
+    box-shadow: 0 8px 22px -17px rgba(33, 29, 24, 0.85); white-space: nowrap;
+  }
+  .is-editing .edit-bar { display: flex; }
+  .edit-bar-label { color: var(--gold-deep); font-size: 7.5px; font-weight: 800; letter-spacing: 0.12em; margin-right: 3px; }
+  .edit-bar button { height: 23px; padding: 0 7px; border: 1px solid transparent; background: transparent; color: var(--ink-soft); font-size: 8px; font-weight: 700; }
+  .edit-bar button:hover:not(:disabled) { border-color: var(--line); background: rgba(255, 253, 247, 0.6); }
+  .edit-bar button:disabled { opacity: 0.35; }
+  .edit-bar .done { background: var(--action); border-color: var(--action); color: var(--action-ink); }
+  .edit-bar .done:hover { background: var(--action-hover); border-color: var(--action-hover); }
+  .edit-bar .cancel { color: var(--con); }
+
+  .inspector { display: flex; flex-direction: column; border-left: 1px solid var(--line); background: rgba(250, 246, 237, 0.4); min-width: 0; }
+  .inspector-head { padding: 13px 14px 10px; border-bottom: 1px solid var(--line); display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+  .inspector-head .section-label { margin-bottom: 3px; }
+  .mode-badge { display: inline-flex; align-items: center; height: 17px; padding: 0 5px; border: 1px solid var(--line-strong); color: var(--muted); font-size: 7px; font-weight: 800; letter-spacing: 0.09em; }
+  .mode-badge.edit { color: var(--gold-deep); border-color: var(--gold); background: var(--gold-soft); }
+  .inspector-scroll { flex: 1; overflow: auto; padding: 12px 14px 16px; }
+  .inspector-title { margin: 7px 0 0; font-family: var(--serif); font-size: 20px; line-height: 1.13; font-weight: 400; }
+  .inspector-text { color: var(--ink-soft); font-family: var(--serif); font-size: 12px; line-height: 1.48; margin: 10px 0 0; white-space: pre-wrap; }
+  .inspector-meta { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 8px; }
+  .stance-badge { padding: 3px 5px; border: 1px solid currentColor; font-size: 7px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+  .stance-pro { color: var(--pro); }
+  .stance-con { color: var(--con); }
+  .stance-neutral { color: var(--gold-deep); }
+  .inspector-section { border-top: 1px solid var(--line); margin-top: 13px; padding-top: 10px; }
+  .section-small { color: var(--muted); font-size: 7.5px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 6px; }
+  .premise-list { margin: 0; padding-left: 16px; color: var(--ink-soft); font-size: 10px; line-height: 1.45; }
+  .premise-list li + li { margin-top: 4px; }
+  .inspector-conclusion { margin: 8px 0 0; padding: 7px 8px; border-left: 2px solid var(--gold); background: rgba(185, 138, 58, 0.08); color: var(--ink); font-family: var(--serif); font-size: 11px; }
+  .inspector-conclusion span { color: var(--gold-deep); font-family: var(--sans); font-size: 7px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; display: block; margin-bottom: 2px; }
+  .read-note { margin: 14px 0 0; color: var(--faint); font-size: 9px; line-height: 1.45; }
+  .form { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label, .field > span { color: var(--muted); font-size: 7.5px; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; }
+  .field input, .field textarea, .field select {
+    width: 100%; border: 1px solid var(--line-strong); border-radius: 2px;
+    background: var(--surface-strong); color: var(--ink); padding: 6px 7px;
+    font-size: 10px; line-height: 1.35; outline: none;
+  }
+  .field input:focus, .field textarea:focus, .field select:focus { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(185, 138, 58, 0.13); }
+  .field textarea { min-height: 58px; resize: vertical; font-family: var(--serif); font-size: 11px; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+  .field-row.three { grid-template-columns: 1fr 1fr 1fr; }
+  .field-note { color: var(--faint); font-size: 8px; line-height: 1.4; }
+  .relations { display: flex; flex-direction: column; gap: 5px; }
+  .relation-row { display: grid; grid-template-columns: minmax(0, 1fr) 91px 20px; align-items: center; gap: 5px; padding: 4px 0; border-bottom: 1px solid rgba(217, 207, 188, 0.65); }
+  .relation-copy { min-width: 0; }
+  .relation-copy b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-soft); font-size: 8.5px; font-weight: 600; }
+  .relation-copy span { color: var(--faint); font-size: 7px; }
+  .relation-row select { min-width: 0; padding: 3px 3px; border: 1px solid var(--line); background: var(--surface-strong); color: var(--ink-soft); font-size: 7.5px; }
+  .relation-remove { width: 20px; height: 20px; border: 0; background: transparent; color: var(--faint); font-size: 14px; line-height: 1; }
+  .relation-remove:hover { color: var(--con); }
+  .relation-empty { color: var(--faint); font-size: 9px; padding: 4px 0 7px; }
+  .inspector-actions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+  .small-btn { min-height: 23px; padding: 0 7px; border: 1px solid var(--line-strong); background: transparent; color: var(--ink-soft); font-size: 8px; font-weight: 700; }
+  .small-btn:hover { border-color: var(--ink-soft); background: rgba(255, 253, 247, 0.5); }
+  .small-btn.gold { border-color: var(--gold); color: var(--gold-deep); }
+  .small-btn.danger { border-color: rgba(165, 61, 49, 0.35); color: var(--con); }
+  .small-btn.danger:hover { background: var(--con-soft); border-color: var(--con); }
+  .selection-note { margin-top: 10px; padding: 7px 8px; border: 1px dashed var(--line-strong); color: var(--faint); font-size: 8.5px; line-height: 1.45; }
+  .new-form { margin-top: 10px; padding: 9px 9px 8px; border: 1px solid var(--gold); background: rgba(242, 230, 204, 0.45); }
+  .new-form h3 { margin: 0 0 7px; font-family: var(--serif); font-size: 13px; font-weight: 400; }
+  .new-form .field-row { margin-bottom: 7px; }
+  .new-form .form { margin-top: 0; gap: 7px; }
+  .link-form { margin-top: 7px; padding-top: 7px; border-top: 1px dashed var(--line-strong); }
+  .inspector-foot { margin-top: 13px; padding-top: 10px; border-top: 1px solid var(--line); color: var(--faint); font-size: 8px; line-height: 1.5; }
+  .toast {
+    position: fixed; left: 50%; bottom: 18px; transform: translate(-50%, 10px);
+    z-index: 20; padding: 8px 12px; border: 1px solid var(--ink-soft); background: var(--ink);
+    color: var(--paper); box-shadow: 0 10px 28px -15px rgba(0, 0, 0, 0.75);
+    font-size: 9.5px; opacity: 0; pointer-events: none; transition: opacity 150ms ease, transform 150ms ease;
+  }
+  .toast.is-visible { opacity: 1; transform: translate(-50%, 0); }
+
+  @media (max-width: 1180px) {
+    .workspace { grid-template-columns: minmax(0, 1fr) 308px; }
+    .library { display: none; }
+    .canvas-head h1 { font-size: 28px; }
+  }
+  @media (max-width: 880px) {
+    .prototype-shell { min-height: 100vh; }
+    .manifesto { display: none; }
+    .workspace { grid-template-columns: 1fr; grid-template-rows: minmax(560px, 1fr) auto; overflow: auto; }
+    .canvas { min-height: 560px; }
+    .inspector { max-height: 620px; border-left: 0; border-top: 1px solid var(--line); }
+  }
+</style>
+</head>
+<body>
+<div class="prototype-shell" id="shell">
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">A</div>
+      <div>
+        <div class="brand-name">AGORA</div>
+        <div class="brand-sub">DEBATE HARNESS</div>
+      </div>
+    </div>
+    <div class="manifesto">Every argument has a shape. Find it, then argue with it.</div>
+    <div class="top-meta">
+      <span class="paper-pill">Editorial paper</span>
+      <span class="demo-pill">DEMO PROTOTYPE</span>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <aside class="library" aria-label="Debate library">
+      <div class="section-label">The library</div>
+      <div class="library-head">
+        <h2>2 debates</h2>
+        <button class="library-plus" id="library-plus" type="button" title="New debate (not part of prototype)" aria-label="New debate, prototype only">+</button>
+      </div>
+      <button class="debate-card is-active" type="button">
+        <b>Should cities make public transit free at the point of use?</b>
+        <span>Municipal transport should be funded collectively rather than through fares.</span>
+        <span>10 arguments · 12 relations</span>
+      </button>
+      <button class="debate-card" type="button">
+        <b>Should the four-day week be the default full-time schedule?</b>
+        <span>Full-time work should be measured in output, not hours.</span>
+        <span>19 nodes · 1d ago</span>
+      </button>
+      <div class="library-note">A set of local debates. The map is the argument; the chamber is where you question it.</div>
+    </aside>
+
+    <section class="canvas" aria-label="Argument map">
+      <div class="canvas-head">
+        <div class="canvas-eyebrow">
+          <span>Argument map</span><span class="dot">·</span>
+          <span id="stat-nodes">10 arguments</span><span class="dot">·</span>
+          <span id="stat-edges">12 relations</span><span class="dot">·</span>
+          <span id="stat-mode">Read mode</span>
+        </div>
+        <h1 id="motion-heading">Should cities make public transit free at the point of use?</h1>
+        <div class="canvas-sub" id="motion-sub">A city should fund transit collectively rather than through fares at the point of use.</div>
+      </div>
+
+      <div class="map-frame" id="map-frame">
+        <div class="edit-bar" id="edit-bar" role="toolbar" aria-label="Draft editing controls">
+          <span class="edit-bar-label">EDITING DRAFT</span>
+          <button type="button" id="undo-btn" title="Undo (Ctrl+Z)">Undo</button>
+          <button type="button" id="redo-btn" title="Redo (Ctrl+Shift+Z)">Redo</button>
+          <span class="control-sep"></span>
+          <button type="button" class="cancel" id="cancel-btn">Cancel</button>
+          <button type="button" class="done" id="done-btn">Done</button>
+        </div>
+        <div class="map-scroll" id="map-scroll">
+          <div class="map-canvas" id="map-canvas">
+            <svg class="edge-layer" id="edge-layer" aria-hidden="true"></svg>
+            <div class="node-layer" id="node-layer"></div>
+          </div>
+        </div>
+        <div class="map-hint" id="map-hint">Select a card to inspect it</div>
+        <div class="map-controls" aria-label="Map controls">
+          <button class="control-btn" type="button" id="zoom-out" aria-label="Zoom out">−</button>
+          <span class="control-readout" id="zoom-readout">100%</span>
+          <button class="control-btn" type="button" id="zoom-in" aria-label="Zoom in">+</button>
+          <span class="control-sep"></span>
+          <button class="control-btn" type="button" id="fit-btn">Fit</button>
+          <div class="view-toggle" role="group" aria-label="Map layout">
+            <button type="button" class="is-active" aria-pressed="true">Case</button>
+            <button type="button" disabled title="Thread view is not part of this prototype">Thread</button>
+          </div>
+          <button class="edit-toggle" type="button" id="edit-map-btn">Edit map</button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="inspector" id="inspector" aria-label="Inspector"></aside>
+  </main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+  "use strict";
+
+  const INITIAL = {
+    motion: {
+      id: "thesis",
+      kind: "statement",
+      stance: "neutral",
+      speaker: "moderator",
+      title: "Should cities make public transit free at the point of use?",
+      text: "A city should fund transit collectively rather than through fares at the point of use. The question is whether universal access is worth the revenue and service trade-offs.",
+      premises: [],
+      conclusion: "Cities should make public transit free at the point of use.",
+      tags: ["mobility", "public goods"]
+    },
+    nodes: [
+      {
+        id: "p1", kind: "argument", stance: "pro", speaker: "advocate",
+        title: "A fare is a toll on a public good",
+        text: "A fare is a toll on a public good, and the revenue it raises is not worth the access it suppresses.",
+        premises: ["Transit is a shared public good.", "A toll reduces use of the good it prices."],
+        conclusion: "Abolishing fares improves access to a public good.",
+        tags: ["access", "public goods"]
+      },
+      {
+        id: "p2", kind: "argument", stance: "pro", speaker: "advocate",
+        title: "Collection costs and dwell time are real",
+        text: "Collection costs and dwell time consume revenue and slow the network; removing fares avoids both.",
+        premises: ["Fare collection consumes staff time and vehicle dwell time."],
+        conclusion: "Free fares can improve service efficiency.",
+        tags: ["operations"]
+      },
+      {
+        id: "p3", kind: "argument", stance: "pro", speaker: "advocate",
+        title: "The revenue alternative hurts the poor",
+        text: "Funding transit through general revenue is more progressive than a fare that falls hardest on low-income riders.",
+        premises: ["Fares are regressive.", "General revenue can be raised progressively."],
+        conclusion: "Public funding is fairer than fare funding.",
+        tags: ["equity", "tax"]
+      },
+      {
+        id: "p4", kind: "argument", stance: "pro", speaker: "advocate",
+        title: "Universality builds the coalition",
+        text: "A universal service builds a broader coalition than a means-tested one and protects the network from residual stigma.",
+        premises: ["Universal programs have broader political constituencies."],
+        conclusion: "Universality is politically durable.",
+        tags: ["politics"]
+      },
+      {
+        id: "p5", kind: "argument", stance: "pro", speaker: "advocate",
+        title: "Access, not model shift, is the point",
+        text: "The case for free transit is access and affordability, not the claim that every driver will leave the car.",
+        premises: ["The primary good is access to destinations."],
+        conclusion: "The policy should be judged on access, not modal shift alone.",
+        tags: ["access", "framing"]
+      },
+      {
+        id: "c1", kind: "argument", stance: "con", speaker: "challenger",
+        title: "Ridership is not the same as service quality",
+        text: "Free fares can increase low-value trips without improving frequency, coverage, or reliability.",
+        premises: ["Service quality depends on funding and operations."],
+        conclusion: "A fare cut does not guarantee a better network.",
+        tags: ["service", "evidence"]
+      },
+      {
+        id: "c2", kind: "argument", stance: "con", speaker: "challenger",
+        title: "The money buys more service elsewhere",
+        text: "The same revenue can buy more frequent service, which may serve riders better than a zero price.",
+        premises: ["Frequency is a major driver of ridership."],
+        conclusion: "Targeted service investment can outperform free fares.",
+        tags: ["service", "opportunity cost"]
+      },
+      {
+        id: "c3", kind: "argument", stance: "con", speaker: "challenger",
+        title: "Fare enforcement punishes the poor",
+        text: "Fare enforcement can criminalize poverty, but removing the fare is not the only way to address that harm.",
+        premises: ["Penalties fall disproportionately on low-income riders."],
+        conclusion: "Enforcement reform is a necessary alternative.",
+        tags: ["equity", "enforcement"]
+      },
+      {
+        id: "c4", kind: "argument", stance: "con", speaker: "challenger",
+        title: "Zero price overstimulates low-value trips",
+        text: "A zero price can crowd peak vehicles with trips that have low value and displace riders with fewer alternatives.",
+        premises: ["Price helps allocate scarce peak capacity."],
+        conclusion: "Free fares can make crowding worse.",
+        tags: ["capacity", "economics"]
+      },
+      {
+        id: "c5", kind: "argument", stance: "con", speaker: "challenger",
+        title: "Universality has a fiscal cost",
+        text: "A universal benefit pays for riders who do not need it and can crowd out targeted support.",
+        premises: ["Universal benefits can be expensive."],
+        conclusion: "Means-tested support may be more efficient.",
+        tags: ["fiscal", "targeting"]
+      }
+    ],
+    edges: [
+      { id: "e1", from: "p1", to: "thesis", type: "support" },
+      { id: "e2", from: "p2", to: "thesis", type: "support" },
+      { id: "e3", from: "p3", to: "thesis", type: "support" },
+      { id: "e4", from: "p4", to: "thesis", type: "support" },
+      { id: "e5", from: "p5", to: "thesis", type: "support" },
+      { id: "e6", from: "c1", to: "thesis", type: "attack" },
+      { id: "e7", from: "c2", to: "thesis", type: "attack" },
+      { id: "e8", from: "c3", to: "p1", type: "attack" },
+      { id: "e9", from: "c4", to: "thesis", type: "attack" },
+      { id: "e10", from: "c5", to: "thesis", type: "undercut" },
+      { id: "e11", from: "c1", to: "p5", type: "attack" },
+      { id: "e12", from: "c2", to: "p2", type: "undercut" }
+    ]
+  };
+
+  const clone = (value) => JSON.parse(JSON.stringify(value));
+  const byId = (id) => id === "thesis" ? draft.motion : draft.nodes.find((node) => node.id === id);
+  const allNodes = () => [draft.motion, ...draft.nodes];
+  const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[character]));
+
+  let draft = clone(INITIAL);
+  let committed = clone(INITIAL);
+  let baseline = null;
+  let selectedId = "thesis";
+  let editing = false;
+  let history = [];
+  let future = [];
+  let responseOpen = false;
+  let linkOpen = false;
+  let fieldCheckpoint = false;
+  let zoom = 1;
+  let sequence = 20;
+  let toastTimer = null;
+
+  const shell = document.getElementById("shell");
+  const edgeLayer = document.getElementById("edge-layer");
+  const nodeLayer = document.getElementById("node-layer");
+  const mapCanvas = document.getElementById("map-canvas");
+  const mapScroll = document.getElementById("map-scroll");
+  const inspector = document.getElementById("inspector");
+  const motionHeading = document.getElementById("motion-heading");
+  const motionSub = document.getElementById("motion-sub");
+  const nodeStat = document.getElementById("stat-nodes");
+  const edgeStat = document.getElementById("stat-edges");
+  const modeStat = document.getElementById("stat-mode");
+  const mapHint = document.getElementById("map-hint");
+  const zoomReadout = document.getElementById("zoom-readout");
+  const undoBtn = document.getElementById("undo-btn");
+  const redoBtn = document.getElementById("redo-btn");
+  const toast = document.getElementById("toast");
+
+  const NODE_W = 170;
+  const NODE_H = 82;
+  const MOTION_W = 200;
+  const MOTION_H = 92;
+  const MAP_W = 700;
+  const MAP_H = 600;
+
+  function layout() {
+    const positions = {};
+    const pro = draft.nodes.filter((node) => node.stance === "pro");
+    const con = draft.nodes.filter((node) => node.stance === "con");
+    const neutral = draft.nodes.filter((node) => node.stance === "neutral");
+    pro.forEach((node, index) => {
+      positions[node.id] = { x: 8, y: 42 + index * 90, w: NODE_W, h: NODE_H };
+    });
+    con.forEach((node, index) => {
+      positions[node.id] = { x: MAP_W - NODE_W - 8, y: 42 + index * 90, w: NODE_W, h: NODE_H };
+    });
+    neutral.forEach((node, index) => {
+      positions[node.id] = { x: (MAP_W - NODE_W) / 2, y: 404 + index * 82, w: NODE_W, h: NODE_H };
+    });
+    positions.thesis = { x: (MAP_W - MOTION_W) / 2, y: 224, w: MOTION_W, h: MOTION_H };
+    const lowest = Math.max(
+      MAP_H - 30,
+      ...Object.values(positions).map((position) => position.y + position.h + 30)
+    );
+    return { positions, height: lowest };
+  }
+
+  function pathFor(edge, positions) {
+    const source = positions[edge.from];
+    const target = positions[edge.to];
+    if (!source || !target) return "";
+    const sourceCenter = { x: source.x + source.w / 2, y: source.y + source.h / 2 };
+    const targetCenter = { x: target.x + target.w / 2, y: target.y + target.h / 2 };
+    const rightward = sourceCenter.x < targetCenter.x;
+    const startX = rightward ? source.x + source.w : source.x;
+    const endX = rightward ? target.x : target.x + target.w;
+    const startY = sourceCenter.y;
+    const endY = targetCenter.y;
+    const bend = Math.max(30, Math.abs(endX - startX) * 0.42);
+    return `M ${startX} ${startY} C ${startX + (rightward ? bend : -bend)} ${startY}, ${endX + (rightward ? -bend : bend)} ${endY}, ${endX} ${endY}`;
+  }
+
+  function markerFor(type) {
+    return type === "attack" ? "arrow-attack" : type === "undercut" ? "arrow-undercut" : "arrow-support";
+  }
+
+  function renderMap() {
+    const { positions, height } = layout();
+    mapCanvas.style.width = `${MAP_W}px`;
+    mapCanvas.style.height = `${height}px`;
+    mapCanvas.style.transform = `scale(${zoom})`;
+    edgeLayer.setAttribute("viewBox", `0 0 ${MAP_W} ${height}`);
+    edgeLayer.setAttribute("width", String(MAP_W));
+    edgeLayer.setAttribute("height", String(height));
+    const markers = `
+      <defs>
+        <marker id="arrow-support" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#2f6b56"/></marker>
+        <marker id="arrow-attack" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#a53d31"/></marker>
+        <marker id="arrow-undercut" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#6b4e9e"/></marker>
+      </defs>`;
+    edgeLayer.innerHTML = markers + draft.edges.map((edge) => {
+      const path = pathFor(edge, positions);
+      if (!path) return "";
+      return `<path class="edge edge--${edge.type}" d="${path}" marker-end="url(#${markerFor(edge.type)})" />`;
+    }).join("");
+
+    nodeLayer.innerHTML = allNodes().map((node) => {
+      const position = positions[node.id];
+      if (!position) return "";
+      const isMotion = node.id === "thesis";
+      const stanceClass = isMotion ? "" : ` stance-${node.stance}`;
+      const selected = node.id === selectedId ? " is-selected" : "";
+      const eyebrow = isMotion
+        ? `<span>THE MOTION</span><span class="node-kind">THESIS</span>`
+        : `<span>${node.stance === "pro" ? "FOR THE MOTION" : node.stance === "con" ? "AGAINST THE MOTION" : "CONTEXT"}</span><span class="node-kind">${escapeHtml(node.kind === "statement" ? "STATEMENT" : "ARGUMENT")}</span>`;
+      return `<button type="button" class="node-card${isMotion ? " motion" : ""}${stanceClass}${selected}" data-node-id="${escapeHtml(node.id)}" style="left:${position.x}px;top:${position.y}px;width:${isMotion ? MOTION_W : NODE_W}px;height:${isMotion ? MOTION_H : NODE_H}px" aria-pressed="${node.id === selectedId}">
+        <span class="node-eyebrow">${eyebrow}</span>
+        <span class="node-title">${escapeHtml(node.title)}</span>
+        <span class="node-text">${escapeHtml(node.text)}</span>
+      </button>`;
+    }).join("");
+  }
+
+  function renderHeader() {
+    const count = draft.nodes.length;
+    nodeStat.textContent = `${count} argument${count === 1 ? "" : "s"}`;
+    edgeStat.textContent = `${draft.edges.length} relation${draft.edges.length === 1 ? "" : "s"}`;
+    modeStat.textContent = editing ? "Edit mode" : "Read mode";
+    motionHeading.textContent = draft.motion.title;
+    motionSub.textContent = draft.motion.text;
+    mapHint.textContent = editing ? "Select a card, edit in the inspector · draft changes only" : "Select a card to inspect it";
+    zoomReadout.textContent = `${Math.round(zoom * 100)}%`;
+    undoBtn.disabled = history.length === 0;
+    redoBtn.disabled = future.length === 0;
+    shell.classList.toggle("is-editing", editing);
+    document.getElementById("edit-map-btn").style.display = editing ? "none" : "";
+  }
+
+  function readInspector() {
+    const node = byId(selectedId) ?? draft.motion;
+    const isMotion = node.id === "thesis";
+    const stance = isMotion ? "neutral" : node.stance;
+    const stanceLabel = stance === "pro" ? "For the motion" : stance === "con" ? "Against the motion" : isMotion ? "The motion" : "Context";
+    const premises = node.premises?.length
+      ? `<div class="inspector-section"><div class="section-small">Premises</div><ol class="premise-list">${node.premises.map((premise) => `<li>${escapeHtml(premise)}</li>`).join("")}</ol>${node.conclusion ? `<div class="inspector-conclusion"><span>Therefore</span>${escapeHtml(node.conclusion)}</div>` : ""}</div>`
+      : "";
+    inspector.innerHTML = `
+      <div class="inspector-head">
+        <div><div class="section-label">Inspector</div><span class="mode-badge">READ</span></div>
+      </div>
+      <div class="inspector-scroll">
+        <div class="inspector-meta"><span class="stance-badge stance-${stance}">${stanceLabel}</span><span>${isMotion ? "Root claim" : node.kind === "statement" ? "Statement" : "Argument"}</span></div>
+        <h2 class="inspector-title">${escapeHtml(node.title)}</h2>
+        <p class="inspector-text">${escapeHtml(node.text)}</p>
+        ${premises}
+        <div class="read-note">Read mode keeps the map quiet. Select <b>Edit map</b> to change the draft; all fields and relations live in this inspector.</div>
+        <div class="inspector-foot">DEMO DATA · Prototype only. Changes here do not touch Agora’s stored debates.</div>
+      </div>`;
+  }
+
+  function relationRows(node) {
+    const rows = draft.edges.filter((edge) => edge.from === node.id || edge.to === node.id);
+    if (!rows.length) return `<div class="relation-empty">No relations yet.</div>`;
+    return rows.map((edge) => {
+      const outgoing = edge.from === node.id;
+      const other = byId(outgoing ? edge.to : edge.from);
+      const direction = outgoing ? (edge.to === "thesis" ? "To the motion" : "Responds to") : (edge.from === "thesis" ? "From the motion" : "Responded to by");
+      return `<div class="relation-row">
+        <div class="relation-copy"><b>${escapeHtml(other?.title ?? "Unknown")}</b><span>${direction}</span></div>
+        <select data-edge-type="${escapeHtml(edge.id)}" aria-label="Relation type">
+          <option value="support"${edge.type === "support" ? " selected" : ""}>Support</option>
+          <option value="attack"${edge.type === "attack" ? " selected" : ""}>Attack</option>
+          <option value="undercut"${edge.type === "undercut" ? " selected" : ""}>Undercut</option>
+        </select>
+        <button type="button" class="relation-remove" data-remove-edge="${escapeHtml(edge.id)}" aria-label="Remove relation" title="Remove relation">×</button>
+      </div>`;
+    }).join("");
+  }
+
+  function editInspector() {
+    const node = byId(selectedId) ?? draft.motion;
+    const isMotion = node.id === "thesis";
+    const stance = isMotion ? "neutral" : node.stance;
+    const stanceLabel = stance === "pro" ? "For the motion" : stance === "con" ? "Against the motion" : isMotion ? "The motion" : "Context";
+    const relationOptions = allNodes().filter((candidate) => candidate.id !== node.id).map((candidate) => `<option value="${escapeHtml(candidate.id)}">${escapeHtml(candidate.title)}</option>`).join("");
+    const responseForm = responseOpen ? `
+      <div class="new-form">
+        <h3>Add a response to “${escapeHtml(node.title)}”</h3>
+        <div class="field-row">
+          <label class="field"><span>Relation</span><select id="new-response-relation"><option value="support">Support</option><option value="attack">Attack</option><option value="undercut">Undercut</option></select></label>
+          <label class="field"><span>Stance</span><select id="new-response-stance"><option value="pro">For</option><option value="con">Against</option><option value="neutral">Context</option></select></label>
+        </div>
+        <label class="field"><span>Working title</span><input id="new-response-title" placeholder="New response" autocomplete="off" /></label>
+        <div class="inspector-actions"><button type="button" class="small-btn gold" data-action="create-response">Create argument</button><button type="button" class="small-btn" data-action="close-response">Cancel</button></div>
+      </div>` : "";
+    const linkForm = linkOpen ? `
+      <div class="link-form">
+        <div class="field-row"><label class="field"><span>Link to</span><select id="link-target">${relationOptions}</select></label><label class="field"><span>Type</span><select id="link-type"><option value="support">Support</option><option value="attack">Attack</option><option value="undercut">Undercut</option></select></label></div>
+        <div class="inspector-actions"><button type="button" class="small-btn" data-action="create-link">Add relation</button><button type="button" class="small-btn" data-action="close-link">Cancel</button></div>
+      </div>` : "";
+    const form = `
+      <div class="form">
+        ${isMotion ? `<div class="selection-note">The motion is the root claim. It can be edited, but it cannot be removed; delete the debate if you want to remove it.</div>` : `<div class="field-row three"><label class="field"><span>Kind</span><select data-field="kind"><option value="argument"${node.kind === "argument" ? " selected" : ""}>Argument</option><option value="statement"${node.kind === "statement" ? " selected" : ""}>Statement</option></select></label><label class="field"><span>Stance</span><select data-field="stance"><option value="pro"${node.stance === "pro" ? " selected" : ""}>For</option><option value="con"${node.stance === "con" ? " selected" : ""}>Against</option><option value="neutral"${node.stance === "neutral" ? " selected" : ""}>Context</option></select></label><label class="field"><span>Speaker</span><select data-field="speaker"><option value="advocate"${node.speaker === "advocate" ? " selected" : ""}>Advocate</option><option value="challenger"${node.speaker === "challenger" ? " selected" : ""}>Challenger</option><option value="moderator"${node.speaker === "moderator" ? " selected" : ""}>Moderator</option><option value="you"${node.speaker === "you" ? " selected" : ""}>You</option></select></label></div>`}
+        <label class="field"><span>Title</span><input data-field="title" value="${escapeHtml(node.title)}" autocomplete="off" /></label>
+        <label class="field"><span>Argument text</span><textarea data-field="text">${escapeHtml(node.text)}</textarea></label>
+        <label class="field"><span>Premises <em>one per line</em></span><textarea data-field="premises">${escapeHtml((node.premises ?? []).join("\n"))}</textarea></label>
+        <label class="field"><span>Conclusion</span><input data-field="conclusion" value="${escapeHtml(node.conclusion ?? "")}" autocomplete="off" /></label>
+        <label class="field"><span>Tags <em>comma separated</em></span><input data-field="tags" value="${escapeHtml((node.tags ?? []).join(", "))}" autocomplete="off" /></label>
+      </div>`;
+    inspector.innerHTML = `
+      <div class="inspector-head">
+        <div><div class="section-label">Inspector</div><span class="mode-badge edit">EDIT DRAFT</span></div>
+      </div>
+      <div class="inspector-scroll">
+        <div class="inspector-meta"><span class="stance-badge stance-${stance}">${stanceLabel}</span><span>${isMotion ? "Root claim" : "Argument"}</span></div>
+        ${form}
+        <div class="inspector-section">
+          <div class="section-small">Relations</div>
+          <div class="relations">${relationRows(node)}</div>
+          <div class="inspector-actions"><button type="button" class="small-btn gold" data-action="add-response">Add response</button><button type="button" class="small-btn" data-action="add-link">Link existing</button>${isMotion ? "" : `<button type="button" class="small-btn danger" data-action="remove-node">Remove argument</button>`}</div>
+          ${responseForm}
+          ${linkForm}
+        </div>
+        <div class="selection-note">Editing is a draft. The map stays clean: select a card, edit every field and relation here, then press <b>Done</b> to commit or <b>Cancel</b> to discard.</div>
+        <div class="inspector-foot">DEMO DATA · Prototype only. Changes here do not touch Agora’s stored debates.</div>
+      </div>`;
+  }
+
+  function renderInspector() {
+    if (editing) editInspector();
+    else readInspector();
+  }
+
+  function renderAll() {
+    if (!byId(selectedId)) selectedId = "thesis";
+    renderHeader();
+    renderMap();
+    renderInspector();
+  }
+
+  function checkpoint() {
+    history.push(clone(draft));
+    if (history.length > 60) history.shift();
+    future = [];
+  }
+
+  function showToast(message) {
+    toast.textContent = message;
+    toast.classList.add("is-visible");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove("is-visible"), 2600);
+  }
+
+  function updateField(field, value) {
+    const node = byId(selectedId);
+    if (!node) return;
+    if (field === "premises") node.premises = value.split("\n").map((line) => line.trim()).filter(Boolean);
+    else if (field === "tags") node.tags = value.split(",").map((tag) => tag.trim()).filter(Boolean);
+    else node[field] = value;
+    renderHeader();
+    renderMap();
+  }
+
+  function enterEdit() {
+    editing = true;
+    baseline = clone(draft);
+    history = [];
+    future = [];
+    responseOpen = false;
+    linkOpen = false;
+    fieldCheckpoint = false;
+    renderAll();
+    showToast("Editing draft. Edits stay local until Done.");
+  }
+
+  function cancelEdit() {
+    if (!editing) return;
+    draft = clone(baseline);
+    editing = false;
+    baseline = null;
+    history = [];
+    future = [];
+    responseOpen = false;
+    linkOpen = false;
+    if (!byId(selectedId)) selectedId = "thesis";
+    renderAll();
+    showToast("Draft discarded.");
+  }
+
+  function commitEdit() {
+    if (!editing) return;
+    committed = clone(draft);
+    editing = false;
+    baseline = null;
+    history = [];
+    future = [];
+    responseOpen = false;
+    linkOpen = false;
+    renderAll();
+    showToast("Draft saved to this prototype.");
+  }
+
+  function undo() {
+    if (!editing || !history.length) return;
+    future.push(clone(draft));
+    draft = history.pop();
+    if (!byId(selectedId)) selectedId = "thesis";
+    responseOpen = false;
+    linkOpen = false;
+    renderAll();
+  }
+
+  function redo() {
+    if (!editing || !future.length) return;
+    history.push(clone(draft));
+    draft = future.pop();
+    if (!byId(selectedId)) selectedId = "thesis";
+    responseOpen = false;
+    linkOpen = false;
+    renderAll();
+  }
+
+  function nextId(prefix, items) {
+    sequence += 1;
+    let id = `${prefix}${sequence}`;
+    while (items.some((item) => item.id === id)) {
+      sequence += 1;
+      id = `${prefix}${sequence}`;
+    }
+    return id;
+  }
+
+  function createResponse() {
+    const target = byId(selectedId);
+    if (!target) return;
+    const relation = document.getElementById("new-response-relation")?.value ?? "support";
+    const stance = document.getElementById("new-response-stance")?.value ?? "pro";
+    const workingTitle = document.getElementById("new-response-title")?.value.trim() || "New response";
+    checkpoint();
+    const node = {
+      id: nextId("n", draft.nodes), kind: "argument", stance,
+      speaker: stance === "con" ? "challenger" : "advocate",
+      title: workingTitle, text: "", premises: [], conclusion: "", tags: []
+    };
+    draft.nodes.push(node);
+    draft.edges.push({ id: nextId("e", draft.edges), from: node.id, to: target.id, type: relation });
+    selectedId = node.id;
+    responseOpen = false;
+    linkOpen = false;
+    renderAll();
+    showToast("Argument added. Edit its fields in the inspector.");
+  }
+
+  function createLink() {
+    const node = byId(selectedId);
+    const targetId = document.getElementById("link-target")?.value;
+    const type = document.getElementById("link-type")?.value ?? "support";
+    if (!node || !targetId || targetId === node.id) return;
+    if (draft.edges.some((edge) => edge.from === node.id && edge.to === targetId)) {
+      showToast("That relation already exists.");
+      return;
+    }
+    checkpoint();
+    draft.edges.push({ id: nextId("e", draft.edges), from: node.id, to: targetId, type });
+    linkOpen = false;
+    renderAll();
+    showToast("Relation added.");
+  }
+
+  function removeNode() {
+    const node = byId(selectedId);
+    if (!node || node.id === "thesis") return;
+    checkpoint();
+    draft.nodes = draft.nodes.filter((candidate) => candidate.id !== node.id);
+    draft.edges = draft.edges.filter((edge) => edge.from !== node.id && edge.to !== node.id);
+    selectedId = "thesis";
+    renderAll();
+    showToast("Argument removed. Undo is available.");
+  }
+
+  function removeEdge(edgeId) {
+    checkpoint();
+    draft.edges = draft.edges.filter((edge) => edge.id !== edgeId);
+    renderAll();
+    showToast("Relation removed. Undo is available.");
+  }
+
+  function changeEdgeType(edgeId, type) {
+    const edge = draft.edges.find((candidate) => candidate.id === edgeId);
+    if (!edge || edge.type === type) return;
+    checkpoint();
+    edge.type = type;
+    renderMap();
+    renderInspector();
+    showToast("Relation type changed.");
+  }
+
+  nodeLayer.addEventListener("click", (event) => {
+    const card = event.target.closest("[data-node-id]");
+    if (!card) return;
+    selectedId = card.dataset.nodeId;
+    responseOpen = false;
+    linkOpen = false;
+    renderAll();
+  });
+
+  inspector.addEventListener("focusin", (event) => {
+    if (event.target.matches("[data-field]")) fieldCheckpoint = true;
+  });
+
+  inspector.addEventListener("input", (event) => {
+    const field = event.target.dataset.field;
+    if (!field) return;
+    if (fieldCheckpoint) {
+      checkpoint();
+      fieldCheckpoint = false;
+    }
+    updateField(field, event.target.value);
+  });
+
+  inspector.addEventListener("change", (event) => {
+    const edgeId = event.target.dataset.edgeType;
+    if (edgeId) {
+      changeEdgeType(edgeId, event.target.value);
+      return;
+    }
+    const field = event.target.dataset.field;
+    if (!field) return;
+    checkpoint();
+    updateField(field, event.target.value);
+    if (field === "stance") {
+      renderAll();
+      showToast("Stance changed; the card moved to its new side.");
+    }
+  });
+
+  inspector.addEventListener("click", (event) => {
+    const edgeId = event.target.closest("[data-remove-edge]")?.dataset.removeEdge;
+    if (edgeId) {
+      removeEdge(edgeId);
+      return;
+    }
+    const action = event.target.closest("[data-action]")?.dataset.action;
+    if (!action) return;
+    if (action === "add-response") {
+      responseOpen = true;
+      linkOpen = false;
+      renderInspector();
+    } else if (action === "close-response") {
+      responseOpen = false;
+      renderInspector();
+    } else if (action === "create-response") {
+      createResponse();
+    } else if (action === "add-link") {
+      linkOpen = true;
+      responseOpen = false;
+      renderInspector();
+    } else if (action === "close-link") {
+      linkOpen = false;
+      renderInspector();
+    } else if (action === "create-link") {
+      createLink();
+    } else if (action === "remove-node") {
+      removeNode();
+    }
+  });
+
+  document.getElementById("edit-map-btn").addEventListener("click", enterEdit);
+  document.getElementById("done-btn").addEventListener("click", commitEdit);
+  document.getElementById("cancel-btn").addEventListener("click", cancelEdit);
+  undoBtn.addEventListener("click", undo);
+  redoBtn.addEventListener("click", redo);
+
+  document.getElementById("zoom-in").addEventListener("click", () => {
+    zoom = Math.min(1.2, zoom + 0.1);
+    renderMap();
+    renderHeader();
+  });
+  document.getElementById("zoom-out").addEventListener("click", () => {
+    zoom = Math.max(0.7, zoom - 0.1);
+    renderMap();
+    renderHeader();
+  });
+  document.getElementById("fit-btn").addEventListener("click", () => {
+    zoom = 1;
+    mapScroll.scrollTo({ left: 0, top: 0, behavior: "smooth" });
+    renderMap();
+    renderHeader();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    const target = event.target;
+    if (target instanceof HTMLElement && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
+    if (!editing) return;
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+      event.preventDefault();
+      if (event.shiftKey) redo();
+      else undo();
+    } else if (event.key === "Delete" || event.key === "Backspace") {
+      if (byId(selectedId)?.id !== "thesis") {
+        event.preventDefault();
+        removeNode();
+      }
+    }
+  });
+
+  document.querySelectorAll(".debate-card").forEach((card) => {
+    if (card.classList.contains("is-active")) return;
+    card.addEventListener("click", () => showToast("Only the transit debate is modeled in this prototype."));
+  });
+  document.getElementById("library-plus").addEventListener("click", () => showToast("Creating debates is outside this editing prototype."));
+
+  renderAll();
+</script>
+</body>
+</html>

@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { Debate } from "../core/model";
 import type { JudgmentRun } from "../core/judgment";
 import type { JudgeProgressEvent } from "../shared/judge-progress";
-import { ApiError, judgeDebateStream } from "./api";
+import { ApiError, judgeDebateStream, saveDebate } from "./api";
 
 function ndjsonResponse(chunks: string[]): Response {
   const encoder = new TextEncoder();
@@ -19,6 +20,38 @@ function ndjsonResponse(chunks: string[]): Response {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe("saveDebate", () => {
+  it("sends only the editable graph fields as a PATCH", async () => {
+    const debate = {
+      id: "debate-1",
+      motion: "A motion",
+      thesisText: "A thesis",
+      nodes: [{ id: "thesis", kind: "statement", title: "A motion", text: "A thesis", stance: "neutral", speaker: "you", tags: [] }],
+      edges: []
+    } as unknown as Debate;
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ debate }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await saveDebate("debate-1", debate);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/debates/debate-1");
+    expect(options.method).toBe("PATCH");
+    expect(JSON.parse(String(options.body))).toEqual({
+      motion: "A motion",
+      thesisText: "A thesis",
+      nodes: debate.nodes,
+      edges: []
+    });
+  });
 });
 
 describe("judgeDebateStream", () => {

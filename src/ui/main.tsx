@@ -6,6 +6,7 @@ import "./styles.css";
 import "./dark.css";
 import "./aurora.css";
 import "./light.css";
+import "./editor.css";
 
 initTheme();
 

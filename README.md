@@ -125,6 +125,20 @@ The map is a pan/zoom argument graph. The thesis sits in the centre.
 - Dense maps open as a complete overview; small maps open at a readable scale. Drag to pan, scroll to zoom, and use **Fit** to recover the whole shape.
 - The static map refits when the window changes size. After a manual pan or zoom it preserves your view until you press **Fit**.
 - Select a card for the inspector: full text, premises, conclusion, and relations.
+- **Edit map** opens a separate draft editor. Read mode has no per-card action buttons.
+
+### Editing the map
+
+`Edit map` changes the map from a reading surface into a draft. Nothing is written until **Done**; **Cancel** restores the saved map. The motion is edit-only: it is the root claim, so it cannot be added or removed.
+
+- Every argument exposes kind (argument or statement), title, text, premises, conclusion, and tags. The motion exposes the same content fields.
+- **Side** and **speaker** are derived from the graph, not separate fields. Change the relation that places an argument to change its side; the editor shows the result before you save.
+- **Add response** creates an argument and its relation in one step. **Link existing** attaches the selected argument to another card or the motion. Relation types can be changed between support, attack, and undercut, and relations can be removed.
+- **Remove argument** removes the card and its incident relations. The editor refuses to remove the motion, to strand a response whose only path is through a removed argument, or to remove the only relation that keeps a card connected.
+- Links that would create a loop are refused.
+- `Undo` / `Redo` stay inside the draft; `Ctrl+Z` / `Ctrl+Shift+Z` and `Delete` work when focus is not in a form field. `Esc` cancels an unfocused draft.
+
+Edits are saved through the same atomic debate-store path as the rest of the app and preserve the debate's chat, origin, and metadata.
 
 ### The chamber
 
@@ -253,6 +267,7 @@ src/
     layout.ts           deterministic case/thread graph layouts
     stage.ts            seeded branch-walk staging + speaker narration
     judgment.ts         pure link assessments, grounded propagation, deterministic solver, summary, Markdown report
+    edit.ts             pure draft graph editing: content, responses, relations, connectivity guards
     demo.ts             two hand-authored reference debates
   server/
     index.ts            Express entry, Vite middleware in dev, static dist in prod
@@ -274,12 +289,13 @@ src/
     thinking.ts         thinking capability and provider wire mappings
     judge-progress.ts   shared judge progress events, concurrency, and ETA estimate
   ui/
-    App.tsx             workspace, library, chamber, stage controller, judgment controller
-    components/         DebateGraph, ChatPanel, StagePanel, NodeInspector, JudgmentModal, JudgmentPanel, Modals
+    App.tsx             workspace, library, chamber, stage controller, judgment controller, draft editor state
+    components/         DebateGraph, ChatPanel, StagePanel, NodeInspector, MapEditor, JudgmentModal, JudgmentPanel, Modals
     styles.css          editorial paper / library ink / shared stage
     dark.css            Night Reading Room — warm dark palette
     aurora.css          Aurora — cool low-light palette
     light.css           Editorial paper — daylight stage
+    editor.css          map editor panel and draft controls
 ```
 
 The domain layer is shared by server and browser. The graph layout and staging algorithm are deterministic given a seed, so the same map stages identically in a test and in the browser.
@@ -294,6 +310,7 @@ The theme is applied before paint by `public/theme-init.js`. Production builds s
 | `GET` | `/api/debates` | library summaries; includes warnings for unreadable files |
 | `POST` | `/api/debates` | author from `{ text }` |
 | `GET` | `/api/debates/:id` | full debate |
+| `PATCH` | `/api/debates/:id` | save an edited graph from `{ motion, thesisText, nodes, edges }`; rejects a missing motion, stranded nodes, or relations between nodes that are not in the map |
 | `DELETE` | `/api/debates/:id` | remove |
 | `GET` | `/api/debates/:id/argdown` | download source |
 | `POST` | `/api/debates/:id/chat` | answer a question about the map from `{ text }`; no map edits |

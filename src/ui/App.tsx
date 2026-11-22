@@ -13,6 +13,17 @@ import {
   type JudgmentRun
 } from "../core/judgment";
 import {
+  addEdge,
+  addResponse,
+  changeEdgeType,
+  removeEdge,
+  removeNode,
+  updateMotion,
+  updateNode,
+  type MotionEditPatch,
+  type NodeEditPatch
+} from "../core/edit";
+import {
   createDebate,
   deleteDebate,
   fetchDebate,
@@ -20,6 +31,7 @@ import {
   fetchSettings,
   importArgdown,
   judgeDebateStream,
+  saveDebate,
   sendChat,
   type JudgeStreamOptions,
   type UiSettings
@@ -29,6 +41,7 @@ import type { GraphHandle, GraphJudgment, GraphStage } from "./components/Debate
 import { ChatPanel } from "./components/ChatPanel";
 import { StagePanel } from "./components/StagePanel";
 import { NodeInspector } from "./components/NodeInspector";
+import { MapEditor } from "./components/MapEditor";
 import { JudgmentPanel } from "./components/JudgmentPanel";
 import { JudgmentModal, type JudgeRunInput } from "./components/JudgmentModal";
 import { ConfirmModal, ExportModal, ImportModal, NewDebateModal, SettingsModal } from "./components/Modals";
@@ -75,6 +88,11 @@ function speechSafetyDelay(text: string, rate: number): number {
 
 const ACTIVE_KEY = "agora.active";
 
+/** The draft is isolated from the saved map, including nested node arrays. */
+function copyDebate(debate: Debate): Debate {
+  return structuredClone(debate);
+}
+
 function timeAgo(timestamp: number): string {
   const seconds = Math.max(1, Math.floor((Date.now() - timestamp) / 1000));
   if (seconds < 60) return "just now";
@@ -109,8 +127,15 @@ export default function App() {
   const [restored, setRestored] = useState<string[]>([]);
   const [revealedEffects, setRevealedEffects] = useState<string[]>([]);
   const [focusMap, setFocusMap] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editDraft, setEditDraft] = useState<Debate | null>(null);
+  const [editHistory, setEditHistory] = useState<Debate[]>([]);
+  const [editFuture, setEditFuture] = useState<Debate[]>([]);
+  const [editBusy, setEditBusy] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   const graphRef = useRef<GraphHandle | null>(null);
   const toastTimer = useRef<number | null>(null);
+  const fieldCheckpoint = useRef(false);
 
   const showToast = useCallback((text: string, tone: "ok" | "warn" | "error" = "ok") => {
     if (toastTimer.current) window.clearTimeout(toastTimer.current);
@@ -138,6 +163,12 @@ export default function App() {
       setStage(null);
       setJudgment(null);
       setRestored([]);
+      setEditing(false);
+      setEditDraft(null);
+      setEditHistory([]);
+      setEditFuture([]);
+      setEditError(null);
+      fieldCheckpoint.current = false;
       localStorage.setItem(ACTIVE_KEY, id);
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Could not open that debate.", "error");
@@ -195,9 +226,13 @@ export default function App() {
     }
   }, [focusMap]);
 
+  const displayedDebate = editing ? editDraft : debate;
+
   const selectedNode = useMemo(
-    () => (debate && selectedId ? debate.nodes.find((node) => node.id === selectedId) ?? null : null),
-    [debate, selectedId]
+    () => (displayedDebate && selectedId
+      ? displayedDebate.nodes.find((node) => node.id === selectedId) ?? null
+      : null),
+    [displayedDebate, selectedId]
   );
 
   const judgmentRecord = useMemo(
@@ -343,13 +378,13 @@ export default function App() {
   }, [judgment, judgmentSnapshot, priorJudgmentSnapshot, revealedEffects, effectRevealed, judgmentComplete, appliedVerdicts, restored, currentEntry, currentSupportId, conflictStep]);
 
   const openStage = useCallback(() => {
-    if (!debate) return;
+    if (!debate || editing) return;
     const transcript = stageDebate(debate, randomSeed());
     setJudgment(null);
     setRestored([]);
     setSelectedId(null);
     setStage({ transcript, index: 0, playing: true, speed: 1, voice: false });
-  }, [debate]);
+  }, [debate, editing]);
 
   const closeStage = useCallback(() => {
     if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
@@ -384,12 +419,12 @@ export default function App() {
   }, []);
 
   const openJudgmentSetup = useCallback(() => {
-    if (!debate) return;
+    if (!debate || editing) return;
     if (stage) closeStage();
     setFocusMap(false);
     setSelectedId(null);
     setModal("judge");
-  }, [debate, stage, closeStage]);
+  }, [debate, editing, stage, closeStage]);
 
   const conveneJudgment = useCallback(async (input: JudgeRunInput, options: JudgeStreamOptions = {}) => {
     if (!debate) throw new Error("Open a debate before convening the bench.");
@@ -415,6 +450,207 @@ export default function App() {
     setRevealedEffects([]);
     setSelectedId(null);
   }, []);
+
+  const rememberDraft = useCallback(() => {
+    if (!editDraft) return;
+    setEditHistory((history) => [...history, copyDebate(editDraft)].slice(-40));
+    setEditFuture([]);
+  }, [editDraft]);
+
+  const checkpointField = useCallback(() => {
+    if (!fieldCheckpoint.current) return;
+    fieldCheckpoint.current = false;
+    rememberDraft();
+  }, [rememberDraft]);
+
+  const beginEditing = useCallback(() => {
+    if (!debate || chatBusy || stage || judgment) return;
+    setFocusMap(false);
+    setEditDraft(copyDebate(debate));
+    setEditHistory([]);
+    setEditFuture([]);
+    setEditError(null);
+    setEditBusy(false);
+    setSelectedId(debate.thesisId);
+    fieldCheckpoint.current = false;
+    setEditing(true);
+  }, [debate, chatBusy, stage, judgment]);
+
+  const markFieldFocus = useCallback(() => {
+    fieldCheckpoint.current = true;
+  }, []);
+
+  const changeDraftNode = useCallback((id: string, patch: NodeEditPatch) => {
+    if (!editDraft) return;
+    const next = updateNode(editDraft, id, patch);
+    if (next === editDraft) return;
+    checkpointField();
+    setEditError(null);
+    setEditDraft(next);
+  }, [editDraft, checkpointField]);
+
+  const changeDraftMotion = useCallback((patch: MotionEditPatch) => {
+    if (!editDraft) return;
+    const next = updateMotion(editDraft, patch);
+    if (next === editDraft) return;
+    checkpointField();
+    setEditError(null);
+    setEditDraft(next);
+  }, [editDraft, checkpointField]);
+
+  const addDraftResponse = useCallback((targetId: string, type: "support" | "attack" | "undercut", title: string) => {
+    if (!editDraft) return;
+    try {
+      const result = addResponse(editDraft, targetId, type, title);
+      rememberDraft();
+      setEditError(null);
+      setEditDraft(result.debate);
+      setSelectedId(result.nodeId);
+    } catch (error) {
+      setEditError(error instanceof Error ? error.message : "Could not add that response.");
+    }
+  }, [editDraft, rememberDraft]);
+
+  const addDraftEdge = useCallback((from: string, to: string, type: "support" | "attack" | "undercut") => {
+    if (!editDraft) return false;
+    const result = addEdge(editDraft, from, to, type);
+    if (!result.ok) {
+      setEditError(result.error ?? "Could not add that relation.");
+      return false;
+    }
+    rememberDraft();
+    setEditError(null);
+    setEditDraft(result.debate);
+    return true;
+  }, [editDraft, rememberDraft]);
+
+  const changeDraftEdgeType = useCallback((edgeId: string, type: "support" | "attack" | "undercut") => {
+    if (!editDraft) return;
+    const next = changeEdgeType(editDraft, edgeId, type);
+    if (next === editDraft) return;
+    rememberDraft();
+    setEditError(null);
+    setEditDraft(next);
+  }, [editDraft, rememberDraft]);
+
+  const removeDraftEdge = useCallback((edgeId: string) => {
+    if (!editDraft) return;
+    const result = removeEdge(editDraft, edgeId);
+    if (!result.ok) {
+      setEditError(result.error ?? "Could not remove that relation.");
+      return;
+    }
+    rememberDraft();
+    setEditError(null);
+    setEditDraft(result.debate);
+  }, [editDraft, rememberDraft]);
+
+  const removeDraftNode = useCallback((nodeId: string) => {
+    if (!editDraft) return;
+    const result = removeNode(editDraft, nodeId);
+    if (!result.ok) {
+      setEditError(result.error ?? "Could not remove that argument.");
+      return;
+    }
+    rememberDraft();
+    setEditError(null);
+    setEditDraft(result.debate);
+    if (selectedId === nodeId) setSelectedId(editDraft.thesisId);
+  }, [editDraft, rememberDraft, selectedId]);
+
+  const undoDraft = useCallback(() => {
+    if (!editDraft || editHistory.length === 0) return;
+    const previous = editHistory[editHistory.length - 1]!;
+    setEditFuture((future) => [copyDebate(editDraft), ...future].slice(0, 40));
+    setEditHistory((history) => history.slice(0, -1));
+    setEditDraft(copyDebate(previous));
+    if (!previous.nodes.some((node) => node.id === selectedId)) setSelectedId(previous.thesisId);
+    setEditError(null);
+    fieldCheckpoint.current = false;
+  }, [editDraft, editHistory, selectedId]);
+
+  const redoDraft = useCallback(() => {
+    if (!editDraft || editFuture.length === 0) return;
+    const next = editFuture[0]!;
+    setEditHistory((history) => [...history, copyDebate(editDraft)].slice(-40));
+    setEditFuture((future) => future.slice(1));
+    setEditDraft(copyDebate(next));
+    if (!next.nodes.some((node) => node.id === selectedId)) setSelectedId(next.thesisId);
+    setEditError(null);
+    fieldCheckpoint.current = false;
+  }, [editDraft, editFuture, selectedId]);
+
+  const cancelEditing = useCallback(() => {
+    if (editBusy) return;
+    setEditing(false);
+    setEditDraft(null);
+    setEditHistory([]);
+    setEditFuture([]);
+    setEditError(null);
+    setSelectedId(null);
+    fieldCheckpoint.current = false;
+  }, [editBusy]);
+
+  const finishEditing = useCallback(async () => {
+    if (!debate || !editDraft || editBusy) return;
+    setEditBusy(true);
+    setEditError(null);
+    try {
+      const result = await saveDebate(debate.id, editDraft);
+      setDebate(result.debate);
+      setEditing(false);
+      setEditDraft(null);
+      setEditHistory([]);
+      setEditFuture([]);
+      setSelectedId(null);
+      fieldCheckpoint.current = false;
+      await refreshSummaries();
+      showToast("Map saved.");
+    } catch (error) {
+      const text = error instanceof Error ? error.message : "Could not save the map.";
+      setEditError(text);
+      showToast(text, "error");
+    } finally {
+      setEditBusy(false);
+    }
+  }, [debate, editDraft, editBusy, refreshSummaries, showToast]);
+
+  useEffect(() => {
+    if (!editing || modal) return;
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
+      const modifier = event.ctrlKey || event.metaKey;
+      if (modifier && event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        if (event.shiftKey) redoDraft();
+        else undoDraft();
+      } else if (modifier && event.key.toLowerCase() === "y") {
+        event.preventDefault();
+        redoDraft();
+      } else if (event.key === "Delete" && selectedId && selectedId !== editDraft?.thesisId) {
+        const control = target?.closest("button, a, input, textarea, select, [contenteditable='true']");
+        if (control && !control.closest(".graph-node")) return;
+        event.preventDefault();
+        removeDraftNode(selectedId);
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        cancelEditing();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [editing, modal, selectedId, editDraft?.thesisId, undoDraft, redoDraft, removeDraftNode, cancelEditing]);
+
+  useEffect(() => {
+    if (!editing) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [editing]);
 
   const toggleJudgmentPlay = useCallback(() => {
     if (judgment?.finished) {
@@ -714,6 +950,10 @@ export default function App() {
     setSelectedId(null);
     setJudgment(null);
     setRestored([]);
+    setEditing(false);
+    setEditDraft(null);
+    setEditHistory([]);
+    setEditFuture([]);
     localStorage.setItem(ACTIVE_KEY, result.debate.id);
     await refreshSummaries();
     if (result.warning) {
@@ -732,6 +972,10 @@ export default function App() {
     setSelectedId(null);
     setJudgment(null);
     setRestored([]);
+    setEditing(false);
+    setEditDraft(null);
+    setEditHistory([]);
+    setEditFuture([]);
     localStorage.setItem(ACTIVE_KEY, result.debate.id);
     await refreshSummaries();
     showToast(result.warnings[0] ?? "Argdown imported.", result.warnings.length ? "warn" : "ok");
@@ -740,7 +984,7 @@ export default function App() {
 
   const handleSend = useCallback(async () => {
     const text = draft.trim();
-    if (!text || !debate || chatBusy) return;
+    if (!text || !debate || chatBusy || editing) return;
     setDraft("");
     setChatBusy(true);
     setDebate((current) => current ? { ...current, chat: [...current.chat, message("user", text)] } : current);
@@ -757,10 +1001,10 @@ export default function App() {
     } finally {
       setChatBusy(false);
     }
-  }, [draft, debate, chatBusy, refreshSummaries, showToast]);
+  }, [draft, debate, chatBusy, editing, refreshSummaries, showToast]);
 
   const handleDelete = useCallback(async () => {
-    if (!deleteTarget) return;
+    if (!deleteTarget || editing) return;
     const target = deleteTarget;
     try {
       await deleteDebate(target.id);
@@ -780,7 +1024,7 @@ export default function App() {
       }
     }
     showToast("Debate removed.");
-  }, [deleteTarget, summaries, activeId, loadDebate, showToast]);
+  }, [deleteTarget, summaries, activeId, editing, loadDebate, showToast]);
 
   if (initializing) {
     return (
@@ -793,15 +1037,16 @@ export default function App() {
     );
   }
 
-  const counts = debate
+  const shownDebate = displayedDebate ?? debate;
+  const counts = shownDebate
     ? {
-        pro: debate.nodes.filter((node) => node.stance === "pro").length,
-        con: debate.nodes.filter((node) => node.stance === "con").length
+        pro: shownDebate.nodes.filter((node) => node.stance === "pro").length,
+        con: shownDebate.nodes.filter((node) => node.stance === "con").length
       }
     : { pro: 0, con: 0 };
 
   return (
-    <div className={`app ${stage ? "has-stage" : ""} ${focusMap ? "focus-map" : ""} ${judgment ? "is-judging" : ""}`}>
+    <div className={`app ${stage ? "has-stage" : ""} ${focusMap ? "focus-map" : ""} ${judgment ? "is-judging" : ""} ${editing ? "is-editing" : ""}`}>
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">
@@ -818,11 +1063,13 @@ export default function App() {
         <div className="topbar-center">
           <span className="topbar-rule" />
           <p>
-            {judgment
-              ? judgmentComplete
-                ? "The record is closed. The reasons remain."
-                : "The bench is in session. Follow the reasoning."
-              : "Every argument has a shape. Find it, then argue with it."}
+            {editing
+              ? "The map is in your hands. Finish the draft when it holds."
+              : judgment
+                ? judgmentComplete
+                  ? "The record is closed. The reasons remain."
+                  : "The bench is in session. Follow the reasoning."
+                : "Every argument has a shape. Find it, then argue with it."}
           </p>
           <span className="topbar-rule" />
         </div>
@@ -832,8 +1079,8 @@ export default function App() {
             type="button"
             className="btn btn--quiet btn--focus"
             onClick={() => setFocusMap((value) => !value)}
-            disabled={Boolean(judgment)}
-            title={judgment ? "Exit judgment to change the room" : focusMap ? "Show library and chamber" : "Give the map the whole room"}
+            disabled={Boolean(judgment) || editing}
+            title={editing ? "Finish or cancel the draft before changing the room" : judgment ? "Exit judgment to change the room" : focusMap ? "Show library and chamber" : "Give the map the whole room"}
           >
             {focusMap ? (
               <svg viewBox="0 0 18 18" width="15" height="15" aria-hidden="true"><path d="M7 2H2v5M11 16h5v-5M16 7V2h-5M2 11v5h5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -842,11 +1089,11 @@ export default function App() {
             )}
             {focusMap ? "Exit focus" : "Focus"}
           </button>
-          <button type="button" className="btn btn--quiet" onClick={() => setModal("import")} disabled={Boolean(judgment)} title="Import Argdown">
+          <button type="button" className="btn btn--quiet" onClick={() => setModal("import")} disabled={Boolean(judgment) || editing} title={editing ? "Finish the draft before importing" : "Import Argdown"}>
             <svg viewBox="0 0 18 18" width="15" height="15" aria-hidden="true"><path d="M9 2v9M5.5 7.5 9 11l3.5-3.5M3 13.5V16h12v-2.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
             Import
           </button>
-          <button type="button" className="btn btn--quiet" onClick={() => debate && setModal("export")} disabled={!debate} title="Export Argdown">
+          <button type="button" className="btn btn--quiet" onClick={() => debate && setModal("export")} disabled={!debate || editing} title={editing ? "Finish the draft before exporting" : "Export Argdown"}>
             <svg viewBox="0 0 18 18" width="15" height="15" aria-hidden="true"><path d="M9 11V2M5.5 5.5 9 2l3.5 3.5M3 13.5V16h12v-2.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
             Export
           </button>
@@ -854,15 +1101,15 @@ export default function App() {
             type="button"
             className={`btn btn--judge ${judgment ? "is-active" : ""}`}
             onClick={openJudgmentSetup}
-            disabled={!debate || Boolean(judgment)}
-            title={judgment ? "The bench is in session" : "Convene a judgment on this map"}
+            disabled={!debate || Boolean(judgment) || editing}
+            title={editing ? "Finish the draft before convening a judgment" : judgment ? "The bench is in session" : "Convene a judgment on this map"}
           >
             <svg viewBox="0 0 18 18" width="15" height="15" aria-hidden="true">
               <path d="M9 2v13M5 15h8M4 5h10M4 5 2 10h4L4 5zm10 0-2 5h4l-2-5z" fill="none" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             {judgment ? "Judging" : "Judge"}
           </button>
-          <button type="button" className="btn btn--stage" onClick={openStage} disabled={!debate || Boolean(judgment)}>
+          <button type="button" className="btn btn--stage" onClick={openStage} disabled={!debate || Boolean(judgment) || editing} title={editing ? "Finish the draft before staging" : undefined}>
             <svg viewBox="0 0 18 18" width="14" height="14" aria-hidden="true"><path d="M5 3.5 14 9l-9 5.5z" fill="currentColor"/></svg>
             Stage debate
           </button>
@@ -879,7 +1126,7 @@ export default function App() {
               <div className="eyebrow">The library</div>
               <h2>{summaries.length} {summaries.length === 1 ? "debate" : "debates"}</h2>
             </div>
-            <button type="button" className="library-new" onClick={() => setModal("new")} aria-label="New debate" title="New debate">+</button>
+            <button type="button" className="library-new" onClick={() => setModal("new")} aria-label="New debate" title="New debate" disabled={editing}>+</button>
           </div>
 
           <div className="library-list">
@@ -889,6 +1136,7 @@ export default function App() {
                   type="button"
                   className="library-card-main"
                   onClick={() => item.id !== activeId && loadDebate(item.id)}
+                  disabled={editing}
                 >
                   <span className="library-card-motion">{item.motion}</span>
                   <span className="library-card-thesis">{item.thesisText}</span>
@@ -904,13 +1152,14 @@ export default function App() {
                   onClick={() => setDeleteTarget(item)}
                   aria-label={`Delete ${item.motion}`}
                   title="Delete debate"
+                  disabled={editing}
                 >×</button>
               </div>
             ))}
             {summaries.length === 0 && (
               <div className="library-empty">
                 <p>No motions on the floor.</p>
-                <button type="button" className="text-link" onClick={() => setModal("new")}>Convene the first debate</button>
+                <button type="button" className="text-link" onClick={() => setModal("new")} disabled={editing}>Convene the first debate</button>
               </div>
             )}
           </div>
@@ -927,8 +1176,8 @@ export default function App() {
         <main className={`canvas ${loadingDebate ? "is-loading" : ""}`}>
           <div className="canvas-head">
             <div className="canvas-head-row">
-              <div className="eyebrow">{judgment ? "Judgment · the bench" : "Argument map"}</div>
-              {debate && (
+              <div className="eyebrow">{judgment ? "Judgment · the bench" : editing ? "Argument map · editing draft" : "Argument map"}</div>
+              {displayedDebate && (
                 judgment && judgmentSnapshot ? (
                   <div className="canvas-stats canvas-stats--judgment">
                     {conflictStep > 0 || judgmentComplete ? (
@@ -946,40 +1195,45 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="canvas-stats">
-                    <span><b>{debate.nodes.length}</b> nodes</span>
-                    <span><b>{debate.edges.length}</b> relations</span>
+                    <span><b>{displayedDebate.nodes.length}</b> nodes</span>
+                    <span><b>{displayedDebate.edges.length}</b> relations</span>
                     <span className="canvas-split"><i className="score-dot score-dot--pro" />{counts.pro} <i className="score-dot score-dot--con" />{counts.con}</span>
-                    <span className={`origin-tag origin-tag--${debate.origin}`}>
-                      {debate.origin === "imported" ? "Imported" : debate.origin === "seed" ? "Reference map" : "Authored"}
+                    <span className={`origin-tag origin-tag--${displayedDebate.origin}`}>
+                      {editing
+                        ? "Draft"
+                        : displayedDebate.origin === "imported" ? "Imported" : displayedDebate.origin === "seed" ? "Reference map" : "Authored"}
                     </span>
                   </div>
                 )
               )}
             </div>
             <div className="canvas-heading">
-              {debate ? (
-                <h1 className="canvas-motion">{debate.motion}</h1>
+              {displayedDebate ? (
+                <h1 className="canvas-motion">{displayedDebate.motion}</h1>
               ) : (
                 <h1 className="canvas-motion">No motion on the floor</h1>
               )}
-              {debate && <p className="canvas-sub">{debate.thesisText}</p>}
+              {displayedDebate && <p className="canvas-sub">{displayedDebate.thesisText}</p>}
             </div>
           </div>
 
           <div className="canvas-body">
-            {debate ? (
+            {displayedDebate ? (
               <>
                 <DebateGraph
                   ref={graphRef}
-                  debate={debate}
+                  debate={displayedDebate}
                   selectedId={selectedId}
                   onSelect={setSelectedId}
                   stage={stageGraph}
                   judgment={judgmentGraph}
+                  editing={editing}
+                  canEdit={!chatBusy}
+                  onBeginEdit={beginEditing}
                 />
-                {selectedNode && (
+                {!editing && selectedNode && (
                   <NodeInspector
-                    debate={debate}
+                    debate={displayedDebate}
                     node={selectedNode}
                     onClose={() => setSelectedId(null)}
                   />
@@ -999,7 +1253,28 @@ export default function App() {
           </div>
         </main>
 
-        {judgment && debate && judgmentSnapshot ? (
+        {editing && editDraft ? (
+          <MapEditor
+            debate={editDraft}
+            selectedId={selectedId ?? editDraft.thesisId}
+            busy={editBusy}
+            error={editError}
+            canUndo={editHistory.length > 0}
+            canRedo={editFuture.length > 0}
+            onChangeNode={changeDraftNode}
+            onChangeMotion={changeDraftMotion}
+            onAddResponse={addDraftResponse}
+            onAddEdge={addDraftEdge}
+            onChangeEdgeType={changeDraftEdgeType}
+            onRemoveEdge={removeDraftEdge}
+            onRemoveNode={removeDraftNode}
+            onFieldFocus={markFieldFocus}
+            onDone={() => void finishEditing()}
+            onCancel={cancelEditing}
+            onUndo={undoDraft}
+            onRedo={redoDraft}
+          />
+        ) : judgment && debate && judgmentSnapshot ? (
           <JudgmentPanel
             debate={debate}
             run={judgment.run}
@@ -1038,7 +1313,7 @@ export default function App() {
         )}
       </div>
 
-      {stage && debate && (
+      {stage && debate && !editing && (
         <StagePanel
           transcript={stage.transcript}
           motion={debate.motion}

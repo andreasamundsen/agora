@@ -4,6 +4,7 @@ import { askDebate, authorDebate } from "./llm";
 import { judgeDebate, JudgeCancelledError, MAX_LINKS } from "./judge";
 import { ArgdownImportError, importArgdown } from "./argdown-import";
 import { toArgdown } from "../core/argdown";
+import { isConnected } from "../core/edit";
 import { message } from "../core/model";
 import { getSettings, isReady, isReasoningEffort, publicSettings, saveSettings, SettingsError } from "./settings";
 import { providerUrlProblem } from "../shared/provider-url";
@@ -94,6 +95,56 @@ export function createApi(store: DebateStore): Router {
       const saved = await store.save({ ...withUser, chat, updatedAt: Date.now() });
       if (result.warning) warnings.add(result.warning);
       res.json({ debate: saved, engine: result.engine, warning: warnings.size ? [...warnings].join(" ") : undefined });
+    } catch (error) {
+      if (error instanceof DebateReadError) return unreadableDebate(res);
+      next(error);
+    }
+  });
+
+  api.patch("/debates/:id", async (req, res, next) => {
+    try {
+      const body = req.body ?? {};
+      if (!Array.isArray(body.nodes) || !Array.isArray(body.edges) || !body.nodes.length) {
+        return res.status(400).json({ error: "An edited map needs a node list and a relation list." });
+      }
+      if (body.nodes.length > 42) {
+        return res.status(400).json({ error: "The map is limited to 42 arguments." });
+      }
+      if (body.nodes.some((node: unknown) => !node || typeof node !== "object" || Array.isArray(node))) {
+        return res.status(400).json({ error: "Every node in the edit must be an object." });
+      }
+      if (body.edges.some((edge: unknown) => !edge || typeof edge !== "object" || Array.isArray(edge))) {
+        return res.status(400).json({ error: "Every relation in the edit must be an object." });
+      }
+      if (body.motion !== undefined && typeof body.motion !== "string") {
+        return res.status(400).json({ error: "The motion title must be text." });
+      }
+      if (body.thesisText !== undefined && typeof body.thesisText !== "string") {
+        return res.status(400).json({ error: "The motion text must be text." });
+      }
+
+      const existing = await store.get(req.params.id);
+      if (!existing) return res.status(404).json({ error: "Debate not found" });
+      if (!body.nodes.some((node: { id?: unknown }) => node?.id === existing.thesisId)) {
+        return res.status(400).json({ error: "The motion must remain in the edited map." });
+      }
+      const nodeIds = new Set(body.nodes.map((node: { id?: unknown }) => node?.id));
+      if (body.edges.some((edge: { from?: unknown; to?: unknown }) => !nodeIds.has(edge?.from) || !nodeIds.has(edge?.to))) {
+        return res.status(400).json({ error: "Every relation must connect two nodes in the edited map." });
+      }
+      if (!isConnected({ ...existing, nodes: body.nodes, edges: body.edges })) {
+        return res.status(400).json({ error: "Every argument must remain connected to the motion." });
+      }
+
+      const saved = await store.save({
+        ...existing,
+        motion: typeof body.motion === "string" ? body.motion : existing.motion,
+        thesisText: typeof body.thesisText === "string" ? body.thesisText : existing.thesisText,
+        nodes: body.nodes,
+        edges: body.edges,
+        updatedAt: Date.now()
+      });
+      res.json({ debate: saved });
     } catch (error) {
       if (error instanceof DebateReadError) return unreadableDebate(res);
       next(error);

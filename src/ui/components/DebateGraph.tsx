@@ -51,6 +51,9 @@ interface Props {
   onSelect: (id: string | null) => void;
   stage?: GraphStage;
   judgment?: GraphJudgment;
+  editing?: boolean;
+  canEdit?: boolean;
+  onBeginEdit?: () => void;
 }
 
 const EDGE_COLORS: Record<DebateEdge["type"], string> = {
@@ -84,7 +87,7 @@ function readGraphView(): LayoutMode {
 }
 
 export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
-  { debate, selectedId, onSelect, stage, judgment },
+  { debate, selectedId, onSelect, stage, judgment, editing, canEdit, onBeginEdit },
   ref
 ) {
   const [view, setView] = useState<LayoutMode>(readGraphView);
@@ -450,6 +453,21 @@ export const DebateGraph = forwardRef<GraphHandle, Props>(function DebateGraph(
             Thread
           </button>
         </div>
+        {onBeginEdit && !editing && !judgment?.active && !stage?.active && (
+          <>
+            <span className="control-sep" />
+            <button
+              type="button"
+              className="icon-btn icon-btn--wide graph-edit-btn"
+              onClick={onBeginEdit}
+              disabled={canEdit === false}
+              aria-label="Edit map"
+              title="Open the map editor"
+            >
+              Edit map
+            </button>
+          </>
+        )}
       </div>
 
       {!stage?.active && !judgment?.active && hiddenCount > 0 && (
