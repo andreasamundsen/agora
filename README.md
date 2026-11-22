@@ -18,11 +18,11 @@ Agora ships with three appearances. The gallery leads with **Aurora**, a glossy 
 
 ![The Agora workspace in the Aurora theme, showing the debate library, a case-view argument map, and the chamber](docs/screenshots/workspace-case-aurora.jpg)
 
-*The workspace in Aurora: cool paper, neon-ink highlights, and the argument map at the centre.*
+*The workspace in Aurora: glossy black chrome, spring-green support and watermelon attack cards, and the argument map at the centre.*
 
 ![A staged debate in the Aurora theme with the argument map behind the speaker and the spoken turn below](docs/screenshots/stage-debate-aurora.jpg)
 
-*The stage in Aurora: midnight light, a cool reading surface, and the same argument map following the turn.*
+*The stage in Aurora: black gloss, muted peach footlights, and the same argument map following the turn.*
 
 ![A thread-view argument map in the Aurora theme with replies attached to the claims they answer](docs/screenshots/map-thread-aurora.jpg)
 
