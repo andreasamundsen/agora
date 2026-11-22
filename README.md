@@ -66,8 +66,8 @@ Agora ships with three appearances. The gallery leads with **Aurora**, a cool lo
 
 Download from the [GitHub Releases](https://github.com/andreasamundsen/agora/releases) page:
 
-- `Agora-Setup-0.1.60.exe`
-- `Agora-Setup-0.1.60.exe.sha256`
+- `Agora-Setup-0.1.61.exe`
+- `Agora-Setup-0.1.61.exe.sha256`
 
 1. Back up `%APPDATA%\Agora\data` if you already have debates.
 2. Close Agora, then run the installer. It is per-user and does not require administrator rights.
@@ -75,7 +75,7 @@ Download from the [GitHub Releases](https://github.com/andreasamundsen/agora/rel
 4. Verify the download against the checksum from the same release:
 
    ```powershell
-   Get-FileHash .\Agora-Setup-0.1.60.exe -Algorithm SHA256
+   Get-FileHash .\Agora-Setup-0.1.61.exe -Algorithm SHA256
    ```
 
 A matching hash confirms the file has not changed; it is not a code signature. There is no auto-update, so a future beta is a manual download and install.

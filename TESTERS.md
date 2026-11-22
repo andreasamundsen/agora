@@ -4,11 +4,18 @@ Agora is a local debate harness. You install it like a normal Windows app; no No
 
 ## Install
 
-1. Download `Agora-Setup-0.1.60.exe` and its `.sha256` sidecar from the GitHub Releases page.
+1. Download `Agora-Setup-0.1.61.exe` and its `.sha256` sidecar from the GitHub Releases page.
 2. Windows will warn that the publisher is unknown. This build is intentionally unsigned: choose **More info → Run anyway**.
 3. The installer is per-user and does not need administrator rights. Agora opens when it finishes.
 4. To upgrade, close Agora first, then run the newer installer over it. Your debates stay in `%APPDATA%\Agora\data`.
 5. Verify the SHA-256 checksum against the value in the `.sha256` file from the same release. A matching hash is not a code signature; it only confirms the file has not changed.
+
+## What's new in 0.1.61
+
+- **The map is now editable.** **Edit map** opens a draft beside the graph. Change an argument’s kind, title, text, premises, conclusion, or tags; add a response; link an existing argument to another card or to the motion; retype or remove a relation; or remove a leaf argument.
+- **Nothing is written until Done.** Cancel restores the saved map, and Undo/Redo stay inside the draft. Read mode keeps its clean card view with no per-card action buttons.
+- **The editor protects the graph.** It refuses self-links, loops, removal of the motion, and removal of a card that would strand other responses. The map still works offline, exports and imports as Argdown, and preserves existing chat, origin, and judgment behaviour.
+- Existing debates and settings are unchanged. The motion is editable but cannot be added or removed.
 
 ## What's new in 0.1.60
 
@@ -212,6 +219,7 @@ Provider calls go directly from your machine to the provider you choose. When yo
 ## What to try
 
 - Open a demo debate and explore the argument map. Use **Case** and **Thread** at the bottom right: Thread attaches each reply to the argument it answers, and both views stay at a similar height. The map refits when you resize the window; after you pan or zoom manually, it keeps your view until you press **Fit**.
+- Press **Edit map** to try the draft editor: change a title, add a response, link an existing argument, and retype a relation. Use **Cancel** for experiments, then **Done** when you want to save one. Read mode returns with no per-card buttons.
 - Press **Judge**, choose a standard, and run a judgment. After the clashes, the bench weighs the surviving direct case lines. A contested case line carries half weight on either side; the selected burden is applied once, in the final threshold. A direct **defeats** ruling on the motion is not automatically final: the weighing pass must corroborate it as a **decisive** con line at the selected Strictness, and the attacker must be clean. Otherwise the ruling remains a live attack, the motion stays contested, and the weighted balance decides. The weighing pass can also prove a clean, strong direct support at the same Strictness bar; that makes the motion stand unless a corroborated direct defeat also exists, in which case the two decisive claims cancel and the motion is undecided. The judge now receives each target's own relation and a short path to the motion, so rulings on replies are grounded in what the target was answering. The standard sets the threshold, not a veto: a lopsided record decides, and the burden decides the close ones. A **falls** outcome can come from a corroborated direct strike on the motion or from a weighted con case that dominates. A surviving argument can also show a **weakened** condition beside its status when a ruling says the attack had real force but did not strike it. `Save judgment report` downloads the balance and the rulings.
 - Press **Stage Debate** to watch the exchange.
 - Use **Import** / **Export** to move a debate as Argdown.
