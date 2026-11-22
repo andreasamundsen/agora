@@ -248,3 +248,39 @@ html[data-theme="dark"] .record-row:hover { background: rgba(255, 240, 215, 0.05
 html[data-theme="dark"] .record-row.is-current { background: var(--gold-soft); }
 
 html[data-theme="dark"] .toast { background: #242019; border-color: var(--line-strong); color: var(--ink); }
+
+/* Night action controls: one muted parchment treatment for primary actions. */
+html[data-theme="dark"]:not([data-palette]) {
+  --night-action: #b6a58b;
+  --night-action-hover: #c6b59b;
+  --night-action-ink: #17130f;
+}
+html[data-theme="dark"]:not([data-palette]) .btn--stage,
+html[data-theme="dark"]:not([data-palette]) .btn--judge,
+html[data-theme="dark"]:not([data-palette]) .library-new,
+html[data-theme="dark"]:not([data-palette]) .stage-play-btn {
+  background: var(--night-action);
+  border-color: var(--night-action);
+  color: var(--night-action-ink);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.2);
+}
+html[data-theme="dark"]:not([data-palette]) .btn--stage svg,
+html[data-theme="dark"]:not([data-palette]) .btn--judge svg {
+  color: currentColor;
+}
+html[data-theme="dark"]:not([data-palette]) .btn--stage:hover,
+html[data-theme="dark"]:not([data-palette]) .btn--judge:hover:not(:disabled),
+html[data-theme="dark"]:not([data-palette]) .library-new:hover,
+html[data-theme="dark"]:not([data-palette]) .stage-play-btn:hover {
+  background: var(--night-action-hover);
+  border-color: var(--night-action-hover);
+  color: var(--night-action-ink);
+}
+html[data-theme="dark"]:not([data-palette]) .btn--judge.is-active {
+  background: var(--gold-soft);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+html[data-theme="dark"]:not([data-palette]) .btn--judge.is-active svg {
+  color: var(--gold);
+}
