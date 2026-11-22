@@ -18,45 +18,66 @@ function fetchStub(handler: (url: string, init?: RequestInit) => Promise<Respons
   return ((input: string | URL | Request, init?: RequestInit) => handler(String(input), init)) as typeof fetch;
 }
 
+function bodyOf(init?: RequestInit): Record<string, unknown> {
+  return JSON.parse(String(init?.body)) as Record<string, unknown>;
+}
+
 describe("provider test", () => {
-  it("uses the normalized models endpoint and sends auth", async () => {
+  it("sends a tiny completion to the exact selected model", async () => {
     let seenUrl = "";
     let seenAuth = "";
+    let seenBody: Record<string, unknown> = {};
     const result = await testProviderConnection(
       settings({ baseUrl: "https://api.openai.com/v1/chat/completions" }),
       fetchStub(async (url, init) => {
         seenUrl = url;
         seenAuth = String((init?.headers as Record<string, string> | undefined)?.Authorization ?? "");
-        return new Response(JSON.stringify({ data: [] }), { status: 200 });
+        seenBody = bodyOf(init);
+        return new Response(JSON.stringify({ choices: [{ message: { content: "ready" } }] }), { status: 200 });
       })
     );
 
     expect(result.ok).toBe(true);
-    expect(seenUrl).toBe("https://api.openai.com/v1/models");
+    expect(seenUrl).toBe("https://api.openai.com/v1/chat/completions");
     expect(seenAuth).toBe("Bearer test-key");
+    expect(seenBody).toEqual({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: "Reply with the single word: ready" }],
+      max_tokens: 64
+    });
   });
 
-  it("falls back to chat completions if models is unavailable", async () => {
-    const urls: string[] = [];
+  it("fails when the selected model cannot complete a request", async () => {
     const result = await testProviderConnection(
-      settings({ baseUrl: "https://api.example.com/v1" }),
-      fetchStub(async (url) => {
-        urls.push(url);
-        if (url.endsWith("/models")) return new Response("not found", { status: 404 });
+      settings({ baseUrl: "https://api.example.com/v1", model: "missing-model" }),
+      fetchStub(async () => new Response("model not found", { status: 404 }))
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain("missing-model");
+    expect(result.message).toContain("404");
+  });
+
+  it("uses max_completion_tokens for OpenAI reasoning models", async () => {
+    let seenBody: Record<string, unknown> = {};
+    const result = await testProviderConnection(
+      settings({ model: "o3-mini" }),
+      fetchStub(async (_url, init) => {
+        seenBody = bodyOf(init);
         return new Response(JSON.stringify({ choices: [] }), { status: 200 });
       })
     );
 
     expect(result.ok).toBe(true);
-    expect(urls).toEqual([
-      "https://api.example.com/v1/models",
-      "https://api.example.com/v1/chat/completions"
-    ]);
+    expect(seenBody.max_completion_tokens).toBe(64);
+    expect(seenBody.max_tokens).toBeUndefined();
+    expect(seenBody.temperature).toBeUndefined();
   });
 
-  it("tests Claude through its native model list", async () => {
+  it("tests Claude through the native Messages endpoint", async () => {
     let seenUrl = "";
     let seenHeaders: Record<string, string> = {};
+    let seenBody: Record<string, unknown> = {};
     const result = await testProviderConnection(
       settings({
         provider: "anthropic",
@@ -66,19 +87,25 @@ describe("provider test", () => {
       fetchStub(async (url, init) => {
         seenUrl = url;
         seenHeaders = init?.headers as Record<string, string>;
-        return new Response(JSON.stringify({ data: [{ id: "claude-sonnet-4-6" }] }), { status: 200 });
+        seenBody = bodyOf(init);
+        return new Response(JSON.stringify({ content: [{ type: "text", text: "ready" }] }), { status: 200 });
       })
     );
 
     expect(result.ok).toBe(true);
-    expect(seenUrl).toBe("https://api.anthropic.com/v1/models");
+    expect(seenUrl).toBe("https://api.anthropic.com/v1/messages");
     expect(seenHeaders.Authorization).toBe("Bearer test-key");
     expect(seenHeaders["anthropic-version"]).toBe("2026-10-21");
+    expect(seenBody).toEqual({
+      model: "claude-sonnet-4-6",
+      messages: [{ role: "user", content: "Reply with the single word: ready" }],
+      max_tokens: 64
+    });
   });
 
-  it("falls back to Gemini's native generateContent endpoint", async () => {
-    const urls: string[] = [];
-    const bodies: Record<string, unknown>[] = [];
+  it("tests Gemini through the native generateContent endpoint", async () => {
+    let seenUrl = "";
+    let seenBody: Record<string, unknown> = {};
     const result = await testProviderConnection(
       settings({
         provider: "google",
@@ -86,21 +113,17 @@ describe("provider test", () => {
         model: "gemini-3.5-flash"
       }),
       fetchStub(async (url, init) => {
-        urls.push(url);
-        if (url.endsWith("/models")) return new Response("not found", { status: 404 });
-        bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+        seenUrl = url;
+        seenBody = bodyOf(init);
         return new Response(JSON.stringify({ candidates: [] }), { status: 200 });
       })
     );
 
     expect(result.ok).toBe(true);
-    expect(urls).toEqual([
-      "https://generativelanguage.googleapis.com/v1beta/models",
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent"
-    ]);
-    expect(bodies[0]).toEqual({
+    expect(seenUrl).toBe("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent");
+    expect(seenBody).toEqual({
       contents: [{ role: "user", parts: [{ text: "Reply with the single word: ready" }] }],
-      generationConfig: { maxOutputTokens: 8, temperature: 0 }
+      generationConfig: { maxOutputTokens: 64 }
     });
   });
 

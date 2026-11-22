@@ -1,15 +1,15 @@
-import { chatEndpoint, modelsEndpoint, providerUrlProblem } from "../shared/provider-url";
+import { chatEndpoint, providerUrlProblem } from "../shared/provider-url";
 import {
   ANTHROPIC_API_VERSION,
   anthropicMessagesEndpoint,
-  anthropicModelsEndpoint,
   geminiGenerateEndpoint,
-  geminiModelsEndpoint,
   providerProtocol
 } from "../shared/provider-protocol";
+import { thinkingCapability } from "../shared/thinking";
 import type { StoredSettings } from "./settings";
 
 export const SETTINGS_TEST_TIMEOUT_MS = 15_000;
+const TEST_MAX_TOKENS = 64;
 
 export interface ProviderTestResult {
   ok: boolean;
@@ -20,8 +20,10 @@ export interface ProviderTestResult {
 type FetchLike = typeof fetch;
 
 /**
- * Test the configured provider without letting a hung socket keep the
- * Settings modal busy for minutes. The same signal covers both requests.
+ * Test the configured provider with a tiny completion to the exact selected
+ * model. The models endpoint can succeed while the model id is rejected, so
+ * connection-only checks would report a false positive. The signal bounds the
+ * whole check so a hung socket cannot keep Settings busy for minutes.
  */
 export async function testProviderConnection(
   settings: StoredSettings,
@@ -46,28 +48,12 @@ export async function testProviderConnection(
         : settings.apiKey
           ? { Authorization: `Bearer ${settings.apiKey}` }
           : {};
-  const modelsUrl =
-    protocol === "anthropic"
-      ? anthropicModelsEndpoint(settings.baseUrl)
-      : protocol === "gemini"
-        ? geminiModelsEndpoint(settings.baseUrl)
-        : modelsEndpoint(settings.baseUrl);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const models = await fetchImpl(modelsUrl, {
-      headers: authHeaders,
-      signal: controller.signal
-    }).catch(() => null);
-
-    if (controller.signal.aborted) {
-      return { ok: false, message: `The provider did not answer within ${Math.round(timeoutMs / 1000)} seconds.` };
-    }
-    if (models?.ok) {
-      return { ok: true, message: `Connected to ${settings.model}.`, latencyMs: Date.now() - started };
-    }
-
+    const capability = thinkingCapability(settings.provider, settings.model);
+    const useCompletionTokens = protocol === "openai" && capability.supported;
     let chat: Response;
     if (protocol === "anthropic") {
       chat = await fetchImpl(anthropicMessagesEndpoint(settings.baseUrl), {
@@ -76,7 +62,7 @@ export async function testProviderConnection(
         body: JSON.stringify({
           model: settings.model,
           messages: [{ role: "user", content: "Reply with the single word: ready" }],
-          max_tokens: 8
+          max_tokens: TEST_MAX_TOKENS
         }),
         signal: controller.signal
       });
@@ -86,7 +72,7 @@ export async function testProviderConnection(
         headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({
           contents: [{ role: "user", parts: [{ text: "Reply with the single word: ready" }] }],
-          generationConfig: { maxOutputTokens: 8, temperature: 0 }
+          generationConfig: { maxOutputTokens: TEST_MAX_TOKENS }
         }),
         signal: controller.signal
       });
@@ -97,8 +83,9 @@ export async function testProviderConnection(
         body: JSON.stringify({
           model: settings.model,
           messages: [{ role: "user", content: "Reply with the single word: ready" }],
-          max_tokens: 8,
-          temperature: 0
+          ...(useCompletionTokens
+            ? { max_completion_tokens: TEST_MAX_TOKENS }
+            : { max_tokens: TEST_MAX_TOKENS })
         }),
         signal: controller.signal
       });
@@ -106,7 +93,7 @@ export async function testProviderConnection(
 
     if (!chat.ok) {
       const detail = (await chat.text().catch(() => "")).slice(0, 300);
-      return { ok: false, message: `Provider rejected the request (${chat.status}). ${detail}` };
+      return { ok: false, message: `Provider rejected the test request for ${settings.model} (${chat.status}). ${detail}` };
     }
     return { ok: true, message: `Connected to ${settings.model}.`, latencyMs: Date.now() - started };
   } catch (error) {
