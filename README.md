@@ -10,6 +10,20 @@ It is built in the spirit of a learning harness: the model is not there to agree
 
 Agora is an early public beta. The source is available under the **MIT License**. The Windows build is intentionally unsigned, has no auto-update, and has no dedicated website yet. OpenAI, DeepSeek, Claude, and Gemini have been live-tested against real accounts. Compatibility is strongest with current model IDs; older or retired models may fail, and **Max** thinking is not consistently reliable. xAI/Grok has not yet been live-tested. Read [`SECURITY.md`](SECURITY.md) before installing.
 
+## Screenshots
+
+![The Agora workspace showing the debate library, a case-view argument map, and the chamber](docs/screenshots/workspace-case.jpg)
+
+*The workspace: the library, the argument map, and the chamber. The map groups the case by side and keeps the motion at the centre.*
+
+![A thread-view argument map with replies attached to the claims they answer](docs/screenshots/map-thread.jpg)
+
+*Thread view: replies attach to the argument they answer, so a line of reasoning can be followed outward from the motion.*
+
+![A staged debate with the argument map behind the speaker and the spoken turn below](docs/screenshots/stage-debate.jpg)
+
+*The stage: the argument map follows the turn while the panel presents the case, the speaker, the score, and the next move.*
+
 ## Install on Windows
 
 Download from the [GitHub Releases](https://github.com/andreasamundsen/agora/releases) page:
