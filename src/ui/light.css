@@ -2,6 +2,12 @@
 /* Editorial paper — a daylight stage                                  */
 /* ------------------------------------------------------------------ */
 
+html[data-theme="light"] {
+  --action-bg: var(--ink-soft);
+  --action-bg-hover: #3f382f;
+  --action-ink: var(--surface-strong);
+}
+
 html[data-theme="light"] .stage-panel {
   color: var(--ink);
   background:
@@ -38,13 +44,37 @@ html[data-theme="light"] .stage-icon-btn.is-on {
   background: var(--gold-soft);
 }
 html[data-theme="light"] .stage-play-btn {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--surface-strong);
+  background: var(--action-bg);
+  border-color: var(--action-bg);
+  color: var(--action-ink);
 }
+html[data-theme="light"] .btn--stage,
+html[data-theme="light"] .btn--judge,
+html[data-theme="light"] .library-new {
+  background: var(--action-bg);
+  border-color: var(--action-bg);
+  color: var(--action-ink);
+  box-shadow: 0 1px 0 rgba(33, 29, 24, 0.12);
+}
+html[data-theme="light"] .btn--stage svg,
+html[data-theme="light"] .btn--judge svg {
+  color: currentColor;
+}
+html[data-theme="light"] .btn--stage:hover,
+html[data-theme="light"] .btn--judge:hover:not(:disabled),
+html[data-theme="light"] .library-new:hover,
 html[data-theme="light"] .stage-play-btn:hover {
-  background: var(--con-deep);
-  border-color: var(--con-deep);
+  background: var(--action-bg-hover);
+  border-color: var(--action-bg-hover);
+  color: var(--action-ink);
+}
+html[data-theme="light"] .btn--judge.is-active {
+  background: var(--gold-soft);
+  border-color: var(--gold);
+  color: var(--gold-deep);
+}
+html[data-theme="light"] .btn--judge.is-active svg {
+  color: var(--gold-deep);
 }
 html[data-theme="light"] .stage-speed select {
   border-color: rgba(33, 29, 24, 0.2);
