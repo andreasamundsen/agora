@@ -269,6 +269,7 @@ html[data-theme="dark"][data-palette="aurora"] .btn:hover:not(:disabled) { backg
 html[data-theme="dark"][data-palette="aurora"] .btn--quiet:hover { background: rgba(139, 114, 255, 0.08); }
 html[data-theme="dark"][data-palette="aurora"] .btn--primary,
 html[data-theme="dark"][data-palette="aurora"] .btn--stage,
+html[data-theme="dark"][data-palette="aurora"] .btn--judge,
 html[data-theme="dark"][data-palette="aurora"] .library-new {
   background: linear-gradient(135deg, var(--aurora-pink), var(--aurora-violet));
   color: #080b14;
@@ -276,15 +277,19 @@ html[data-theme="dark"][data-palette="aurora"] .library-new {
   box-shadow: 0 0 20px -12px rgba(255, 79, 157, 0.9);
 }
 html[data-theme="dark"][data-palette="aurora"] .btn--primary:hover:not(:disabled),
-html[data-theme="dark"][data-palette="aurora"] .btn--stage:hover {
+html[data-theme="dark"][data-palette="aurora"] .btn--stage:hover,
+html[data-theme="dark"][data-palette="aurora"] .btn--judge:hover:not(:disabled) {
   background: linear-gradient(135deg, #ff6bab, #9b86ff);
   color: #080b14;
   border-color: transparent;
 }
-html[data-theme="dark"][data-palette="aurora"] .btn--judge { background: rgba(139, 114, 255, 0.1); }
-html[data-theme="dark"][data-palette="aurora"] .btn--judge:hover:not(:disabled) { background: var(--gold); color: #080b14; }
-html[data-theme="dark"][data-palette="aurora"] .btn--judge:hover:not(:disabled) svg { color: #080b14; }
-html[data-theme="dark"][data-palette="aurora"] .btn--judge.is-active { background: var(--gold-soft); color: var(--gold); }
+html[data-theme="dark"][data-palette="aurora"] .btn--judge:hover:not(:disabled) svg { color: var(--gold); }
+html[data-theme="dark"][data-palette="aurora"] .btn--judge.is-active {
+  background: linear-gradient(135deg, var(--aurora-pink), var(--aurora-violet));
+  color: #080b14;
+  border-color: transparent;
+  box-shadow: 0 0 26px -10px rgba(255, 79, 157, 0.9);
+}
 html[data-theme="dark"][data-palette="aurora"] .btn--ghost { background: rgba(139, 114, 255, 0.07); border-color: var(--line-strong); }
 html[data-theme="dark"][data-palette="aurora"] .btn--ghost:hover:not(:disabled) { background: var(--surface); border-color: var(--aurora-teal); }
 
