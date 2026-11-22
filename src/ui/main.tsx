@@ -5,6 +5,7 @@ import { initTheme } from "./theme";
 import "./styles.css";
 import "./dark.css";
 import "./aurora.css";
+import "./light.css";
 
 initTheme();
 

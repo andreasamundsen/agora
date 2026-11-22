@@ -1,0 +1,107 @@
+/* ------------------------------------------------------------------ */
+/* Editorial paper — a daylight stage                                  */
+/* ------------------------------------------------------------------ */
+
+html[data-theme="light"] .stage-panel {
+  color: var(--ink);
+  background:
+    radial-gradient(ellipse at 18% 0%, rgba(185, 138, 58, 0.13), transparent 50%),
+    radial-gradient(ellipse at 88% 100%, rgba(165, 61, 49, 0.07), transparent 45%),
+    #f8f2e6;
+  border-top-color: var(--gold);
+  box-shadow: 0 -26px 60px rgba(33, 29, 24, 0.16), 0 -1px 0 rgba(185, 138, 58, 0.2);
+}
+html[data-theme="light"] .stage-panel::before { opacity: 0.24; }
+
+html[data-theme="light"] .stage-head {
+  background: rgba(255, 253, 247, 0.32);
+  border-bottom-color: rgba(33, 29, 24, 0.14);
+}
+html[data-theme="light"] .stage-brand { color: var(--gold-deep); }
+html[data-theme="light"] .stage-live-dot {
+  background: var(--con);
+  box-shadow: 0 0 0 4px rgba(165, 61, 49, 0.12);
+}
+html[data-theme="light"] .stage-motion { color: var(--ink-soft); }
+html[data-theme="light"] .stage-icon-btn {
+  border-color: rgba(33, 29, 24, 0.2);
+  color: var(--ink-soft);
+}
+html[data-theme="light"] .stage-icon-btn:hover:not(:disabled) {
+  border-color: var(--ink-soft);
+  color: var(--ink);
+  background: rgba(33, 29, 24, 0.06);
+}
+html[data-theme="light"] .stage-icon-btn.is-on {
+  color: var(--gold-deep);
+  border-color: var(--gold);
+  background: var(--gold-soft);
+}
+html[data-theme="light"] .stage-play-btn {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--surface-strong);
+}
+html[data-theme="light"] .stage-play-btn:hover {
+  background: var(--con-deep);
+  border-color: var(--con-deep);
+}
+html[data-theme="light"] .stage-speed select {
+  border-color: rgba(33, 29, 24, 0.2);
+  color: var(--ink-soft);
+}
+html[data-theme="light"] .stage-speed select option {
+  background: var(--surface-strong);
+  color: var(--ink);
+}
+html[data-theme="light"] .stage-close-btn {
+  color: var(--muted);
+}
+html[data-theme="light"] .stage-close-btn:hover {
+  color: var(--ink);
+  background: rgba(33, 29, 24, 0.07);
+}
+
+html[data-theme="light"] .stage-turn-no { color: var(--muted); }
+html[data-theme="light"] .stage-turn-no b { color: var(--ink); }
+html[data-theme="light"] .stage-speaker { color: var(--ink); }
+html[data-theme="light"] .speaker--advocate { color: var(--pro-deep); }
+html[data-theme="light"] .speaker--advocate .stage-speaker-dot {
+  background: var(--pro-deep);
+  box-shadow: 0 0 0 3px rgba(47, 111, 83, 0.13);
+}
+html[data-theme="light"] .speaker--challenger { color: var(--con-deep); }
+html[data-theme="light"] .speaker--challenger .stage-speaker-dot {
+  background: var(--con);
+  box-shadow: 0 0 0 3px rgba(165, 61, 49, 0.13);
+}
+html[data-theme="light"] .speaker--you { color: var(--gold-deep); }
+html[data-theme="light"] .speaker--you .stage-speaker-dot {
+  background: var(--gold);
+  box-shadow: 0 0 0 3px rgba(185, 138, 58, 0.15);
+}
+html[data-theme="light"] .speaker--moderator { color: var(--ink-soft); }
+html[data-theme="light"] .speaker--moderator .stage-speaker-dot { background: var(--muted); }
+html[data-theme="light"] .stage-heading { color: var(--ink-soft); }
+html[data-theme="light"] .stage-progress { background: rgba(33, 29, 24, 0.14); }
+html[data-theme="light"] .stage-progress i { background: var(--gold); }
+html[data-theme="light"] .stage-seed { color: var(--faint); }
+
+html[data-theme="light"] .stage-kicker { color: var(--gold-deep); }
+html[data-theme="light"] .stage-text { color: var(--ink); }
+html[data-theme="light"] .stage-text::first-letter { color: var(--gold-deep); }
+html[data-theme="light"] .stage-right { border-left-color: rgba(33, 29, 24, 0.14); }
+html[data-theme="light"] .stage-score span { color: var(--muted); }
+html[data-theme="light"] .stage-score b { color: var(--ink); }
+html[data-theme="light"] .stage-next-label { color: var(--faint); }
+html[data-theme="light"] .stage-next { color: var(--muted); }
+html[data-theme="light"] .stage-shuffle {
+  color: var(--gold-deep);
+  border-bottom-color: rgba(185, 138, 58, 0.5);
+}
+html[data-theme="light"] .stage-shuffle:hover {
+  color: var(--con-deep);
+  border-color: var(--con-deep);
+}
+html[data-theme="light"] .stage-progress-bar { background: rgba(33, 29, 24, 0.1); }
+html[data-theme="light"] .stage-progress-bar i { background: var(--gold); }

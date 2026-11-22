@@ -276,9 +276,10 @@ src/
   ui/
     App.tsx             workspace, library, chamber, stage controller, judgment controller
     components/         DebateGraph, ChatPanel, StagePanel, NodeInspector, JudgmentModal, JudgmentPanel, Modals
-    styles.css          editorial paper / library ink / dark wood stage
+    styles.css          editorial paper / library ink / shared stage
     dark.css            Night Reading Room — warm dark palette
     aurora.css          Aurora — cool low-light palette
+    light.css           Editorial paper — daylight stage
 ```
 
 The domain layer is shared by server and browser. The graph layout and staging algorithm are deterministic given a seed, so the same map stages identically in a test and in the browser.
@@ -338,7 +339,7 @@ See [`SECURITY.md`](SECURITY.md) for the current beta's security limitations, in
 
 ## Why the name
 
-The agora was the public square where a city argued with itself. The interface is deliberately editorial: warm paper, serif headings, ink for the motion, faded red for the challenge, and a dark wood stage for the performance. Aurora keeps that structure while moving the light to a cool, low-light reading room. The map is the argument; the stage is the argument being made; the bench is the argument being judged.
+The agora was the public square where a city argued with itself. The interface is deliberately editorial: warm paper, serif headings, ink for the motion, faded red for the challenge, and a stage that follows the light: dark wood at night, daylight paper by day. Aurora keeps that structure while moving the light to a cool, low-light reading room. The map is the argument; the stage is the argument being made; the bench is the argument being judged.
 
 ## License
 
