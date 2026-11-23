@@ -66,8 +66,8 @@ Agora ships with three appearances. The gallery leads with **Aurora**, a glossy 
 
 Download from the [GitHub Releases](https://github.com/andreasamundsen/agora/releases) page:
 
-- `Agora-Setup-0.1.62.exe`
-- `Agora-Setup-0.1.62.exe.sha256`
+- `Agora-Setup-0.1.63.exe`
+- `Agora-Setup-0.1.63.exe.sha256`
 
 1. Back up `%APPDATA%\Agora\data` if you already have debates.
 2. Close Agora, then run the installer. It is per-user and does not require administrator rights.
@@ -75,7 +75,7 @@ Download from the [GitHub Releases](https://github.com/andreasamundsen/agora/rel
 4. Verify the download against the checksum from the same release:
 
    ```powershell
-   Get-FileHash .\Agora-Setup-0.1.62.exe -Algorithm SHA256
+   Get-FileHash .\Agora-Setup-0.1.63.exe -Algorithm SHA256
    ```
 
 A matching hash confirms the file has not changed; it is not a code signature. There is no auto-update, so a future beta is a manual download and install.
@@ -295,6 +295,10 @@ Judgment controls: `Space` play/pause, `←`/`→` previous/next ruling, click a
 
 While assessments run, the judge modal streams the links currently being read, a real completed-link count and track, and an ETA that appears after the first link returns and refines after each completion. **Cancel judgment** stops scheduling further links. A judgment run is a **sidecar**: it never edits the debate, its nodes, or its edges; replay is free.
 
+### Saved judgments
+
+At the finale, **Save judgment** stores the completed sitting with the debate. The Judge setup includes **Bench history → Saved judgments**, where each run shows its date, judge, outcome, and standard; **Open** replays it read-only and **Delete** removes it. Saved runs are independent of the live map: each stores the run record, the final snapshot, and a compact frozen copy of the map. If the map changes later, the saved sitting stays viewable and is marked as recorded from an earlier map. Agora does not auto-save a judgment; use **New run** for a fresh sitting. Saved data lives under `%APPDATA%\Agora\data\judgments` and does not include the API key.
+
 The bench uses the same provider and key as the rest of the app. Its **Judge model** field defaults to your configured model but can be overridden for the run. Each link prompt contains only the source claim, the target claim, and the relation type. Maps are capped at 80 links per sitting, with four links assessed at a time; a failed link is retried once, then the run aborts. Without a key, the bench runs a **local structural review** that demonstrates the procedure but is not a substantive judgment.
 
 ### Appearance
@@ -426,6 +430,10 @@ The theme is applied before paint by `public/theme-init.js`. Production builds s
 | `GET` | `/api/debates/:id/argdown` | download source |
 | `POST` | `/api/debates/:id/chat` | answer a question about the map from `{ text }`; no map edits |
 | `POST` | `/api/debates/:id/judge` | `{ standard, strictness, model?, stream? }` → judgment run; `stream: true` returns NDJSON progress events ending in the run |
+| `GET` | `/api/debates/:id/judgments` | saved-run summaries and the current map fingerprint |
+| `POST` | `/api/debates/:id/judgments` | `{ run }` → save a completed run with a frozen map view |
+| `GET` | `/api/debates/:id/judgments/:runId` | open a saved run and its frozen map; `stale` reports whether the live map has changed |
+| `DELETE` | `/api/debates/:id/judgments/:runId` | remove a saved run |
 | `POST` | `/api/import` | `{ source, motion? }` |
 | `GET`/`PUT` | `/api/settings` | provider settings (key never returned) |
 | `POST` | `/api/settings/test` | model-list check, then a tiny completion; 15-second limit |
@@ -458,7 +466,7 @@ See [`SECURITY.md`](SECURITY.md) for the current beta's security limitations, in
 - The **local bench** is a structural demonstration, not a substantive judgment. Connect a model for real rulings.
 - The bench judges the arguments **as written on the record**. It does not retrieve sources or establish factual truth; `✓ Proved` is a procedural finding, not a fact-check.
 - Judgment is **one clustering call plus one model call per argument link** and is not cached; a map with many replies can take a while and cost accordingly.
-- A judgment run lives in the browser session as a sidecar. Export the report if you want the record to survive a reload.
+- A judgment run lives in the browser session as a sidecar unless you explicitly save it. Saved runs survive reloads and map edits through the frozen map view; exporting the Markdown report remains a separate option.
 - Authoring and chamber responses are non-streaming. Judgment progress is streamed, but the model's ruling text is still delivered as part of the assessment rather than token by token.
 - Staging is a textual performance with an optional browser voice, not audio mixing or avatars.
 - The chamber can answer general questions from the selected model's training knowledge, but it does not browse or retrieve live web data.

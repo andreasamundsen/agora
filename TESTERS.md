@@ -4,11 +4,19 @@ Agora is a local debate harness. You install it like a normal Windows app; no No
 
 ## Install
 
-1. Download `Agora-Setup-0.1.62.exe` and its `.sha256` sidecar from the GitHub Releases page.
+1. Download `Agora-Setup-0.1.63.exe` and its `.sha256` sidecar from the GitHub Releases page.
 2. Windows will warn that the publisher is unknown. This build is intentionally unsigned: choose **More info → Run anyway**.
 3. The installer is per-user and does not need administrator rights. Agora opens when it finishes.
 4. To upgrade, close Agora first, then run the newer installer over it. Your debates stay in `%APPDATA%\Agora\data`.
 5. Verify the SHA-256 checksum against the value in the `.sha256` file from the same release. A matching hash is not a code signature; it only confirms the file has not changed.
+
+## What's new in 0.1.63
+
+- **Judgments can be saved.** At the finale, **Save judgment** stores the completed sitting with the debate. This is explicit: Agora does not auto-save a judgment.
+- **Bench history keeps multiple runs per debate.** Open **Judge → Bench history → Saved judgments** to see each saved run's date, judge, outcome, and standard. **Open** replays a saved record; **Delete** removes it.
+- **Saved records are read-only.** Opening one shows **Saved sitting / Recorded judgment** and cannot change the live map. Each record stores the run, its final snapshot, and a compact frozen copy of the map, so it still opens after the map changes.
+- **Earlier-map records are clearly marked.** If the map has changed since a run was saved, history and the saved view label it as recorded from an earlier map. The frozen map is used for playback.
+- Existing debates, settings, Argdown interchange, editing, Stage, provider behavior, and judgment arithmetic are unchanged. Saved data lives under `%APPDATA%\Agora\data\judgments` and never includes the API key.
 
 ## What's new in 0.1.62
 
