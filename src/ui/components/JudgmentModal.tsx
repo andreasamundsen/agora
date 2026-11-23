@@ -4,12 +4,14 @@ import {
   BURDEN_SHARE,
   BURDEN_THRESHOLDS,
   clashEdges,
+  OUTCOME_LABEL,
   PREPONDERANCE_BAND_SHARE,
   STANDARD_LABEL,
   STANDARD_NOTE,
   STRICTNESS_LABEL,
   STRICTNESS_NOTE,
   type JudgeStrictness,
+  type SavedJudgmentSummary,
   type StandardOfProof
 } from "../../core/judgment";
 import {
@@ -42,6 +44,15 @@ function formatRemaining(ms: number): string {
   return rest ? `${minutes}m ${rest}s` : `${minutes}m`;
 }
 
+function formatSavedAt(timestamp: number): string {
+  return new Date(timestamp).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
 function ScalesMark({ animated = false }: { animated?: boolean }) {
   return (
     <svg className={`bench-scales ${animated ? "is-weighing" : ""}`} viewBox="0 0 64 64" aria-hidden="true">
@@ -57,12 +68,20 @@ export function JudgmentModal({
   debate,
   settings,
   onRun,
+  savedJudgments = [],
+  historyLoading = false,
+  onOpenSaved,
+  onDeleteSaved,
   onClose,
   onOpenSettings
 }: {
   debate: Debate;
   settings: UiSettings | null;
   onRun: (input: JudgeRunInput, options: JudgeStreamOptions) => Promise<void>;
+  savedJudgments?: SavedJudgmentSummary[];
+  historyLoading?: boolean;
+  onOpenSaved?: (id: string) => void;
+  onDeleteSaved?: (id: string) => void;
   onClose: () => void;
   onOpenSettings: () => void;
 }) {
@@ -411,6 +430,61 @@ export function JudgmentModal({
               <li><b>Burden</b><span>Does it meet the standard this claim requires?</span></li>
             </ol>
           </div>
+
+          <section className="bench-history" aria-label="Saved judgments">
+            <div className="bench-history-head">
+              <div>
+                <div className="eyebrow">Bench history</div>
+                <h3>Saved judgments</h3>
+              </div>
+              <span>{savedJudgments.length > 0 ? `${savedJudgments.length} saved` : "Nothing saved yet"}</span>
+            </div>
+            {historyLoading ? (
+              <p className="bench-history-empty">Reading the history…</p>
+            ) : savedJudgments.length === 0 ? (
+              <p className="bench-history-empty">
+                A completed judgment can be saved from its finale. Saved judgments stay with this debate and reopen
+                exactly as they were, even after the map changes.
+              </p>
+            ) : (
+              <ul className="bench-history-list">
+                {savedJudgments.map((saved) => (
+                  <li className="bench-history-row" key={saved.id}>
+                    <div className="bench-history-when">
+                      <b>{formatSavedAt(saved.savedAt)}</b>
+                      <span>
+                        {saved.engine === "local" ? "Structural review" : saved.judgeModel}
+                        {saved.stale && <em className="bench-history-stale">Earlier map</em>}
+                      </span>
+                    </div>
+                    <div className="bench-history-outcome">
+                      <b>{OUTCOME_LABEL[saved.outcome]}</b>
+                      <span>{STANDARD_LABEL[saved.standard]} · {saved.strictness}</span>
+                    </div>
+                    <div className="bench-history-actions">
+                      <button
+                        type="button"
+                        className="text-link"
+                        onClick={() => onOpenSaved?.(saved.id)}
+                        disabled={!onOpenSaved}
+                      >
+                        Open
+                      </button>
+                      <button
+                        type="button"
+                        className="text-link bench-history-delete"
+                        onClick={() => onDeleteSaved?.(saved.id)}
+                        disabled={!onDeleteSaved}
+                        aria-label={`Delete saved judgment from ${formatSavedAt(saved.savedAt)}`}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
 
           {error && <div className="form-error">{error}</div>}
         </div>

@@ -2892,6 +2892,60 @@ button:disabled { cursor: not-allowed; }
 .judge-rubric b { display: block; font-size: 8.5px; font-weight: 700; letter-spacing: 0.04em; color: var(--ink); }
 .judge-rubric span { display: block; margin-top: 3px; font-size: 8.5px; line-height: 1.4; color: var(--muted); }
 
+.judgment-saved {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 13px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line-strong);
+  background: var(--paper);
+}
+.judgment-saved.is-stale { border-color: var(--gold); border-left-color: var(--gold-deep); background: var(--gold-soft); }
+.judgment-saved-mark { color: var(--gold-deep); font-size: 15px; line-height: 1; }
+.judgment-saved b { display: block; font-size: 8.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink); }
+.judgment-saved span { display: block; margin-top: 3px; font-size: 9.5px; line-height: 1.4; color: var(--muted); }
+
+.bench-history {
+  margin-top: 15px;
+  padding-top: 13px;
+  border-top: 1px solid var(--line);
+}
+.bench-history-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.bench-history-head h3 { margin: 3px 0 0; font-family: var(--serif); font-size: 17px; font-weight: 500; color: var(--ink); }
+.bench-history-head > span { font-size: 8px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
+.bench-history-empty { margin: 0; max-width: 570px; font-size: 10px; line-height: 1.5; color: var(--muted); }
+.bench-history-list { list-style: none; margin: 0; padding: 0; max-height: 205px; overflow-y: auto; scrollbar-width: thin; }
+.bench-history-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 2px;
+  border-top: 1px solid var(--line);
+}
+.bench-history-when b, .bench-history-outcome b { display: block; font-size: 9px; font-weight: 700; color: var(--ink); }
+.bench-history-when span, .bench-history-outcome span { display: block; margin-top: 3px; font-size: 8.5px; color: var(--muted); }
+.bench-history-stale {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 1px 4px;
+  border: 1px solid var(--gold);
+  border-radius: 2px;
+  font-style: normal;
+  font-size: 7.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--gold-deep);
+}
+.bench-history-actions { display: flex; align-items: center; gap: 9px; }
+.bench-history-actions .text-link { font-size: 8.5px; }
+.bench-history-delete { color: var(--muted); }
+.bench-history-delete:hover { color: var(--con); }
+.bench-history-actions .text-link:disabled { opacity: 0.45; }
+.finale-saved { align-self: center; font-size: 8.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold); }
+
 .bench-wait {
   min-height: 310px;
   display: grid;

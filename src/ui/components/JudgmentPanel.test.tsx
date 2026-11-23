@@ -311,7 +311,6 @@ describe("JudgmentPanel unified record", () => {
         onPrevious={() => {}}
         onRestart={() => {}}
         onSeek={() => {}}
-
         onSpeedChange={() => {}}
         onExit={() => {}}
         onNewRun={() => {}}
@@ -332,5 +331,50 @@ describe("JudgmentPanel unified record", () => {
     const currentRows = markup.match(/<button[^>]*class="[^"]*is-current[^"]*"[^>]*>[\s\S]*?<\/button>/g) ?? [];
     expect(currentRows).toHaveLength(1);
     expect(currentRows[0]).toContain("Supporting reason");
+  });
+
+  it("offers an explicit save on a live finale and marks a saved record read-only", () => {
+    const { debate, run, snapshot } = panelFixture();
+    const record = buildJudgmentRecord(run);
+    const common = {
+      debate,
+      run,
+      step: run.verdicts.length,
+      currentOrder: record.length,
+      finished: true,
+      finalSeen: true,
+      playing: false,
+      speed: 1,
+      snapshot,
+      restored: [],
+      counts: snapshot.counts,
+      onTogglePlay: () => {},
+      onNext: () => {},
+      onPrevious: () => {},
+      onRestart: () => {},
+      onSeek: () => {},
+      onSpeedChange: () => {},
+      onExit: () => {},
+      onNewRun: () => {},
+      onOpenSettings: () => {},
+      onReport: () => {},
+      onSave: () => {}
+    };
+
+    const live = renderToStaticMarkup(<JudgmentPanel {...common} />);
+    expect(live).toContain("Save judgment");
+    expect(live).toContain("Download report");
+    expect(live).not.toContain("Recorded judgment");
+    expect(live).not.toContain("Saved judgment");
+
+    const saved = renderToStaticMarkup(<JudgmentPanel {...common} savedAt={Date.now()} />);
+    expect(saved).toContain("Recorded judgment");
+    expect(saved).toContain("Saved judgment");
+    expect(saved).toContain("this record is read-only");
+    expect(saved).not.toContain(">Save judgment<");
+
+    const stale = renderToStaticMarkup(<JudgmentPanel {...common} savedAt={Date.now()} stale />);
+    expect(stale).toContain("Recorded from an earlier map");
+    expect(stale).toContain("the live map has changed since this sitting");
   });
 });

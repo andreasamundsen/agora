@@ -29,6 +29,15 @@ const COMPONENT_LABEL: Record<TargetComponent, string> = {
   unknown: "the target"
 };
 
+function formatSavedAt(timestamp: number): string {
+  return new Date(timestamp).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
 function PlayIcon({ playing }: { playing: boolean }) {
   return playing ? (
     <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
@@ -232,6 +241,11 @@ export function JudgmentPanel({
   onNewRun,
   onOpenSettings,
   onReport,
+  onSave,
+  saving = false,
+  savedAt,
+  stale = false,
+  onHistory,
   caseLineId,
   finalSeen = false,
   onShowFinal = () => {}
@@ -259,6 +273,11 @@ export function JudgmentPanel({
   onNewRun: () => void;
   onOpenSettings: () => void;
   onReport: () => void;
+  onSave?: () => void;
+  saving?: boolean;
+  savedAt?: number;
+  stale?: boolean;
+  onHistory?: () => void;
 }) {
   const total = run.verdicts.length;
   const record = useMemo(() => buildJudgmentRecord(run), [run]);
@@ -290,8 +309,8 @@ export function JudgmentPanel({
     <aside className="chamber judgment-panel" aria-label="Judgment record">
       <header className="chamber-head judgment-head">
         <div>
-          <div className="eyebrow">The bench</div>
-          <h2 className="chamber-title">{complete ? "Judgment" : "In session"}</h2>
+          <div className="eyebrow">{savedAt ? "Saved sitting" : "The bench"}</div>
+          <h2 className="chamber-title">{savedAt ? "Recorded judgment" : complete ? "Judgment" : "In session"}</h2>
         </div>
         <div className={`judge-pill ${run.engine === "local" ? "is-local" : ""}`}>
           <span className="judge-pill-dot" />
@@ -300,6 +319,19 @@ export function JudgmentPanel({
       </header>
 
       <div className="judgment-scroll" ref={scrollRef}>
+        {savedAt && (
+          <div className={`judgment-saved ${stale ? "is-stale" : ""}`} role="status">
+            <span className="judgment-saved-mark">⌑</span>
+            <div>
+              <b>{stale ? "Recorded from an earlier map" : "Saved judgment"}</b>
+              <span>
+                {formatSavedAt(savedAt)}
+                {stale ? " · the live map has changed since this sitting" : " · this record is read-only"}
+              </span>
+            </div>
+          </div>
+        )}
+
         {run.engine === "local" && !complete && (
           <div className="judge-mode-note">
             <b>Structural demonstration</b>
@@ -461,8 +493,19 @@ export function JudgmentPanel({
             )}
 
             <div className="finale-actions">
-              <button type="button" className="btn btn--primary btn--small" onClick={onReport}>Save judgment report</button>
-              <button type="button" className="btn btn--quiet btn--small" onClick={onNewRun}>New run</button>
+              {savedAt ? (
+                <span className="finale-saved">Saved {formatSavedAt(savedAt)}</span>
+              ) : (
+                <button type="button" className="btn btn--primary btn--small" onClick={onSave} disabled={!onSave || saving}>
+                  {saving ? "Saving…" : "Save judgment"}
+                </button>
+              )}
+              <button type="button" className="btn btn--quiet btn--small" onClick={onReport}>
+                Download report
+              </button>
+              <button type="button" className="btn btn--quiet btn--small" onClick={onNewRun}>
+                New run
+              </button>
             </div>
           </section>
         )}
@@ -598,6 +641,11 @@ export function JudgmentPanel({
         </div>
         {complete && (
           <>
+            {onHistory && (
+              <button type="button" className="judgment-report" onClick={onHistory} title="Open the bench history">
+                History
+              </button>
+            )}
             <button type="button" className="judgment-report" onClick={onNewRun} title="Convene a new judgment">
               New run
             </button>

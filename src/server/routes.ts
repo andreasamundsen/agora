@@ -1,11 +1,13 @@
 import { Router, Request, Response } from "express";
 import { DebateStore, DebateReadError } from "./store";
+import { JudgmentStore } from "./judgment-store";
 import { askDebate, authorDebate } from "./llm";
 import { judgeDebate, JudgeCancelledError, MAX_LINKS } from "./judge";
 import { ArgdownImportError, importArgdown } from "./argdown-import";
 import { toArgdown } from "../core/argdown";
 import { isConnected } from "../core/edit";
 import { message } from "../core/model";
+import { debateFingerprint, solveJudgment, type JudgmentRun } from "../core/judgment";
 import { getSettings, isReady, isReasoningEffort, publicSettings, saveSettings, SettingsError } from "./settings";
 import { providerUrlProblem } from "../shared/provider-url";
 import { testProviderConnection } from "./provider-test";
@@ -19,7 +21,28 @@ function unreadableDebate(res: Response): Response {
   });
 }
 
-export function createApi(store: DebateStore): Router {
+function isJudgmentRun(value: unknown): value is JudgmentRun {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const run = value as Partial<JudgmentRun>;
+  return (
+    typeof run.id === "string" &&
+    typeof run.debateId === "string" &&
+    typeof run.createdAt === "number" &&
+    (run.engine === "llm" || run.engine === "local") &&
+    typeof run.summary === "string" &&
+    (run.standard === "pro" || run.standard === "con" || run.standard === "preponderance") &&
+    (run.strictness === "strict" || run.strictness === "balanced" || run.strictness === "generous") &&
+    Array.isArray(run.verdicts) &&
+    Array.isArray(run.links) &&
+    Array.isArray(run.clusters) &&
+    Array.isArray(run.waves) &&
+    Array.isArray(run.warnings) &&
+    Array.isArray(run.decisive) &&
+    Boolean(run.judge && typeof run.judge.model === "string")
+  );
+}
+
+export function createApi(store: DebateStore, judgments = new JudgmentStore()): Router {
   const api = Router();
 
   api.get("/health", (_req, res) => {
@@ -233,9 +256,73 @@ export function createApi(store: DebateStore): Router {
     }
   });
 
+  api.get("/debates/:id/judgments", async (req, res, next) => {
+    try {
+      const debate = await store.get(req.params.id);
+      if (!debate) return res.status(404).json({ error: "Debate not found" });
+      res.json({
+        judgments: await judgments.list(debate),
+        mapFingerprint: debateFingerprint(debate)
+      });
+    } catch (error) {
+      if (error instanceof DebateReadError) return unreadableDebate(res);
+      next(error);
+    }
+  });
+
+  api.get("/debates/:id/judgments/:runId", async (req, res, next) => {
+    try {
+      const debate = await store.get(req.params.id);
+      if (!debate) return res.status(404).json({ error: "Debate not found" });
+      const judgment = await judgments.get(req.params.id, req.params.runId);
+      if (!judgment) return res.status(404).json({ error: "Saved judgment not found" });
+      res.json({
+        judgment,
+        stale: judgment.mapFingerprint !== debateFingerprint(debate)
+      });
+    } catch (error) {
+      if (error instanceof DebateReadError) return unreadableDebate(res);
+      next(error);
+    }
+  });
+
+  api.post("/debates/:id/judgments", async (req, res, next) => {
+    try {
+      const debate = await store.get(req.params.id);
+      if (!debate) return res.status(404).json({ error: "Debate not found" });
+      const run = req.body?.run;
+      if (!isJudgmentRun(run) || run.debateId !== debate.id) {
+        return res.status(400).json({ error: "A saved judgment needs a complete run for this debate." });
+      }
+      const snapshot = solveJudgment(
+        debate,
+        run.links,
+        run.clusters,
+        run.standard,
+        run.strictness,
+        run.engine === "llm"
+      );
+      const saved = await judgments.save(debate, run, snapshot);
+      res.status(201).json({ judgment: saved, stale: false });
+    } catch (error) {
+      if (error instanceof DebateReadError) return unreadableDebate(res);
+      next(error);
+    }
+  });
+
+  api.delete("/debates/:id/judgments/:runId", async (req, res, next) => {
+    try {
+      await judgments.delete(req.params.id, req.params.runId);
+      res.json({ ok: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   api.delete("/debates/:id", async (req, res, next) => {
     try {
       await store.delete(req.params.id);
+      await judgments.deleteForDebate(req.params.id);
       res.json({ ok: true });
     } catch (error) {
       next(error);

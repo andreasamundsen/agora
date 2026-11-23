@@ -2,6 +2,8 @@ import type { Debate, DebateSummary } from "../core/model";
 import type {
   JudgeStrictness,
   JudgmentRun,
+  SavedJudgment,
+  SavedJudgmentSummary,
   StandardOfProof
 } from "../core/judgment";
 import type { JudgeProgressEvent } from "../shared/judge-progress";
@@ -132,6 +134,36 @@ export function judgeDebate(
   return request(`/debates/${encodeURIComponent(id)}/judge`, {
     method: "POST",
     body: JSON.stringify(input)
+  });
+}
+
+export function fetchSavedJudgments(id: string): Promise<{
+  judgments: SavedJudgmentSummary[];
+  mapFingerprint: string;
+}> {
+  return request(`/debates/${encodeURIComponent(id)}/judgments`);
+}
+
+export function fetchSavedJudgment(
+  debateId: string,
+  runId: string
+): Promise<{ judgment: SavedJudgment; stale: boolean }> {
+  return request(`/debates/${encodeURIComponent(debateId)}/judgments/${encodeURIComponent(runId)}`);
+}
+
+export function saveJudgmentRun(
+  debateId: string,
+  run: JudgmentRun
+): Promise<{ judgment: SavedJudgment; stale: boolean }> {
+  return request(`/debates/${encodeURIComponent(debateId)}/judgments`, {
+    method: "POST",
+    body: JSON.stringify({ run })
+  });
+}
+
+export function deleteSavedJudgment(debateId: string, runId: string): Promise<{ ok: boolean }> {
+  return request(`/debates/${encodeURIComponent(debateId)}/judgments/${encodeURIComponent(runId)}`, {
+    method: "DELETE"
   });
 }
 

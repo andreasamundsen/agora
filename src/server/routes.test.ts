@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { once } from "node:events";
 import { reconcileDebate } from "../core/model";
+import type { JudgmentRun } from "../core/judgment";
 import { createApi } from "./routes";
 import { DebateStore } from "./store";
 
@@ -31,6 +32,27 @@ async function stop(): Promise<void> {
     server?.close((error) => (error ? reject(error) : resolve()));
   });
   server = null;
+}
+
+function sampleRun(debateId: string, id = "judgment_api"): JudgmentRun {
+  return {
+    id,
+    debateId,
+    createdAt: Date.now(),
+    engine: "local",
+    judge: { provider: "local", model: "structural" },
+    standard: "pro",
+    strictness: "balanced",
+    verdicts: [],
+    links: [],
+    clusters: [],
+    waves: [],
+    balance: { pro: 0, con: 0, margin: 0, threshold: 2, lines: [], assessed: false },
+    warnings: [],
+    summary: "A test judgment.",
+    outcome: "undecided",
+    decisive: []
+  };
 }
 
 beforeEach(async () => {
@@ -301,5 +323,107 @@ describe("debate routes", () => {
       })
     });
     expect(stranded.status).toBe(400);
+  });
+
+  it("saves, lists, reopens, and deletes a judgment for its debate", async () => {
+    const store = new DebateStore(dir);
+    const debate = reconcileDebate({
+      id: "saved-judgment",
+      motion: "Should the record be saved?",
+      thesisId: "thesis",
+      nodes: [
+        { id: "thesis", kind: "statement", title: "Saved record", text: "The record should be saved." },
+        { id: "support", kind: "argument", title: "A reason", text: "It should.", stance: "pro" }
+      ],
+      edges: [{ id: "support-edge", from: "support", to: "thesis", type: "support" }]
+    });
+    await store.save(debate);
+    await start(store);
+
+    const created = await fetch(`${base}/api/debates/saved-judgment/judgments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ run: sampleRun("saved-judgment") })
+    });
+    expect(created.status).toBe(201);
+    const createdBody = (await created.json()) as {
+      judgment: { id: string; frozenDebate: { nodes: unknown[] }; mapFingerprint: string };
+      stale: boolean;
+    };
+    expect(createdBody.judgment.id).toBe("judgment_api");
+    expect(createdBody.judgment.frozenDebate.nodes).toHaveLength(2);
+    expect(createdBody.stale).toBe(false);
+
+    const listed = await fetch(`${base}/api/debates/saved-judgment/judgments`);
+    expect(listed.status).toBe(200);
+    const listedBody = (await listed.json()) as { judgments: { id: string; stale: boolean }[] };
+    expect(listedBody.judgments.map((item) => item.id)).toEqual(["judgment_api"]);
+    expect(listedBody.judgments[0]?.stale).toBe(false);
+
+    const opened = await fetch(`${base}/api/debates/saved-judgment/judgments/judgment_api`);
+    expect(opened.status).toBe(200);
+    const openedBody = (await opened.json()) as { judgment: { run: { summary: string } }; stale: boolean };
+    expect(openedBody.judgment.run.summary).toBe("A test judgment.");
+    expect(openedBody.stale).toBe(false);
+
+    const deleted = await fetch(`${base}/api/debates/saved-judgment/judgments/judgment_api`, {
+      method: "DELETE"
+    });
+    expect(deleted.status).toBe(200);
+    const reopened = await fetch(`${base}/api/debates/saved-judgment/judgments/judgment_api`);
+    expect(reopened.status).toBe(404);
+  });
+
+  it("marks a saved judgment stale after the map changes", async () => {
+    const store = new DebateStore(dir);
+    const debate = reconcileDebate({
+      id: "stale-judgment",
+      motion: "Should the record be saved?",
+      thesisId: "thesis",
+      nodes: [
+        { id: "thesis", kind: "statement", title: "Saved record", text: "The record should be saved." },
+        { id: "support", kind: "argument", title: "A reason", text: "It should.", stance: "pro" }
+      ],
+      edges: [{ id: "support-edge", from: "support", to: "thesis", type: "support" }]
+    });
+    await store.save(debate);
+    await start(store);
+
+    await fetch(`${base}/api/debates/stale-judgment/judgments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ run: sampleRun("stale-judgment") })
+    });
+
+    await store.save({
+      ...debate,
+      nodes: debate.nodes.map((node) =>
+        node.id === "support" ? { ...node, text: "The reason has changed." } : node
+      )
+    });
+
+    const listed = await fetch(`${base}/api/debates/stale-judgment/judgments`);
+    const body = (await listed.json()) as { judgments: { stale: boolean }[] };
+    expect(body.judgments[0]?.stale).toBe(true);
+  });
+
+  it("rejects a judgment that does not belong to the debate", async () => {
+    const store = new DebateStore(dir);
+    const debate = reconcileDebate({
+      id: "owned-judgment",
+      motion: "A map",
+      thesisId: "thesis",
+      nodes: [{ id: "thesis", kind: "statement", title: "A map", text: "A map" }],
+      edges: []
+    });
+    await store.save(debate);
+    await start(store);
+
+    const response = await fetch(`${base}/api/debates/owned-judgment/judgments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ run: sampleRun("another-debate") })
+    });
+    expect(response.status).toBe(400);
   });
 });

@@ -176,6 +176,89 @@ export interface JudgmentRun {
   decisive: DecisiveStep[];
 }
 
+/**
+ * A saved judgment is an immutable record of one sitting. The frozen graph is
+ * deliberately a full debate copy (without chat): it lets the record reopen
+ * exactly as it was even after the live map has changed, without pretending
+ * the old reading is current.
+ */
+export interface SavedJudgment {
+  id: string;
+  debateId: string;
+  savedAt: number;
+  mapFingerprint: string;
+  frozenDebate: Debate;
+  run: JudgmentRun;
+  snapshot: JudgmentSnapshot;
+}
+
+export interface SavedJudgmentSummary {
+  id: string;
+  debateId: string;
+  savedAt: number;
+  createdAt: number;
+  mapFingerprint: string;
+  outcome: JudgmentOutcome;
+  standard: StandardOfProof;
+  strictness: JudgeStrictness;
+  engine: JudgeEngine;
+  judgeModel: string;
+  /** True when the saved graph differs from the debate currently on disk. */
+  stale: boolean;
+}
+
+/**
+ * The semantic map fingerprint. Chat, titles? No: titles and text are part of
+ * the argument the bench read. Timestamps, origin and chat are not.
+ */
+export function debateFingerprint(debate: Debate): string {
+  const body = JSON.stringify({
+    motion: debate.motion,
+    thesisId: debate.thesisId,
+    thesisText: debate.thesisText,
+    nodes: [...debate.nodes]
+      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .map((node) => ({
+        id: node.id,
+        kind: node.kind,
+        title: node.title,
+        text: node.text,
+        stance: node.stance,
+        speaker: node.speaker,
+        tags: node.tags,
+        group: node.group,
+        premises: node.premises,
+        conclusion: node.conclusion ?? null
+      })),
+    edges: [...debate.edges]
+      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .map((edge) => ({ id: edge.id, from: edge.from, to: edge.to, type: edge.type, note: edge.note ?? null }))
+  });
+
+  // FNV-1a, 64-bit. The fingerprint is a staleness check, not a signature.
+  let hash = 0xcbf29ce484222325n;
+  for (let index = 0; index < body.length; index += 1) {
+    hash ^= BigInt(body.charCodeAt(index));
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+  }
+  return hash.toString(16).padStart(16, "0");
+}
+
+/** Copy only the graph that a judgment needs; chat and live metadata stay out. */
+export function frozenDebateCopy(debate: Debate): Debate {
+  return {
+    ...debate,
+    nodes: debate.nodes.map((node) => ({
+      ...node,
+      tags: [...node.tags],
+      premises: [...node.premises]
+    })),
+    edges: debate.edges.map((edge) => ({ ...edge })),
+    chat: []
+  };
+}
+
+
 export const VERDICT_LABEL: Record<ClashVerdict, string> = {
   defeats: "Defeats",
   weakens: "Weakens",

@@ -10,7 +10,9 @@ import {
   OUTCOME_SHORT,
   solveJudgment,
   type JudgmentRecordEntry,
-  type JudgmentRun
+  type JudgmentRun,
+  type JudgmentSnapshot,
+  type SavedJudgmentSummary
 } from "../core/judgment";
 import {
   addEdge,
@@ -26,12 +28,16 @@ import {
 import {
   createDebate,
   deleteDebate,
+  deleteSavedJudgment,
   fetchDebate,
   fetchDebates,
+  fetchSavedJudgment,
+  fetchSavedJudgments,
   fetchSettings,
   importArgdown,
   judgeDebateStream,
   saveDebate,
+  saveJudgmentRun,
   sendChat,
   type JudgeStreamOptions,
   type UiSettings
@@ -66,6 +72,14 @@ interface JudgmentState {
   finalSeen: boolean;
   playing: boolean;
   speed: number;
+  /** A saved run is read-only and uses its frozen graph. */
+  saved?: {
+    id: string;
+    savedAt: number;
+    stale: boolean;
+    frozenDebate: Debate;
+    snapshot: JudgmentSnapshot;
+  };
 }
 
 /** One visible beat of the judgment playback: every ruling and every stem cue. */
@@ -124,6 +138,9 @@ export default function App() {
   const [toast, setToast] = useState<{ tone: "ok" | "warn" | "error"; text: string } | null>(null);
   const [stage, setStage] = useState<StageState | null>(null);
   const [judgment, setJudgment] = useState<JudgmentState | null>(null);
+  const [savedJudgments, setSavedJudgments] = useState<SavedJudgmentSummary[]>([]);
+  const [savedHistoryLoading, setSavedHistoryLoading] = useState(false);
+  const [savingJudgment, setSavingJudgment] = useState(false);
   const [restored, setRestored] = useState<string[]>([]);
   const [revealedEffects, setRevealedEffects] = useState<string[]>([]);
   const [focusMap, setFocusMap] = useState(false);
@@ -153,6 +170,28 @@ export default function App() {
     }
   }, [showToast]);
 
+  const loadSavedHistory = useCallback(async (debateId: string) => {
+    setSavedHistoryLoading(true);
+    try {
+      const response = await fetchSavedJudgments(debateId);
+      setSavedJudgments(response.judgments);
+    } catch (error) {
+      setSavedJudgments([]);
+      showToast(error instanceof Error ? error.message : "Could not read the saved judgments.", "error");
+    } finally {
+      setSavedHistoryLoading(false);
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    if (modal !== "judge" || !debate) return;
+    void loadSavedHistory(debate.id);
+  }, [modal, debate?.id, loadSavedHistory]);
+
+  useEffect(() => {
+    if (!debate) setSavedJudgments([]);
+  }, [debate?.id]);
+
   const loadDebate = useCallback(async (id: string) => {
     setLoadingDebate(true);
     try {
@@ -162,6 +201,7 @@ export default function App() {
       setSelectedId(null);
       setStage(null);
       setJudgment(null);
+      setSavedJudgments([]);
       setRestored([]);
       setEditing(false);
       setEditDraft(null);
@@ -226,7 +266,7 @@ export default function App() {
     }
   }, [focusMap]);
 
-  const displayedDebate = editing ? editDraft : debate;
+  const displayedDebate = editing ? editDraft : judgment?.saved?.frozenDebate ?? debate;
 
   const selectedNode = useMemo(
     () => (displayedDebate && selectedId
@@ -269,24 +309,26 @@ export default function App() {
 
   const judgmentSnapshot = useMemo(
     () =>
-      debate && judgment
-        ? solveJudgment(
-            debate,
-            appliedLinks,
-            judgment.run.clusters,
-            judgment.run.standard,
-            judgment.run.strictness,
-            judgment.run.engine === "llm"
-          )
-        : null,
-    [debate, judgment, appliedLinks]
+      judgment?.saved && judgment.finished
+        ? judgment.saved.snapshot
+        : displayedDebate && judgment
+          ? solveJudgment(
+              displayedDebate,
+              appliedLinks,
+              judgment.run.clusters,
+              judgment.run.standard,
+              judgment.run.strictness,
+              judgment.run.engine === "llm"
+            )
+          : null,
+    [displayedDebate, judgment, appliedLinks]
   );
 
   const priorJudgmentSnapshot = useMemo(
     () => {
-      if (!debate || !judgment || conflictStep <= 0) return null;
+      if (!displayedDebate || !judgment || conflictStep <= 0) return null;
       return solveJudgment(
-        debate,
+        displayedDebate,
         linksAtStep(judgment.run, conflictStep - 1),
         judgment.run.clusters,
         judgment.run.standard,
@@ -294,7 +336,7 @@ export default function App() {
         judgment.run.engine === "llm"
       );
     },
-    [debate, judgment?.run, conflictStep]
+    [displayedDebate, judgment?.run, conflictStep]
   );
 
   const judgmentComplete = Boolean(judgment?.finished);
@@ -309,7 +351,7 @@ export default function App() {
     ? judgmentSnapshot.counts
     : judgment && conflictStep > 1 && priorJudgmentSnapshot
       ? priorJudgmentSnapshot.counts
-      : { standing: debate?.nodes.length ?? 0, defeated: 0, contested: 0 };
+      : { standing: displayedDebate?.nodes.length ?? 0, defeated: 0, contested: 0 };
 
   const restoredNow = useMemo(() => {
     if (!judgment || !priorJudgmentSnapshot || !judgmentSnapshot) return [] as string[];
@@ -323,7 +365,7 @@ export default function App() {
   }, [restoredNow.join("|"), conflictStep]);
 
   const judgmentGraph: GraphJudgment | undefined = useMemo(() => {
-    if (!judgment || !debate || !judgmentSnapshot) return undefined;
+    if (!judgment || !displayedDebate || !judgmentSnapshot) return undefined;
     const current = !judgment.finished && currentEntry?.kind === "ruling" ? currentEntry.verdict : undefined;
     const verdictByEdge: GraphJudgment["verdictByEdge"] = {};
     const visibleVerdicts = effectRevealed ? appliedVerdicts : appliedVerdicts.slice(0, -1);
@@ -340,7 +382,7 @@ export default function App() {
       proofConflict: motionSnapshot.proofConflict
     });
     const caseLine = currentSupportId
-      ? debate.edges.find((edge) => edge.id === currentSupportId)
+      ? displayedDebate.edges.find((edge) => edge.id === currentSupportId)
       : undefined;
     const visibleStatuses = effectRevealed
       ? judgmentSnapshot.statuses
@@ -375,7 +417,7 @@ export default function App() {
       motionProved: settled && effectRevealed && judgmentSnapshot.proofs.length > 0 && !judgmentSnapshot.proofConflict,
       unsupportedThesis: settled && effectRevealed && judgmentSnapshot.unsupportedThesis
     };
-  }, [judgment, judgmentSnapshot, priorJudgmentSnapshot, revealedEffects, effectRevealed, judgmentComplete, appliedVerdicts, restored, currentEntry, currentSupportId, conflictStep]);
+  }, [judgment, judgmentSnapshot, priorJudgmentSnapshot, revealedEffects, effectRevealed, judgmentComplete, appliedVerdicts, restored, currentEntry, currentSupportId, conflictStep, displayedDebate]);
 
   const openStage = useCallback(() => {
     if (!debate || editing) return;
@@ -450,6 +492,79 @@ export default function App() {
     setRevealedEffects([]);
     setSelectedId(null);
   }, []);
+
+  const openSavedJudgment = useCallback(async (runId: string) => {
+    if (!debate) return;
+    try {
+      const response = await fetchSavedJudgment(debate.id, runId);
+      if (response.stale) {
+        showToast("Saved judgment opened from an earlier version of this map.", "warn");
+      } else {
+        showToast("Saved judgment opened.");
+      }
+      if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
+      setRestored([]);
+      setRevealedEffects([]);
+      setStage(null);
+      setSelectedId(null);
+      setJudgment({
+        run: response.judgment.run,
+        eventIndex: buildJudgmentRecord(response.judgment.run).length,
+        finished: true,
+        finalSeen: true,
+        playing: false,
+        speed: 1,
+        saved: {
+          id: response.judgment.id,
+          savedAt: response.judgment.savedAt,
+          stale: response.stale,
+          frozenDebate: response.judgment.frozenDebate,
+          snapshot: response.judgment.snapshot
+        }
+      });
+      setModal(null);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Could not open that saved judgment.", "error");
+    }
+  }, [debate, showToast]);
+
+  const saveCurrentJudgment = useCallback(async () => {
+    if (!debate || !judgment || judgment.saved || savingJudgment) return;
+    setSavingJudgment(true);
+    try {
+      const response = await saveJudgmentRun(debate.id, judgment.run);
+      setJudgment((current) => current
+        ? {
+            ...current,
+            saved: {
+              id: response.judgment.id,
+              savedAt: response.judgment.savedAt,
+              stale: response.stale,
+              frozenDebate: response.judgment.frozenDebate,
+              snapshot: response.judgment.snapshot
+            }
+          }
+        : current);
+      showToast("Judgment saved to this debate.");
+      await loadSavedHistory(debate.id);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Could not save this judgment.", "error");
+    } finally {
+      setSavingJudgment(false);
+    }
+  }, [debate, judgment, savingJudgment, showToast, loadSavedHistory]);
+
+  const removeSavedJudgment = useCallback(async (runId: string) => {
+    if (!debate) return;
+    if (!window.confirm("Delete this saved judgment from the bench history?")) return;
+    try {
+      await deleteSavedJudgment(debate.id, runId);
+      setSavedJudgments((current) => current.filter((entry) => entry.id !== runId));
+      showToast("Saved judgment deleted.");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Could not delete that saved judgment.", "error");
+    }
+  }, [debate, showToast]);
 
   const rememberDraft = useCallback(() => {
     if (!editDraft) return;
@@ -725,9 +840,9 @@ export default function App() {
   }, []);
 
   const saveJudgmentReport = useCallback(() => {
-    if (!debate || !judgment) return;
-    const markdown = judgmentMarkdown(debate, judgment.run);
-    const slug = debate.motion.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 54) || "debate";
+    if (!displayedDebate || !judgment) return;
+    const markdown = judgmentMarkdown(displayedDebate, judgment.run);
+    const slug = displayedDebate.motion.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 54) || "debate";
     const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
@@ -738,7 +853,7 @@ export default function App() {
     anchor.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     showToast("Judgment report saved.");
-  }, [debate, judgment, showToast]);
+  }, [displayedDebate, judgment, showToast]);
 
   useEffect(() => {
     if (!judgment?.playing || judgment.finished) return;
@@ -1274,9 +1389,9 @@ export default function App() {
             onUndo={undoDraft}
             onRedo={redoDraft}
           />
-        ) : judgment && debate && judgmentSnapshot ? (
+        ) : judgment && displayedDebate && judgmentSnapshot ? (
           <JudgmentPanel
-            debate={debate}
+            debate={displayedDebate}
             run={judgment.run}
             step={conflictStep}
             currentOrder={judgment.eventIndex}
@@ -1299,6 +1414,11 @@ export default function App() {
             onNewRun={() => setModal("judge")}
             onOpenSettings={() => setModal("settings")}
             onReport={saveJudgmentReport}
+            onSave={() => void saveCurrentJudgment()}
+            saving={savingJudgment}
+            savedAt={judgment.saved?.savedAt}
+            stale={judgment.saved?.stale}
+            onHistory={() => setModal("judge")}
           />
         ) : (
           <ChatPanel
@@ -1368,6 +1488,10 @@ export default function App() {
           debate={debate}
           settings={settings}
           onRun={conveneJudgment}
+          savedJudgments={savedJudgments}
+          historyLoading={savedHistoryLoading}
+          onOpenSaved={openSavedJudgment}
+          onDeleteSaved={removeSavedJudgment}
           onClose={() => setModal(null)}
           onOpenSettings={() => setModal("settings")}
         />

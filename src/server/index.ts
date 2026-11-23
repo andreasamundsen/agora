@@ -1,6 +1,7 @@
 import express from "express";
 import path from "node:path";
 import { DebateStore } from "./store";
+import { JudgmentStore } from "./judgment-store";
 import { createApi } from "./routes";
 import { dataDir } from "./settings";
 import { isLocalApiRequest } from "./local-access";
@@ -41,7 +42,9 @@ async function main(): Promise<void> {
 
   const store = new DebateStore();
   await store.init();
-  app.use("/api", createApi(store));
+  const judgments = new JudgmentStore();
+  await judgments.init();
+  app.use("/api", createApi(store, judgments));
 
   if (isProduction) {
     app.use((_req, res, next) => {

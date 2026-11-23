@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Debate } from "../core/model";
 import type { JudgmentRun } from "../core/judgment";
 import type { JudgeProgressEvent } from "../shared/judge-progress";
-import { ApiError, judgeDebateStream, saveDebate } from "./api";
+import { ApiError, deleteSavedJudgment, fetchSavedJudgment, fetchSavedJudgments, judgeDebateStream, saveDebate, saveJudgmentRun } from "./api";
 
 function ndjsonResponse(chunks: string[]): Response {
   const encoder = new TextEncoder();
@@ -91,5 +91,43 @@ describe("judgeDebateStream", () => {
     await expect(
       judgeDebateStream("debate-1", { standard: "preponderance", strictness: "balanced" })
     ).rejects.toEqual(new ApiError("The bench could not finish.", 500));
+  });
+});
+
+describe("saved judgment requests", () => {
+  it("uses the debate-scoped judgment endpoints", async () => {
+    const saved = {
+      id: "judgment-1",
+      debateId: "debate/one",
+      savedAt: 1,
+      run: { id: "run-1" },
+      snapshot: {},
+      frozenDebate: { nodes: [], edges: [] },
+      mapFingerprint: "abc"
+    };
+    const fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ judgments: [], mapFingerprint: "abc", judgment: saved, stale: true, ok: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        })
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchSavedJudgments("debate/one");
+    await fetchSavedJudgment("debate/one", "judgment/1");
+    await saveJudgmentRun("debate/one", { id: "run-1" } as JudgmentRun);
+    await deleteSavedJudgment("debate/one", "judgment/1");
+
+    const calls = fetchMock.mock.calls as [string, RequestInit][];
+    expect(calls.map(([url]) => url)).toEqual([
+      "/api/debates/debate%2Fone/judgments",
+      "/api/debates/debate%2Fone/judgments/judgment%2F1",
+      "/api/debates/debate%2Fone/judgments",
+      "/api/debates/debate%2Fone/judgments/judgment%2F1"
+    ]);
+    expect(calls.map(([, options]) => options.method ?? "GET")).toEqual(["GET", "GET", "POST", "DELETE"]);
+    expect(JSON.parse(String(calls[2]?.[1]?.body))).toEqual({ run: { id: "run-1" } });
   });
 });
