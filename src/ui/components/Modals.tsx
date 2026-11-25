@@ -885,7 +885,7 @@ export function SettingsModal({
           ))}
         </div>
         <span className="field-hint">
-          System follows the Windows appearance setting. Light is Editorial paper, Dark is Night Reading Room, and Aurora is a twilight palette: deep indigo-black, rose, lilac and periwinkle chrome, with ice-blue support and rose attack cards. The choice applies immediately and is remembered.
+          System follows the Windows appearance setting. Light is Editorial paper, a warm parchment with a walnut motion card, olive support, rust attack cards, and walnut-brown actions; Dark is Night Reading Room, and Aurora is a twilight palette: deep indigo-black, rose, lilac and periwinkle chrome, with ice-blue support and rose attack cards. The choice applies immediately and is remembered.
         </span>
       </div>
 

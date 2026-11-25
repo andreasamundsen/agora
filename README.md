@@ -50,11 +50,11 @@ Agora ships with three appearances. The gallery leads with **Aurora**, the twili
 
 ![The Agora workspace in light mode, showing the debate library, a case-view argument map, and the chamber](docs/screenshots/workspace-case.jpg)
 
-*The workspace in Editorial paper.*
+*The workspace in Editorial paper: warm parchment, a walnut motion card, olive support and rust attack cards.*
 
 ![A staged debate in light mode with the argument map behind the speaker and the spoken turn below](docs/screenshots/stage-debate.jpg)
 
-*The stage in Editorial paper.*
+*The daylight stage in Editorial paper.*
 
 ![A thread-view argument map in light mode with replies attached to the claims they answer](docs/screenshots/map-thread.jpg)
 
@@ -303,7 +303,7 @@ The bench uses the same provider and key as the rest of the app. Its **Judge mod
 
 ### Appearance
 
-Settings → Appearance switches between **System**, **Light**, **Dark**, and **Aurora**. System follows the Windows appearance setting. Light is **Editorial paper**, Dark is **Night Reading Room**, and Aurora is a twilight variant of the dark palette: deep indigo-black, rose–lilac–periwinkle chrome, ice-blue support and rose attack cards. The choice is remembered on this machine and applied before the interface paints, so the dark reading room does not flash paper-white at launch. The desktop window background follows the saved theme on the next launch.
+Settings → Appearance switches between **System**, **Light**, **Dark**, and **Aurora**. System follows the Windows appearance setting. Light is **Editorial paper** — warm parchment with a walnut motion card, olive support, rust attack cards, and walnut-brown actions. Dark is **Night Reading Room**, and Aurora is a twilight variant of the dark palette: deep indigo-black, rose–lilac–periwinkle chrome, ice-blue support and rose attack cards. The choice is remembered on this machine and applied before the interface paints, so the dark reading room does not flash paper-white at launch. The desktop window background follows the saved theme on the next launch.
 
 ## Connecting a model
 
@@ -476,7 +476,7 @@ See [`SECURITY.md`](SECURITY.md) for the current beta's security limitations, in
 
 ## Why the name
 
-The agora was the public square where a city argued with itself. The interface is deliberately editorial: warm paper, serif headings, ink for the motion, faded red for the challenge, and a stage that follows the light: dark wood at night, daylight paper by day. Aurora keeps that structure while moving the light to a deep indigo reading room with rose, lilac and periwinkle chrome. The map is the argument; the stage is the argument being made; the bench is the argument being judged.
+The agora was the public square where a city argued with itself. The interface is deliberately editorial: warm paper, serif headings, walnut for the motion, olive for the support and rust for the challenge, and a stage that follows the light: dark wood at night, daylight paper by day. Aurora keeps that structure while moving the light to a deep indigo reading room with rose, lilac and periwinkle chrome. The map is the argument; the stage is the argument being made; the bench is the argument being judged.
 
 ## License
 

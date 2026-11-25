@@ -4,7 +4,7 @@ export type ThemePalette = "night" | "aurora";
 
 const COOKIE_NAME = "agora_theme";
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
-const LIGHT_THEME_COLOR = "#eee7da";
+const LIGHT_THEME_COLOR = "#e7d9c3";
 const DARK_THEME_COLOR = "#15120e";
 const AURORA_THEME_COLOR = "#090a15";
 

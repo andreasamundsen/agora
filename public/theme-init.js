@@ -12,6 +12,6 @@
     delete document.documentElement.dataset.palette;
   }
   const meta = document.querySelector('meta[name="theme-color"]');
-  const color = resolved === "light" ? "#eee7da" : preference === "aurora" ? "#090a15" : "#15120e";
+  const color = resolved === "light" ? "#e7d9c3" : preference === "aurora" ? "#090a15" : "#15120e";
   if (meta) meta.setAttribute("content", color);
 })();
