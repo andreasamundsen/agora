@@ -4,11 +4,19 @@ Agora is a local debate harness. You install it like a normal Windows app; no No
 
 ## Install
 
-1. Download `Agora-Setup-0.1.64.exe` and its `.sha256` sidecar from the GitHub Releases page.
+1. Download `Agora-Setup-0.1.65.exe` and its `.sha256` sidecar from the GitHub Releases page.
 2. Windows will warn that the publisher is unknown. This build is intentionally unsigned: choose **More info → Run anyway**.
 3. The installer is per-user and does not need administrator rights. Agora opens when it finishes.
 4. To upgrade, close Agora first, then run the newer installer over it. Your debates stay in `%APPDATA%\Agora\data`.
 5. Verify the SHA-256 checksum against the value in the `.sha256` file from the same release. A matching hash is not a code signature; it only confirms the file has not changed.
+
+## What's new in 0.1.65
+
+- **Editorial paper is warmer and deeper.** The light theme now uses a deeper parchment page (`#e7d9c3`) with warmer surfaces, lines, and chamber and stage panels. It is still a daylight reading room, not a sepia overlay.
+- **Argument cards are olive and rust.** Support is moss (`#49623a`) on an oat-green field (`#e3e5d1`); attack is rust (`#93422b`) on warm clay (`#efddd0`). The For/Against labels and the existing judgment colours are unchanged.
+- **Actions are walnut brown.** Judge, Stage Debate, the library `+`, stage play/pause, other primary buttons, and the chamber send control use walnut (`#5e503f`) with beige (`#f5f5dc`) text.
+- **The logo and motion card share the walnut.** The topbar logo mark and the motion card use the same walnut, with the motion text and MOTION label adjusted to stay readable.
+- Night Reading Room and Aurora are unchanged. Existing debates, settings, editing, Stage, saved judgments, Argdown interchange, provider behavior, and judgment arithmetic are also unchanged.
 
 ## What's new in 0.1.64
 
