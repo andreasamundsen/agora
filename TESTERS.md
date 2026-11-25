@@ -4,11 +4,18 @@ Agora is a local debate harness. You install it like a normal Windows app; no No
 
 ## Install
 
-1. Download `Agora-Setup-0.1.63.exe` and its `.sha256` sidecar from the GitHub Releases page.
+1. Download `Agora-Setup-0.1.64.exe` and its `.sha256` sidecar from the GitHub Releases page.
 2. Windows will warn that the publisher is unknown. This build is intentionally unsigned: choose **More info → Run anyway**.
 3. The installer is per-user and does not need administrator rights. Agora opens when it finishes.
 4. To upgrade, close Agora first, then run the newer installer over it. Your debates stay in `%APPDATA%\Agora\data`.
 5. Verify the SHA-256 checksum against the value in the `.sha256` file from the same release. A matching hash is not a code signature; it only confirms the file has not changed.
+
+## What's new in 0.1.64
+
+- **Aurora is now Twilight chrome.** The palette has moved to a deep indigo-black room with a rose → lilac → periwinkle action gradient (`#e18ac2 → #b38be8 → #7f9cf2`), replacing the old peach → apricot → sun action. The active library row, focus rings, stage footlights, and judge chrome follow the same twilight light.
+- **Argument cards are blue and rose.** Support is ice blue (`#8fc7ff`) on `#102a40 → #0b1f31` fills; attack is rose (`#ff9ab8`) on `#341a2b → #261420` fills. Undercut moves to lilac (`#b7a4ff`), and judgment remains moon gold (`#f2d39b`). Borders, glows, badges, edges, and speaker dots follow the same pair.
+- **The README leads with Aurora.** The public gallery now opens with the twilight workspace, stage, and Thread view; Night Reading Room and Editorial paper are folded below.
+- Existing debates, settings, editing, Stage, saved judgments, Argdown interchange, provider behavior, and judgment arithmetic are unchanged.
 
 ## What's new in 0.1.63
 
