@@ -12,9 +12,24 @@ Agora is an early public beta. The source is available under the **MIT License**
 
 ## Screenshots
 
-Agora ships with three appearances. The gallery leads with **Night Reading Room**, the warm dark reading room; **Aurora** and the light **Editorial paper** set are folded out below it.
+Agora ships with three appearances. The gallery leads with **Aurora**, the twilight palette; **Night Reading Room** and the light **Editorial paper** set are folded out below it.
 
-### Night Reading Room
+### Aurora
+
+![The Agora workspace in the Aurora theme, showing the debate library, a case-view argument map, and the chamber](docs/screenshots/workspace-case-aurora.jpg)
+
+*The workspace in Aurora: deep indigo chrome, ice-blue support and rose attack cards, and the argument map at the centre.*
+
+![A staged debate in the Aurora theme with the argument map behind the speaker and the spoken turn below](docs/screenshots/stage-debate-aurora.jpg)
+
+*The stage in Aurora: rose and periwinkle footlights, and the same argument map following the turn.*
+
+![A thread-view argument map in the Aurora theme with replies attached to the claims they answer](docs/screenshots/map-thread-aurora.jpg)
+
+*Thread view in Aurora: replies attach to the argument they answer, so a line of reasoning can be followed outward from the motion.*
+
+<details>
+<summary><strong>Night Reading Room — warm dark</strong></summary>
 
 ![The Agora workspace in Night Reading Room, showing the debate library, a case-view argument map, and the chamber](docs/screenshots/workspace-case-dark.jpg)
 
@@ -27,21 +42,6 @@ Agora ships with three appearances. The gallery leads with **Night Reading Room*
 ![A thread-view argument map in Night Reading Room with replies attached to the claims they answer](docs/screenshots/map-thread-dark.jpg)
 
 *Thread view in Night Reading Room.*
-
-<details>
-<summary><strong>Aurora — glossy black</strong></summary>
-
-![The Agora workspace in the Aurora theme, showing the debate library, a case-view argument map, and the chamber](docs/screenshots/workspace-case-aurora.jpg)
-
-*The workspace in Aurora: glossy black chrome, spring-green support and watermelon attack cards, and the argument map at the centre.*
-
-![A staged debate in the Aurora theme with the argument map behind the speaker and the spoken turn below](docs/screenshots/stage-debate-aurora.jpg)
-
-*The stage in Aurora: black gloss, muted peach footlights, and the same argument map following the turn.*
-
-![A thread-view argument map in the Aurora theme with replies attached to the claims they answer](docs/screenshots/map-thread-aurora.jpg)
-
-*Thread view in Aurora: replies attach to the argument they answer, so a line of reasoning can be followed outward from the motion.*
 
 </details>
 
@@ -303,7 +303,7 @@ The bench uses the same provider and key as the rest of the app. Its **Judge mod
 
 ### Appearance
 
-Settings → Appearance switches between **System**, **Light**, **Dark**, and **Aurora**. System follows the Windows appearance setting. Light is **Editorial paper**, Dark is **Night Reading Room**, and Aurora is a glossy black variant of the dark palette with muted peach accents. The choice is remembered on this machine and applied before the interface paints, so the dark reading room does not flash paper-white at launch. The desktop window background follows the saved theme on the next launch.
+Settings → Appearance switches between **System**, **Light**, **Dark**, and **Aurora**. System follows the Windows appearance setting. Light is **Editorial paper**, Dark is **Night Reading Room**, and Aurora is a twilight variant of the dark palette: deep indigo-black, rose–lilac–periwinkle chrome, ice-blue support and rose attack cards. The choice is remembered on this machine and applied before the interface paints, so the dark reading room does not flash paper-white at launch. The desktop window background follows the saved theme on the next launch.
 
 ## Connecting a model
 
@@ -408,7 +408,7 @@ src/
     components/         DebateGraph, ChatPanel, StagePanel, NodeInspector, MapEditor, JudgmentModal, JudgmentPanel, Modals
     styles.css          editorial paper / library ink / shared stage
     dark.css            Night Reading Room — warm dark palette
-    aurora.css          Aurora — glossy black with muted peach accents
+    aurora.css          Aurora — twilight chrome
     light.css           Editorial paper — daylight stage
     editor.css          map editor panel and draft controls
 ```
@@ -476,7 +476,7 @@ See [`SECURITY.md`](SECURITY.md) for the current beta's security limitations, in
 
 ## Why the name
 
-The agora was the public square where a city argued with itself. The interface is deliberately editorial: warm paper, serif headings, ink for the motion, faded red for the challenge, and a stage that follows the light: dark wood at night, daylight paper by day. Aurora keeps that structure while moving the light to a glossy black reading room with muted peach accents. The map is the argument; the stage is the argument being made; the bench is the argument being judged.
+The agora was the public square where a city argued with itself. The interface is deliberately editorial: warm paper, serif headings, ink for the motion, faded red for the challenge, and a stage that follows the light: dark wood at night, daylight paper by day. Aurora keeps that structure while moving the light to a deep indigo reading room with rose, lilac and periwinkle chrome. The map is the argument; the stage is the argument being made; the bench is the argument being judged.
 
 ## License
 
