@@ -12,24 +12,9 @@ Agora is an early public beta. The source is available under the **MIT License**
 
 ## Screenshots
 
-Agora ships with three appearances. The gallery leads with **Aurora**, a glossy black low-light palette with muted peach accents; **Night Reading Room** and the light **Editorial paper** set are folded out below it.
+Agora ships with three appearances. The gallery leads with **Night Reading Room**, the warm dark reading room; **Aurora** and the light **Editorial paper** set are folded out below it.
 
-### Aurora
-
-![The Agora workspace in the Aurora theme, showing the debate library, a case-view argument map, and the chamber](docs/screenshots/workspace-case-aurora.jpg)
-
-*The workspace in Aurora: glossy black chrome, spring-green support and watermelon attack cards, and the argument map at the centre.*
-
-![A staged debate in the Aurora theme with the argument map behind the speaker and the spoken turn below](docs/screenshots/stage-debate-aurora.jpg)
-
-*The stage in Aurora: black gloss, muted peach footlights, and the same argument map following the turn.*
-
-![A thread-view argument map in the Aurora theme with replies attached to the claims they answer](docs/screenshots/map-thread-aurora.jpg)
-
-*Thread view in Aurora: replies attach to the argument they answer, so a line of reasoning can be followed outward from the motion.*
-
-<details>
-<summary><strong>Night Reading Room — warm dark</strong></summary>
+### Night Reading Room
 
 ![The Agora workspace in Night Reading Room, showing the debate library, a case-view argument map, and the chamber](docs/screenshots/workspace-case-dark.jpg)
 
@@ -42,6 +27,21 @@ Agora ships with three appearances. The gallery leads with **Aurora**, a glossy 
 ![A thread-view argument map in Night Reading Room with replies attached to the claims they answer](docs/screenshots/map-thread-dark.jpg)
 
 *Thread view in Night Reading Room.*
+
+<details>
+<summary><strong>Aurora — glossy black</strong></summary>
+
+![The Agora workspace in the Aurora theme, showing the debate library, a case-view argument map, and the chamber](docs/screenshots/workspace-case-aurora.jpg)
+
+*The workspace in Aurora: glossy black chrome, spring-green support and watermelon attack cards, and the argument map at the centre.*
+
+![A staged debate in the Aurora theme with the argument map behind the speaker and the spoken turn below](docs/screenshots/stage-debate-aurora.jpg)
+
+*The stage in Aurora: black gloss, muted peach footlights, and the same argument map following the turn.*
+
+![A thread-view argument map in the Aurora theme with replies attached to the claims they answer](docs/screenshots/map-thread-aurora.jpg)
+
+*Thread view in Aurora: replies attach to the argument they answer, so a line of reasoning can be followed outward from the motion.*
 
 </details>
 
