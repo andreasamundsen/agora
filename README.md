@@ -12,9 +12,24 @@ Agora is an early public beta. The source is available under the **MIT License**
 
 ## Screenshots
 
-Agora ships with three appearances. The gallery leads with **Aurora**, the twilight palette; **Night Reading Room** and the light **Editorial paper** set are folded out below it.
+Agora ships with three appearances. The gallery leads with **Editorial paper**, the light palette; **Aurora** and **Night Reading Room** are folded out below it.
 
-### Aurora
+### Editorial paper
+
+![The Agora workspace in light mode, showing the debate library, a case-view argument map, and the chamber](docs/screenshots/workspace-case.jpg)
+
+*The workspace in Editorial paper: warm parchment, a walnut motion card, olive support and rust attack cards.*
+
+![A staged debate in light mode with the argument map behind the speaker and the spoken turn below](docs/screenshots/stage-debate.jpg)
+
+*The daylight stage in Editorial paper.*
+
+![A thread-view argument map in light mode with replies attached to the claims they answer](docs/screenshots/map-thread.jpg)
+
+*Thread view in Editorial paper.*
+
+<details>
+<summary><strong>Aurora — twilight chrome</strong></summary>
 
 ![The Agora workspace in the Aurora theme, showing the debate library, a case-view argument map, and the chamber](docs/screenshots/workspace-case-aurora.jpg)
 
@@ -27,6 +42,8 @@ Agora ships with three appearances. The gallery leads with **Aurora**, the twili
 ![A thread-view argument map in the Aurora theme with replies attached to the claims they answer](docs/screenshots/map-thread-aurora.jpg)
 
 *Thread view in Aurora: replies attach to the argument they answer, so a line of reasoning can be followed outward from the motion.*
+
+</details>
 
 <details>
 <summary><strong>Night Reading Room — warm dark</strong></summary>
@@ -42,23 +59,6 @@ Agora ships with three appearances. The gallery leads with **Aurora**, the twili
 ![A thread-view argument map in Night Reading Room with replies attached to the claims they answer](docs/screenshots/map-thread-dark.jpg)
 
 *Thread view in Night Reading Room.*
-
-</details>
-
-<details>
-<summary><strong>Editorial paper — light mode</strong></summary>
-
-![The Agora workspace in light mode, showing the debate library, a case-view argument map, and the chamber](docs/screenshots/workspace-case.jpg)
-
-*The workspace in Editorial paper: warm parchment, a walnut motion card, olive support and rust attack cards.*
-
-![A staged debate in light mode with the argument map behind the speaker and the spoken turn below](docs/screenshots/stage-debate.jpg)
-
-*The daylight stage in Editorial paper.*
-
-![A thread-view argument map in light mode with replies attached to the claims they answer](docs/screenshots/map-thread.jpg)
-
-*Thread view in Editorial paper.*
 
 </details>
 
