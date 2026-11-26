@@ -7,7 +7,7 @@ import type {
   StandardOfProof
 } from "../core/judgment";
 import type { JudgeProgressEvent } from "../shared/judge-progress";
-import type { ThinkingLevel } from "../shared/thinking";
+import type { ThinkingCapability, ThinkingLevel } from "../shared/thinking";
 
 export type ReasoningEffort = ThinkingLevel;
 
@@ -64,8 +64,11 @@ export function fetchDebate(id: string): Promise<{ debate: Debate }> {
   return request(`/debates/${encodeURIComponent(id)}`);
 }
 
-export function createDebate(text: string): Promise<{ debate: Debate; engine: "llm" | "local"; warning?: string }> {
-  return request("/debates", { method: "POST", body: JSON.stringify({ text }) });
+export function createDebate(
+  text: string,
+  signal?: AbortSignal
+): Promise<{ debate: Debate; engine: "llm" | "local"; warning?: string }> {
+  return request("/debates", { method: "POST", body: JSON.stringify({ text }), signal });
 }
 
 export function deleteDebate(id: string): Promise<{ ok: boolean }> {
@@ -120,11 +123,12 @@ export function testSettings(): Promise<{ ok: boolean; message: string; latencyM
 export interface ProviderModelsResult {
   ok: boolean;
   models: string[];
+  capabilities?: Record<string, ThinkingCapability>;
   message?: string;
 }
 
-export function fetchProviderModels(): Promise<ProviderModelsResult> {
-  return request("/settings/models");
+export function fetchProviderModels(force = false): Promise<ProviderModelsResult> {
+  return request(`/settings/models${force ? "?refresh=1" : ""}`);
 }
 
 export function judgeDebate(

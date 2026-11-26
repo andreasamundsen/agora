@@ -114,6 +114,30 @@ describe("Gemini native transport", () => {
     expect(config.temperature).toBeUndefined();
   });
 
+  it("aborts an in-flight request when the caller signal is aborted", async () => {
+    let seenSignal: AbortSignal | undefined;
+    const controller = new AbortController();
+    const pending = callGemini(
+      settings(),
+      [{ role: "user", content: "Map this." }],
+      { signal: controller.signal },
+      fetchStub(async (_url, init) => {
+        seenSignal = init?.signal ?? undefined;
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener(
+            "abort",
+            () => reject(new DOMException("aborted", "AbortError")),
+            { once: true }
+          );
+        });
+      })
+    );
+    controller.abort();
+
+    await expect(pending).rejects.toThrow(/cancelled/i);
+    expect(seenSignal?.aborted).toBe(true);
+  });
+
   it("reports hidden thinking instead of returning an empty answer", async () => {
     await expect(
       callGemini(

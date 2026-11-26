@@ -7,6 +7,7 @@ export const ANTHROPIC_API_VERSION = "2026-10-21";
 export function providerProtocol(provider: string): ProviderProtocol {
   if (provider === "anthropic" || provider === "claude") return "anthropic";
   if (provider === "google" || provider === "gemini") return "gemini";
+  if (provider === "openrouter") return "openai";
   return "openai";
 }
 

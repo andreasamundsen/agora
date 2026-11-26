@@ -6,6 +6,7 @@ import {
   geminiThinkingLevels,
   geminiThinkingStyle,
   isThinkingLevel,
+  openRouterThinkingCapability,
   providerReasoningEffort,
   thinkingCapability,
   thinkingTokenBudget
@@ -35,6 +36,9 @@ describe("thinking levels", () => {
 
     expect(thinkingCapability("openai", "gpt-4o-mini").supported).toBe(false);
     expect(thinkingCapability("custom", "deepseek-flash").supported).toBe(false);
+    const openrouter = thinkingCapability("openrouter", "openai/gpt-4o-mini");
+    expect(openrouter.supported).toBe(false);
+    expect(openrouter.note).toContain("OpenRouter");
   });
 
   it("maps the generic level to each provider's wire value", () => {
@@ -99,5 +103,83 @@ describe("thinking levels", () => {
     expect(thinkingTokenBudget("max")).toBe(16_000);
     expect(geminiThinkingLevel("max")).toBe("XHIGH");
     expect(geminiThinkingLevel("default")).toBeUndefined();
+  });
+});
+
+describe("OpenRouter reasoning metadata", () => {
+  it("derives the supported ladder and wire values from a catalogue entry", () => {
+    const deepseek = openRouterThinkingCapability({
+      supported_parameters: ["reasoning", "reasoning_effort", "max_tokens"],
+      reasoning: {
+        mandatory: false,
+        default_enabled: true,
+        default_effort: "high",
+        supported_efforts: ["max", "high", "low", "none"]
+      }
+    });
+
+    expect(deepseek.supported).toBe(true);
+    expect(deepseek.levels).toEqual(["default", "off", "low", "high", "max"]);
+    expect(deepseek.wireEfforts).toEqual({ low: "low", high: "high", max: "max" });
+    expect(deepseek.note).toContain("OpenRouter");
+
+    const grok = openRouterThinkingCapability({
+      supported_parameters: ["reasoning"],
+      reasoning: {
+        mandatory: true,
+        supported_efforts: ["xhigh", "high", "medium", "low"]
+      }
+    });
+
+    expect(grok.supported).toBe(true);
+    expect(grok.levels).toEqual(["default", "low", "medium", "high", "max"]);
+    expect(grok.wireEfforts?.max).toBe("xhigh");
+    expect(grok.note).toContain("mandatory");
+  });
+
+  it("offers only on/off when the catalogue has no effort ladder", () => {
+    const claude = openRouterThinkingCapability({
+      supported_parameters: ["reasoning"],
+      reasoning: { mandatory: false, default_enabled: true }
+    });
+
+    expect(claude.supported).toBe(true);
+    expect(claude.levels).toEqual(["default", "off"]);
+    expect(claude.wireEfforts).toEqual({});
+  });
+
+  it("does not invent controls without the reasoning gate or reasoning detail", () => {
+    expect(
+      openRouterThinkingCapability({
+        supported_parameters: [],
+        reasoning: { mandatory: false, supported_efforts: null }
+      }).supported
+    ).toBe(false);
+
+    expect(
+      openRouterThinkingCapability({
+        supported_parameters: ["reasoning"],
+        reasoning: null
+      }).supported
+    ).toBe(false);
+
+    expect(
+      openRouterThinkingCapability({
+        supported_parameters: ["reasoning"],
+        reasoning: { mandatory: true }
+      }).supported
+    ).toBe(false);
+  });
+
+  it("lets detected capability override the static OpenRouter fallback", () => {
+    const detected = openRouterThinkingCapability({
+      supported_parameters: ["reasoning"],
+      reasoning: { mandatory: false, supported_efforts: ["high", "none"] }
+    });
+    const resolved = thinkingCapability("openrouter", "future/model-1", detected);
+
+    expect(resolved).toBe(detected);
+    expect(resolved.levels).toEqual(["default", "off", "high"]);
+    expect(providerReasoningEffort("openrouter", "max")).toBe("max");
   });
 });

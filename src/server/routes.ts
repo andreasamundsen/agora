@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { DebateStore, DebateReadError } from "./store";
 import { JudgmentStore } from "./judgment-store";
-import { askDebate, authorDebate } from "./llm";
+import { askDebate, authorDebate, AuthorCancelledError } from "./llm";
 import { judgeDebate, JudgeCancelledError, MAX_LINKS } from "./judge";
 import { ArgdownImportError, importArgdown } from "./argdown-import";
 import { toArgdown } from "../core/argdown";
@@ -72,19 +72,29 @@ export function createApi(store: DebateStore, judgments = new JudgmentStore()): 
   });
 
   api.post("/debates", async (req, res, next) => {
+    const controller = new AbortController();
+    const onClose = () => {
+      if (!res.writableEnded) controller.abort();
+    };
+    res.on("close", onClose);
     try {
       const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
       if (text.length < 6) return res.status(400).json({ error: "Give me a position to debate — a sentence or two is enough." });
       if (text.length > 4000) return res.status(400).json({ error: "That position is too long. Keep it under 4,000 characters." });
-      const result = await authorDebate(text);
+      const result = await authorDebate(text, controller.signal);
+      if (controller.signal.aborted) return;
       const saved = await store.save(result.debate);
+      if (controller.signal.aborted) return;
       res.status(201).json({
         debate: saved,
         engine: result.engine,
         warning: result.warning
       });
     } catch (error) {
+      if (controller.signal.aborted || error instanceof AuthorCancelledError) return;
       next(error);
+    } finally {
+      res.off("close", onClose);
     }
   });
 
@@ -386,7 +396,7 @@ export function createApi(store: DebateStore, judgments = new JudgmentStore()): 
     }
   });
 
-  api.get("/settings/models", async (_req, res, next) => {
+  api.get("/settings/models", async (req, res, next) => {
     try {
       const settings = getSettings();
       if (settings.provider === "local") {
@@ -394,7 +404,7 @@ export function createApi(store: DebateStore, judgments = new JudgmentStore()): 
       }
       const problem = providerUrlProblem(settings.baseUrl, Boolean(settings.apiKey.trim()));
       if (problem) return res.status(400).json({ error: problem });
-      res.json(await listProviderModels(settings));
+      res.json(await listProviderModels(settings, fetch, undefined, req.query.refresh === "1"));
     } catch (error) {
       next(error);
     }

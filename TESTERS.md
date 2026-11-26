@@ -4,11 +4,34 @@ Agora is a local debate harness. You install it like a normal Windows app; no No
 
 ## Install
 
-1. Download `Agora-Setup-0.1.65.exe` and its `.sha256` sidecar from the GitHub Releases page.
+1. Download `Agora-Setup-0.1.68.exe` and its `.sha256` sidecar from the GitHub Releases page.
 2. Windows will warn that the publisher is unknown. This build is intentionally unsigned: choose **More info → Run anyway**.
 3. The installer is per-user and does not need administrator rights. Agora opens when it finishes.
 4. To upgrade, close Agora first, then run the newer installer over it. Your debates stay in `%APPDATA%\Agora\data`.
 5. Verify the SHA-256 checksum against the value in the `.sha256` file from the same release. A matching hash is not a code signature; it only confirms the file has not changed.
+
+## What's new in 0.1.68
+
+- **Judgment link evaluations now carry the debate context.** Every local link prompt includes the motion, the thesis, and a compact target-to-thesis path with the target’s role, titles, and relation types. The path is orientation, not evidence: other arguments’ full text, edge notes, prior verdicts, and the standard of proof stay out, and the model still judges only the link.
+- **Map generation can be cancelled while it is running.** The × in the New Debate dialog is active during authoring. It closes the dialog, aborts the request, and discards the cancelled map instead of saving a fallback. Tokens the provider has already generated may still be billed.
+- **OpenRouter is available as a first-class provider preset.** Its thinking controls follow the selected model’s published metadata, and **Refresh models** forces a catalogue refresh.
+- **The README gallery now shows all three appearances directly,** with one workspace image each for Editorial paper, Aurora, and Night Reading Room.
+- Existing debates, settings, editing, Stage, saved judgments, Argdown interchange, provider behavior, and judgment arithmetic are unchanged.
+
+## What's new in 0.1.67
+
+- **OpenRouter thinking controls now follow the selected model.** Agora reads OpenRouter's published model metadata and shows only the levels that model accepts. Mandatory-reasoning models hide **Off**; models without reasoning metadata keep the provider default and show no thinking control.
+- **The selected level changes the request itself.** OpenRouter routes receive the native `reasoning` object, and reasoning-enabled requests get a larger completion budget so hidden reasoning does not consume the whole answer. A saved level the model no longer accepts falls back to the provider default.
+- **Refresh models is now a true catalogue refresh.** OpenRouter capabilities are cached briefly; **Refresh models** forces a new read, so newly listed models appear without an Agora release.
+- These controls apply only to OpenRouter. Other providers, existing debates, editing, Stage, saved judgments, Argdown interchange, and judgment arithmetic are unchanged.
+
+## What's new in 0.1.66
+
+- **OpenRouter arrived as a first-class provider preset.** Choose **OpenRouter** in Settings to fill `https://openrouter.ai/api/v1` and the tested `openai/gpt-4o-mini` model. OpenRouter model IDs are vendor-prefixed, and **Refresh models** loads the catalogue for your saved key.
+- The 0.1.66 build did not expose OpenRouter thinking controls; 0.1.67 adds model-aware detection.
+- **A saved key is no longer carried to a different host by accident.** Switching to a preset on another host marks the saved key for removal; switching within the same host keeps it.
+- **Stalled model responses now time out.** Agora's generation timeout covers the full response body, so a provider that sends headers and then stalls reports a clear timeout instead of leaving the map generation spinning indefinitely.
+- OpenRouter's xAI Grok 4.5–4.7 routes stalled on the full authoring prompt during testing. Use another OpenRouter model if generation does not complete. Existing debates, editing, Stage, saved judgments, Argdown interchange, and judgment arithmetic are unchanged.
 
 ## What's new in 0.1.65
 

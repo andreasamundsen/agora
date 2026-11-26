@@ -23,6 +23,8 @@ export interface ThinkingCapability {
   supported: boolean;
   levels: ThinkingLevel[];
   note: string;
+  /** Provider wire values for levels whose displayed name differs from the wire token. */
+  wireEfforts?: Partial<Record<ThinkingLevel, string>>;
 }
 
 const DEEPSEEK_THINKING_MODELS = new Set([
@@ -125,13 +127,108 @@ export function geminiThinkingLevel(level: ThinkingLevel): string | undefined {
   return undefined;
 }
 
+/** Raw fields from an OpenRouter `/models` catalogue entry. */
+export interface OpenRouterReasoningFields {
+  supported_parameters?: unknown;
+  reasoning?: unknown;
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.trim().toLowerCase())
+        .filter(Boolean)
+    : [];
+}
+
+function recordOf(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+/**
+ * Turn OpenRouter's live reasoning metadata into the same small capability
+ * object the rest of Agora uses. `supported_parameters` is the gate; the
+ * top-level `reasoning` object supplies the detail. Do not trust the detail
+ * object alone, because the catalogue also exposes it on routes that do not
+ * accept reasoning controls.
+ */
+export function openRouterThinkingCapability(entry: OpenRouterReasoningFields): ThinkingCapability {
+  const params = stringList(entry.supported_parameters);
+  const reasoning = recordOf(entry.reasoning);
+  const hasReasoningParameter = params.includes("reasoning") || params.includes("reasoning_effort");
+  if (!hasReasoningParameter || !reasoning) {
+    return {
+      supported: false,
+      levels: [],
+      note: "OpenRouter does not advertise adjustable thinking controls for this model."
+    };
+  }
+
+  const mandatory = reasoning.mandatory === true;
+  const levels: ThinkingLevel[] = ["default"];
+  if (!mandatory) levels.push("off");
+
+  const wireEfforts: Partial<Record<ThinkingLevel, string>> = {};
+  const rawEfforts = reasoning.supported_efforts;
+  const allEfforts = rawEfforts === null;
+  const efforts = Array.isArray(rawEfforts) ? stringList(rawEfforts) : [];
+  const allows = (value: string) => allEfforts || efforts.includes(value);
+
+  if (allows("low") || allows("minimal")) {
+    levels.push("low");
+    wireEfforts.low = allows("low") ? "low" : "minimal";
+  }
+  if (allows("medium")) {
+    levels.push("medium");
+    wireEfforts.medium = "medium";
+  }
+  if (allows("high")) {
+    levels.push("high");
+    wireEfforts.high = "high";
+  }
+  if (allows("max") || allows("xhigh")) {
+    levels.push("max");
+    wireEfforts.max = allows("max") ? "max" : "xhigh";
+  }
+
+  const hasEffortLadder = levels.some((level) => level !== "default" && level !== "off");
+  if (mandatory && !hasEffortLadder) {
+    return {
+      supported: false,
+      levels: [],
+      note: "OpenRouter says reasoning is mandatory for this model, but it exposes no adjustable level."
+    };
+  }
+
+  let note = hasEffortLadder
+    ? "Thinking controls follow this model's OpenRouter metadata. Only levels the model advertises are shown."
+    : "OpenRouter reports reasoning support without selectable effort for this model. Use the provider default or turn it off.";
+  if (mandatory) note += " Reasoning is mandatory, so Off is hidden.";
+
+  return {
+    supported: true,
+    levels,
+    note,
+    wireEfforts
+  };
+}
+
 /**
  * The model list is authoritative only for identifiers. These small, explicit
  * capability rules decide whether Agora can offer a thinking control safely.
- * Unknown models stay on the old request shape rather than receiving an
+ * A detected OpenRouter capability, when supplied, takes precedence; unknown
+ * models otherwise stay on the old request shape rather than receiving an
  * invented parameter.
  */
-export function thinkingCapability(provider: string, model: string): ThinkingCapability {
+export function thinkingCapability(
+  provider: string,
+  model: string,
+  detected?: ThinkingCapability | null
+): ThinkingCapability {
+  if (detected) return detected;
   const id = model.trim().toLowerCase();
 
   if (provider === "deepseek" && DEEPSEEK_THINKING_MODELS.has(id)) {
@@ -218,6 +315,14 @@ export function thinkingCapability(provider: string, model: string): ThinkingCap
     };
   }
 
+  if (provider === "openrouter") {
+    return {
+      supported: false,
+      levels: [],
+      note: "OpenRouter model parameters vary, so Agora does not guess a thinking control. The selected model runs with its provider default."
+    };
+  }
+
   return {
     supported: false,
     levels: [],
@@ -229,6 +334,7 @@ export function thinkingCapability(provider: string, model: string): ThinkingCap
 export function providerReasoningEffort(provider: string, level: ThinkingLevel): string | undefined {
   if (level === "default" || level === "off") return undefined;
   if (provider === "xai") return level === "max" ? "xhigh" : level;
+  if (provider === "openrouter") return level;
   if (provider === "openai") return level === "max" ? undefined : level;
   if (provider === "deepseek") return level === "medium" ? undefined : level;
   return undefined;

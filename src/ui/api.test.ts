@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Debate } from "../core/model";
 import type { JudgmentRun } from "../core/judgment";
 import type { JudgeProgressEvent } from "../shared/judge-progress";
-import { ApiError, deleteSavedJudgment, fetchSavedJudgment, fetchSavedJudgments, judgeDebateStream, saveDebate, saveJudgmentRun } from "./api";
+import { ApiError, createDebate, deleteSavedJudgment, fetchSavedJudgment, fetchSavedJudgments, judgeDebateStream, saveDebate, saveJudgmentRun } from "./api";
 
 function ndjsonResponse(chunks: string[]): Response {
   const encoder = new TextEncoder();
@@ -51,6 +51,25 @@ describe("saveDebate", () => {
       nodes: debate.nodes,
       edges: []
     });
+  });
+});
+
+describe("createDebate", () => {
+  it("forwards the cancellation signal to the map request", async () => {
+    const debate = { id: "debate-1" } as Debate;
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ debate, engine: "llm" }), {
+        status: 201,
+        headers: { "Content-Type": "application/json" }
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const controller = new AbortController();
+
+    await createDebate("A position worth mapping", controller.signal);
+
+    const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(options.signal).toBe(controller.signal);
   });
 });
 

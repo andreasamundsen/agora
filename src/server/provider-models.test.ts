@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { StoredSettings } from "./settings";
 import { listProviderModels } from "./provider-models";
+import { clearOpenRouterCatalogCache } from "./openrouter-catalog";
 
 function settings(overrides: Partial<StoredSettings> = {}): StoredSettings {
   return {
@@ -19,6 +20,10 @@ function fetchStub(handler: (url: string, init?: RequestInit) => Promise<Respons
 }
 
 describe("provider model discovery", () => {
+  beforeEach(() => {
+    clearOpenRouterCatalogCache();
+  });
+
   it("uses the normalized models endpoint, sends auth, and sorts unique ids", async () => {
     let seenUrl = "";
     let seenAuth = "";
@@ -134,5 +139,101 @@ describe("provider model discovery", () => {
 
     expect(result.ok).toBe(false);
     expect(called).toBe(false);
+  });
+
+  it("returns OpenRouter reasoning capabilities and reuses the catalogue cache", async () => {
+    let calls = 0;
+    let seenUrl = "";
+    let seenAuth = "";
+    const result = await listProviderModels(
+      settings({
+        provider: "openrouter",
+        baseUrl: "https://openrouter.ai/api/v1",
+        model: "deepseek/deepseek-v4.1-flash-1017"
+      }),
+      fetchStub(async (url, init) => {
+        calls += 1;
+        seenUrl = url;
+        seenAuth = String((init?.headers as Record<string, string> | undefined)?.Authorization ?? "");
+        return new Response(
+          JSON.stringify({
+            data: [
+              {
+                id: "deepseek/deepseek-v4.1-flash-1017",
+                supported_parameters: ["reasoning", "reasoning_effort"],
+                reasoning: {
+                  mandatory: false,
+                  supported_efforts: ["max", "high", "low", "none"]
+                }
+              },
+              {
+                id: "openai/gpt-4o-mini",
+                supported_parameters: ["temperature"],
+                reasoning: null
+              }
+            ]
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      })
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.models).toEqual([
+      "deepseek/deepseek-v4.1-flash-1017",
+      "openai/gpt-4o-mini"
+    ]);
+    expect(result.capabilities?.["deepseek/deepseek-v4.1-flash-1017"]?.levels).toEqual([
+      "default",
+      "off",
+      "low",
+      "high",
+      "max"
+    ]);
+    expect(result.capabilities?.["openai/gpt-4o-mini"]?.supported).toBe(false);
+    expect(seenUrl).toBe("https://openrouter.ai/api/v1/models");
+    expect(seenAuth).toBe("Bearer test-key");
+
+    const cached = await listProviderModels(
+      settings({
+        provider: "openrouter",
+        baseUrl: "https://openrouter.ai/api/v1",
+        model: "deepseek/deepseek-v4.1-flash-1017"
+      }),
+      fetchStub(async () => {
+        calls += 1;
+        return new Response("", { status: 500 });
+      })
+    );
+    expect(cached.ok).toBe(true);
+    expect(calls).toBe(1);
+  });
+
+  it("refreshes the OpenRouter catalogue when asked", async () => {
+    let calls = 0;
+    const fetchCatalog = fetchStub(async () => {
+      calls += 1;
+      return new Response(
+        JSON.stringify({
+          data: [{ id: calls === 1 ? "old/model" : "new/model", supported_parameters: [], reasoning: null }]
+        }),
+        { status: 200 }
+      );
+    });
+
+    const first = await listProviderModels(
+      settings({ provider: "openrouter", baseUrl: "https://openrouter.ai/api/v1" }),
+      fetchCatalog
+    );
+    const second = await listProviderModels(
+      settings({ provider: "openrouter", baseUrl: "https://openrouter.ai/api/v1" }),
+      fetchCatalog,
+      undefined,
+      true
+    );
+
+    expect(first.models).toEqual(["old/model"]);
+    expect(second.models).toEqual(["new/model"]);
+    expect(calls).toBe(2);
   });
 });

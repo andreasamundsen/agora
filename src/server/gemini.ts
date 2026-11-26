@@ -19,6 +19,7 @@ interface CallOptions {
   temperature?: number;
   maxTokens?: number;
   jsonMode?: boolean;
+  signal?: AbortSignal;
 }
 
 const GEMINI_DEFAULT_MAX_TOKENS = 4_200;
@@ -88,6 +89,9 @@ export async function callGemini(
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), style !== "none" && level !== "off" ? 240_000 : 150_000);
+  const signal = options.signal
+    ? AbortSignal.any([controller.signal, options.signal])
+    : controller.signal;
   let response: Response;
   try {
     response = await fetchImpl(geminiGenerateEndpoint(settings.baseUrl, settings.model), {
@@ -97,9 +101,10 @@ export async function callGemini(
         ...(settings.apiKey ? { "x-goog-api-key": settings.apiKey } : {})
       },
       body: JSON.stringify(body),
-      signal: controller.signal
+      signal
     });
   } catch (error) {
+    if (options.signal?.aborted) throw new Error("The Gemini request was cancelled.");
     if (controller.signal.aborted) {
       throw new Error("Gemini did not answer before the request timed out.");
     }

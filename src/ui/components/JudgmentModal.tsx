@@ -200,6 +200,11 @@ export function JudgmentModal({
     setError("Judgment cancelled.");
   };
 
+  const cancelAndClose = () => {
+    cancel();
+    onClose();
+  };
+
   const elapsed = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
   const activeLinks = active.slice(0, 4);
   const progressPct = total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 0;
@@ -251,15 +256,11 @@ export function JudgmentModal({
       title={modalTitle}
       onClose={onClose}
       busy={submitting}
+      closeAction={submitting ? cancelAndClose : undefined}
       wide="lg"
+      closeLabel={submitting ? "Cancel judgment" : "Close"}
       actions={
-        submitting ? (
-          <div className="modal-action-group">
-            <button type="button" className="btn btn--quiet" onClick={cancel}>
-              Cancel judgment
-            </button>
-          </div>
-        ) : (
+        submitting ? null : (
           <>
             <div className="modal-note">
               {links.length === 0

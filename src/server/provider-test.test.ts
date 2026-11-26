@@ -47,6 +47,29 @@ describe("provider test", () => {
     });
   });
 
+  it("tests OpenRouter through the compatible chat-completions endpoint", async () => {
+    let seenUrl = "";
+    let seenBody: Record<string, unknown> = {};
+    const result = await testProviderConnection(
+      settings({
+        provider: "openrouter",
+        baseUrl: "https://openrouter.ai/api/v1",
+        model: "openai/gpt-4o-mini"
+      }),
+      fetchStub(async (url, init) => {
+        seenUrl = url;
+        seenBody = bodyOf(init);
+        return new Response(JSON.stringify({ choices: [{ message: { content: "ready" } }] }), { status: 200 });
+      })
+    );
+
+    expect(result.ok).toBe(true);
+    expect(seenUrl).toBe("https://openrouter.ai/api/v1/chat/completions");
+    expect(seenBody.model).toBe("openai/gpt-4o-mini");
+    expect(seenBody.max_tokens).toBe(64);
+    expect(seenBody.max_completion_tokens).toBeUndefined();
+  });
+
   it("fails when the selected model cannot complete a request", async () => {
     const result = await testProviderConnection(
       settings({ baseUrl: "https://api.example.com/v1", model: "missing-model" }),

@@ -1,5 +1,8 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { filterModelOptions, presetDraft, temperatureVisible } from "./Modals";
+import { Modal, filterModelOptions, presetDraft, temperatureVisible } from "./Modals";
+import { openRouterThinkingCapability } from "../../shared/thinking";
 
 const savedGoogle = {
   provider: "google",
@@ -19,6 +22,13 @@ describe("Settings provider presets", () => {
     expect(presetDraft("openai", savedGoogle)).toEqual({
       baseUrl: "https://api.openai.com/v1",
       model: "gpt-4o-mini"
+    });
+  });
+
+  it("offers a dedicated OpenRouter preset with a tested default", () => {
+    expect(presetDraft("openrouter", savedGoogle)).toEqual({
+      baseUrl: "https://openrouter.ai/api/v1",
+      model: "openai/gpt-4o-mini"
     });
   });
 
@@ -50,6 +60,20 @@ describe("Settings temperature visibility", () => {
     expect(temperatureVisible("local", "gpt-4o-mini")).toBe(false);
     expect(temperatureVisible("openai", "")).toBe(false);
   });
+
+  it("uses OpenRouter's detected capability instead of a model-name guess", () => {
+    const detected = openRouterThinkingCapability({
+      supported_parameters: ["reasoning"],
+      reasoning: { mandatory: false, supported_efforts: ["high", "none"] }
+    });
+    expect(detected.supported).toBe(true);
+    expect(temperatureVisible("openai", "deepseek/any-model", detected)).toBe(false);
+    const unsupported = openRouterThinkingCapability({
+      supported_parameters: [],
+      reasoning: null
+    });
+    expect(temperatureVisible("openai", "gpt-4o-mini", unsupported)).toBe(true);
+  });
 });
 
 describe("Model suggestions", () => {
@@ -66,5 +90,32 @@ describe("Model suggestions", () => {
 
   it("returns no entries when nothing matches", () => {
     expect(filterModelOptions(options, "not-a-model")).toEqual([]);
+  });
+});
+
+describe("Modal close control", () => {
+  const child = createElement("p", null, "Body");
+
+  it("keeps the × disabled while busy when there is no close action", () => {
+    const html = renderToStaticMarkup(
+      createElement(Modal, { title: "Test", onClose: () => undefined, busy: true, children: child })
+    );
+    expect(html).toContain('class="modal-close"');
+    expect(html).toContain("disabled");
+  });
+
+  it("enables the × while busy when the close action is the cancellation path", () => {
+    const html = renderToStaticMarkup(
+      createElement(Modal, {
+        title: "Test",
+        onClose: () => undefined,
+        busy: true,
+        closeAction: () => undefined,
+        closeLabel: "Cancel judgment",
+        children: child
+      })
+    );
+    expect(html).toContain('aria-label="Cancel judgment"');
+    expect(html).not.toContain("disabled");
   });
 });

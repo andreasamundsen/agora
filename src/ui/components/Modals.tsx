@@ -5,7 +5,7 @@ import type { UiSettings, ReasoningEffort } from "../api";
 import { downloadArgdown, fetchArgdown, fetchProviderModels, saveSettings, testSettings } from "../api";
 import { applyThemePreference, readThemePreference, type ThemePreference } from "../theme";
 import { isLocalProvider, providerHost, providerUrlProblem } from "../../shared/provider-url";
-import type { ThinkingLevel } from "../../shared/thinking";
+import type { ThinkingCapability, ThinkingLevel } from "../../shared/thinking";
 import { thinkingCapability } from "../../shared/thinking";
 import { InstructionPolicyViewer } from "./InstructionPolicyViewer";
 
@@ -30,9 +30,11 @@ interface ModalProps {
   wide?: "md" | "lg" | "xl";
   busy?: boolean;
   className?: string;
+  closeLabel?: string;
+  closeAction?: () => void;
 }
 
-export function Modal({ eyebrow, title, onClose, children, actions, wide = "md", busy, className }: ModalProps) {
+export function Modal({ eyebrow, title, onClose, children, actions, wide = "md", busy, className, closeLabel, closeAction }: ModalProps) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !busy) onClose();
@@ -56,7 +58,7 @@ export function Modal({ eyebrow, title, onClose, children, actions, wide = "md",
             {eyebrow && <div className="eyebrow">{eyebrow}</div>}
             <h2 className="modal-title">{title}</h2>
           </div>
-          <button type="button" className="modal-close" onClick={onClose} disabled={busy} aria-label="Close">×</button>
+          <button type="button" className="modal-close" onClick={closeAction ?? onClose} disabled={busy && !closeAction} aria-label={closeLabel ?? "Close"}>×</button>
         </header>
         <div className="modal-body">
           <div className="modal-scroll">{children}</div>
@@ -93,7 +95,7 @@ export function NewDebateModal({
   onOpenSettings
 }: {
   settings: UiSettings | null;
-  onCreate: (text: string) => Promise<void>;
+  onCreate: (text: string, signal?: AbortSignal) => Promise<void>;
   onClose: () => void;
   onOpenSettings: () => void;
 }) {
@@ -102,10 +104,13 @@ export function NewDebateModal({
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState(0);
   const areaRef = useRef<HTMLTextAreaElement | null>(null);
+  const createController = useRef<AbortController | null>(null);
 
   useEffect(() => {
     areaRef.current?.focus();
   }, []);
+
+  useEffect(() => () => createController.current?.abort(), []);
 
   useEffect(() => {
     if (!submitting) return;
@@ -116,15 +121,27 @@ export function NewDebateModal({
 
   const submit = async () => {
     if (submitting || text.trim().length < 6) return;
+    const controller = new AbortController();
+    createController.current = controller;
     setSubmitting(true);
     setError(null);
     try {
-      await onCreate(text.trim());
-      onClose();
+      await onCreate(text.trim(), controller.signal);
+      if (!controller.signal.aborted) onClose();
     } catch (caught) {
+      if (controller.signal.aborted) return;
       setError(caught instanceof Error ? caught.message : "Could not build the debate.");
       setSubmitting(false);
+    } finally {
+      if (createController.current === controller) createController.current = null;
     }
+  };
+
+  const cancel = () => {
+    createController.current?.abort();
+    createController.current = null;
+    setSubmitting(false);
+    onClose();
   };
 
   return (
@@ -133,6 +150,8 @@ export function NewDebateModal({
       title="Convene the chamber"
       onClose={onClose}
       busy={submitting}
+      closeAction={submitting ? cancel : undefined}
+      closeLabel={submitting ? "Cancel map generation" : undefined}
       wide="lg"
       actions={!submitting ? (
         <>
@@ -466,6 +485,7 @@ export function ExportModal({ debate, onClose }: { debate: Debate; onClose: () =
 const PRESETS: { id: string; label: string; baseUrl: string; model: string; hint: string }[] = [
   { id: "local", label: "No model", baseUrl: "", model: "", hint: "No model calls. Local scaffolding and structural review only." },
   { id: "openai", label: "OpenAI", baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini", hint: "An API key is required. Reasoning models show thinking controls." },
+  { id: "openrouter", label: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1", model: "openai/gpt-4o-mini", hint: "One key for many providers. Use a vendor-prefixed model ID; thinking controls follow the model metadata." },
   { id: "deepseek", label: "DeepSeek", baseUrl: "https://api.deepseek.com", model: "deepseek-flash", hint: "DeepSeek V4.1 Flash. Thinking effort is configurable below." },
   { id: "xai", label: "xAI / Grok", baseUrl: "https://api.x.ai/v1", model: "grok-4.7", hint: "Grok through the OpenAI-compatible endpoint. Models load from your saved connection." },
   { id: "anthropic", label: "Anthropic / Claude", baseUrl: "https://api.anthropic.com", model: "claude-sonnet-4-6", hint: "Native Claude Messages API. Thinking is set per model." },
@@ -490,9 +510,13 @@ export function presetDraft(
 }
 
 /** Temperature is only meaningful when the selected model has no thinking control. */
-export function temperatureVisible(provider: string, model: string): boolean {
+export function temperatureVisible(
+  provider: string,
+  model: string,
+  detected?: ThinkingCapability | null
+): boolean {
   if (provider === "local" || !model.trim()) return false;
-  return !thinkingCapability(provider, model).supported;
+  return !thinkingCapability(provider, model, detected).supported;
 }
 
 export function filterModelOptions(options: string[], query: string): string[] {
@@ -700,8 +724,11 @@ export function SettingsModal({
   const [forgetKey, setForgetKey] = useState(false);
   const [view, setView] = useState<"settings" | "instructions">("settings");
   const [modelOptions, setModelOptions] = useState<string[]>([]);
+  const [modelCapabilities, setModelCapabilities] = useState<Record<string, ThinkingCapability>>({});
   const [modelListState, setModelListState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [modelListMessage, setModelListMessage] = useState("");
+  const openRouterDestination =
+    provider === "openrouter" || providerHost(baseUrl).toLowerCase().startsWith("openrouter.ai");
 
   const loadModels = async (force = false) => {
     if (provider === "local") return;
@@ -709,12 +736,14 @@ export function SettingsModal({
     setModelListState("loading");
     setModelListMessage("");
     try {
-      const result = await fetchProviderModels();
+      const result = await fetchProviderModels(force);
       setModelOptions(result.models);
+      setModelCapabilities(result.capabilities ?? {});
       setModelListState(result.ok ? "ready" : "error");
       setModelListMessage(result.ok ? "" : result.message ?? "Could not load the model list.");
     } catch (caught) {
       setModelOptions([]);
+      setModelCapabilities({});
       setModelListState("error");
       setModelListMessage(caught instanceof Error ? caught.message : "Could not load the model list.");
     }
@@ -725,11 +754,15 @@ export function SettingsModal({
   }, []);
 
   useEffect(() => {
-    const capability = thinkingCapability(provider, model);
+    const capability = thinkingCapability(
+      provider,
+      model,
+      openRouterDestination ? modelCapabilities[model] : undefined
+    );
     if (capability.supported && !capability.levels.includes(reasoningEffort)) {
       setReasoningEffort("default");
     }
-  }, [provider, model, reasoningEffort]);
+  }, [provider, model, reasoningEffort, modelCapabilities, openRouterDestination]);
 
   useEffect(() => {
     const scroller = document.querySelector(".modal-scroll");
@@ -739,7 +772,8 @@ export function SettingsModal({
   const urlProblem = providerUrlProblem(baseUrl, hasEffectiveKey);
   const providerIsLocal = isLocalProvider(baseUrl);
   const providerDestination = providerHost(baseUrl);
-  const thinking = thinkingCapability(provider, model);
+  const detectedThinking = openRouterDestination ? modelCapabilities[model] ?? null : null;
+  const thinking = thinkingCapability(provider, model, detectedThinking);
 
   const choosePreset = (id: string) => {
     setProvider(id);
@@ -747,8 +781,16 @@ export function SettingsModal({
     if (draft) {
       setBaseUrl(draft.baseUrl);
       setModel(draft.model);
+      // A saved key belongs to the saved destination. Preserve it when the
+      // preset keeps the same host (including OpenAI -> OpenRouter for an
+      // existing OpenRouter configuration), but do not send it to a new host
+      // by accident. Choosing No model does not need a key.
+      setForgetKey(
+        id !== "local" && settings.hasKey && providerHost(draft.baseUrl) !== providerHost(baseUrl)
+      );
     }
     setModelOptions([]);
+    setModelCapabilities({});
     setModelListState("idle");
     setModelListMessage("");
     setStatus(null);
@@ -838,7 +880,7 @@ export function SettingsModal({
       ) : (
         <>
       <p className="modal-lede">
-        Agora supports OpenAI-compatible endpoints plus the native Claude and Gemini APIs. The local scaffolder is always available;
+        Agora supports OpenAI-compatible endpoints (including OpenRouter) plus the native Claude and Gemini APIs. The local scaffolder is always available;
         a model makes the arguments topic-specific.
       </p>
       <p className="modal-note modal-note--privacy">
@@ -990,7 +1032,7 @@ export function SettingsModal({
       {thinking.supported ? (
         <div className="field">
           <span className="field-label">
-            Thinking <em>{provider === "deepseek" ? "DeepSeek effort" : provider === "xai" ? "Grok effort" : provider === "anthropic" ? "Claude effort" : provider === "google" ? "Gemini thinking" : "reasoning effort"}</em>
+            Thinking <em>{detectedThinking ? "OpenRouter effort" : provider === "deepseek" ? "DeepSeek effort" : provider === "xai" ? "Grok effort" : provider === "anthropic" ? "Claude effort" : provider === "google" ? "Gemini thinking" : "reasoning effort"}</em>
           </span>
           <div className="judge-segmented">
             {thinking.levels.map((level) => (
@@ -1007,14 +1049,14 @@ export function SettingsModal({
           </div>
           <span className="field-hint">
             {thinking.note}
-            {thinking.levels.length < 6 ? " Only the levels this model accepts are shown." : ""}
+            {!detectedThinking && thinking.levels.length < 6 ? " Only the levels this model accepts are shown." : ""}
           </span>
         </div>
       ) : provider !== "local" && model.trim() ? (
         <span className="field-hint">{thinking.note}</span>
       ) : null}
 
-      {temperatureVisible(provider, model) && (
+      {temperatureVisible(provider, model, detectedThinking) && (
         <label className="field">
           <span className="field-label">Temperature <em>{temperature.toFixed(2)}</em></span>
           <input

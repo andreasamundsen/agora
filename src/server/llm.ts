@@ -24,6 +24,7 @@ import { providerReasoningEffort, thinkingCapability } from "../shared/thinking"
 import { providerProtocol } from "../shared/provider-protocol";
 import { callAnthropic } from "./anthropic";
 import { callGemini } from "./gemini";
+import { isOpenRouterSettings, openRouterCapabilityFor } from "./openrouter-catalog";
 
 /**
  * Authoring adapter. The rest of the app only sees Debate objects; whether
@@ -38,6 +39,14 @@ export interface AuthorResult {
   reply: string;
   engine: AuthorEngine;
   warning?: string;
+}
+
+/** A map request stopped before it could produce a complete result. */
+export class AuthorCancelledError extends Error {
+  constructor() {
+    super("Map generation was cancelled.");
+    this.name = "AuthorCancelledError";
+  }
 }
 
 export interface AskResult {
@@ -177,78 +186,117 @@ const LOCAL_OUTPUT_TOKEN_FLOOR = 12_000;
 export async function callModel(
   settings: StoredSettings,
   messages: { role: "system" | "user"; content: string }[],
-  options: { temperature?: number; maxTokens?: number; jsonMode?: boolean } = {}
+  options: { temperature?: number; maxTokens?: number; jsonMode?: boolean; signal?: AbortSignal } = {}
 ): Promise<string> {
+  if (options.signal?.aborted) throw new Error("The model request was cancelled.");
   const urlProblem = providerUrlProblem(settings.baseUrl, Boolean(settings.apiKey.trim()));
   if (urlProblem) throw new Error(urlProblem);
   if (!isReady(settings)) throw new Error("No model is configured.");
   const protocol = providerProtocol(settings.provider);
   if (protocol === "anthropic") return callAnthropic(settings, messages, options);
   if (protocol === "gemini") return callGemini(settings, messages, options);
-  const capability = thinkingCapability(settings.provider, settings.model);
+  const openRouter = isOpenRouterSettings(settings);
+  const detectedCapability = openRouter
+    ? await openRouterCapabilityFor(settings, settings.model)
+    : undefined;
+  if (options.signal?.aborted) throw new Error("The model request was cancelled.");
+  const capability = detectedCapability ?? thinkingCapability(settings.provider, settings.model);
   const thinkingModel = capability.supported;
-  const thinkingEnabled = thinkingModel && settings.reasoningEffort !== "default" && settings.reasoningEffort !== "off";
+  const effectiveEffort =
+    thinkingModel && !capability.levels.includes(settings.reasoningEffort)
+      ? "default"
+      : settings.reasoningEffort;
+  const thinkingEnabled =
+    thinkingModel && effectiveEffort !== "default" && effectiveEffort !== "off";
+  const thinkingBudgetActive = thinkingModel && effectiveEffort !== "off";
   const localProvider = isLocalProvider(settings.baseUrl);
-  const maxTokens = thinkingEnabled
+  const maxTokens = thinkingBudgetActive
     ? Math.max(
         options.maxTokens ?? 0,
-        THINKING_TOKEN_BUDGET[settings.reasoningEffort],
+        THINKING_TOKEN_BUDGET[effectiveEffort],
         localProvider ? LOCAL_OUTPUT_TOKEN_FLOOR : 0
       )
     : localProvider
       ? Math.max(options.maxTokens ?? 0, LOCAL_OUTPUT_TOKEN_FLOOR)
       : options.maxTokens ?? 4200;
-  const tokenField = settings.provider === "openai" && thinkingModel ? "max_completion_tokens" : "max_tokens";
+  const tokenField = openRouter
+    ? "max_tokens"
+    : settings.provider === "openai" && thinkingModel
+      ? "max_completion_tokens"
+      : "max_tokens";
   const body: Record<string, unknown> = {
     model: settings.model,
     messages,
     [tokenField]: maxTokens
   };
 
-  if (settings.provider === "deepseek" && thinkingModel && settings.reasoningEffort !== "default") {
+  if (openRouter && thinkingModel) {
+    if (effectiveEffort === "off") {
+      body.reasoning = { enabled: false };
+    } else if (effectiveEffort !== "default") {
+      const effort =
+        capability.wireEfforts?.[effectiveEffort] ??
+        providerReasoningEffort("openrouter", effectiveEffort);
+      if (effort) body.reasoning = { effort };
+    }
+  } else if (settings.provider === "deepseek" && thinkingModel && effectiveEffort !== "default") {
     body.thinking = { type: thinkingEnabled ? "enabled" : "disabled" };
-    if (thinkingEnabled) body.reasoning_effort = providerReasoningEffort(settings.provider, settings.reasoningEffort);
+    if (thinkingEnabled) body.reasoning_effort = providerReasoningEffort(settings.provider, effectiveEffort);
   } else if (thinkingEnabled) {
-    const effort = providerReasoningEffort(settings.provider, settings.reasoningEffort);
+    const effort = providerReasoningEffort(settings.provider, effectiveEffort);
     if (effort) body.reasoning_effort = effort;
   }
 
   const sendTemperature =
-    !thinkingModel || (settings.provider === "deepseek" && settings.reasoningEffort === "off");
+    !thinkingModel || (settings.provider === "deepseek" && effectiveEffort === "off");
   if (sendTemperature) {
     body.temperature = options.temperature ?? settings.temperature;
   }
 
-  const send = async (useJsonMode: boolean): Promise<Response> => {
+  const send = async (useJsonMode: boolean): Promise<{ response: Response; text: string }> => {
     const controller = new AbortController();
-    const timeoutMs = thinkingEnabled ? 240_000 : localProvider ? 300_000 : 150_000;
+    const timeoutMs = thinkingBudgetActive ? 240_000 : localProvider ? 300_000 : 150_000;
     const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const signal = options.signal
+      ? AbortSignal.any([controller.signal, options.signal])
+      : controller.signal;
     try {
-      return await fetch(chatEndpoint(settings.baseUrl), {
+      const response = await fetch(chatEndpoint(settings.baseUrl), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...(settings.apiKey ? { Authorization: `Bearer ${settings.apiKey}` } : {})
         },
         body: JSON.stringify(useJsonMode ? { ...body, response_format: { type: "json_object" } } : body),
-        signal: controller.signal
+        signal
       });
+      // Keep the timeout alive until the body has arrived. A provider can send
+      // 200 headers immediately and then leave the response body open, which
+      // would otherwise wait forever after this function returned.
+      const text = await response.text();
+      return { response, text };
+    } catch (error) {
+      if (options.signal?.aborted) throw new Error("The model request was cancelled.");
+      if (controller.signal.aborted) {
+        throw new Error(`The model did not finish within ${Math.round(timeoutMs / 1000)} seconds.`);
+      }
+      throw error;
     } finally {
       clearTimeout(timer);
     }
   };
 
   const useJsonMode = options.jsonMode !== false;
-  let response = await send(useJsonMode);
+  let { response, text } = await send(useJsonMode);
   if (useJsonMode && (response.status === 400 || response.status === 422)) {
-    response = await send(false);
+    ({ response, text } = await send(false));
   }
   if (!response.ok) {
-    const detail = (await response.text().catch(() => "")).slice(0, 500);
+    const detail = text.slice(0, 500);
     throw new Error(`Model request failed (${response.status})${detail ? `: ${detail}` : ""}`);
   }
 
-  const payload = (await response.json()) as {
+  const payload = JSON.parse(text) as {
     choices?: {
       finish_reason?: string;
       message?: {
@@ -351,16 +399,22 @@ function mergeGraph(
   return { nodes, edges: resolvedEdges };
 }
 
-export async function authorDebate(input: string): Promise<AuthorResult> {
+export async function authorDebate(input: string, signal?: AbortSignal): Promise<AuthorResult> {
+  if (signal?.aborted) throw new AuthorCancelledError();
   const settings = getSettings();
   if (!isReady(settings)) {
     return localAuthorDebate(input);
   }
   try {
-    const content = await callModel(settings, [
-      { role: "system", content: BASE_RULES },
-      { role: "user", content: intakePrompt(input) }
-    ]);
+    const content = await callModel(
+      settings,
+      [
+        { role: "system", content: BASE_RULES },
+        { role: "user", content: intakePrompt(input) }
+      ],
+      { signal }
+    );
+    if (signal?.aborted) throw new AuthorCancelledError();
     const parsed = AuthorOutputSchema.parse(parseJsonObject(content));
     const thesisTitle = cleanTitle(parsed.thesis?.title || topicFromPrompt(input));
     const thesisText = cleanText(parsed.thesis?.text || thesisTitle);
@@ -404,6 +458,7 @@ export async function authorDebate(input: string): Promise<AuthorResult> {
       warning: warnings.size ? [...warnings].join(" ") : undefined
     };
   } catch (error) {
+    if (signal?.aborted) throw new AuthorCancelledError();
     const fallback = localAuthorDebate(input);
     fallback.warning = `Model unavailable (${error instanceof Error ? error.message : String(error)}). Using the local scaffolder.`;
     return fallback;

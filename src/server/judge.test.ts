@@ -60,35 +60,59 @@ function promptDebate() {
   });
 }
 
-describe("local link prompt", () => {
-  it("contains only the support's source, target, and relation type", () => {
+describe("link prompt", () => {
+  it("places the target with debate context while keeping other arguments out", () => {
     const debate = promptDebate();
     const edge = debate.edges.find((candidate) => candidate.id === "e_p1_thesis")!;
     const prompt = linkPrompt(debate, edge);
 
+    expect(prompt).toContain("THE DEBATE");
+    expect(prompt).toContain("Motion: Should the chain hold?");
+    expect(prompt).toContain("Thesis: The chain holds.");
+    expect(prompt).toContain("TARGET'S PLACE IN THE MAP");
+    expect(prompt).toContain("Role: the thesis itself");
+    expect(prompt).toContain("Path to the thesis: the target is the thesis");
     expect(prompt).toContain("Relation: SUPPORT");
     expect(prompt).toContain("SOURCE");
     expect(prompt).toContain("TARGET");
     expect(prompt).toContain("P1 text.");
     expect(prompt).toContain("The chain holds.");
     expect(prompt).not.toContain("C1 text.");
+    expect(prompt).not.toContain("R1 text.");
     expect(prompt).not.toContain("UNRELATED CONTEXT.");
-    expect(prompt).not.toContain("TARGET'S ROLE IN THE MAP");
-    expect(prompt).not.toContain("SHORTEST PATH TO THE THESIS");
+    expect(prompt).not.toContain("FRAMING NOTE, NOT AN ARGUMENT.");
     expect(prompt).not.toContain("OTHER RELATIONS AROUND THIS PAIR");
     expect(prompt).not.toContain("RELATION NOTE THAT MUST NOT LEAK.");
     expect(prompt).not.toContain("STANDARD OF PROOF");
   });
 
-  it("contains only the conflict's source and target, not the reply chain", () => {
+  it("gives a direct case line its short path to the thesis", () => {
     const debate = promptDebate();
     const edge = debate.edges.find((candidate) => candidate.id === "e_c1_p1")!;
     const prompt = linkPrompt(debate, edge);
 
     expect(prompt).toContain("Relation: ATTACK");
+    expect(prompt).toContain("Role: direct case line (1 step from the thesis)");
+    expect(prompt).toContain("“P1 supports the thesis” —SUPPORT→ “The chain holds”");
     expect(prompt).toContain("C1 text.");
     expect(prompt).toContain("P1 text.");
     expect(prompt).not.toContain("R1 text.");
+    expect(prompt).not.toContain("UNRELATED CONTEXT.");
+  });
+
+  it("gives a deeper response a compact path through the branch", () => {
+    const debate = promptDebate();
+    const edge = debate.edges.find((candidate) => candidate.id === "e_r1_c1")!;
+    const prompt = linkPrompt(debate, edge);
+
+    expect(prompt).toContain("Relation: ATTACK");
+    expect(prompt).toContain("Role: first response (2 steps from the thesis)");
+    expect(prompt).toContain(
+      "“C1 attacks P1” —ATTACK→ “P1 supports the thesis” —SUPPORT→ “The chain holds”"
+    );
+    expect(prompt).toContain("R1 text.");
+    expect(prompt).not.toContain("P1 premise.");
+    expect(prompt).not.toContain("P1 conclusion.");
     expect(prompt).not.toContain("UNRELATED CONTEXT.");
   });
 });

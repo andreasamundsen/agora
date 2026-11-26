@@ -1058,8 +1058,9 @@ export default function App() {
     };
   }, [stage?.index, stage?.transcript, debate]);
 
-  const handleCreate = useCallback(async (text: string) => {
-    const result = await createDebate(text);
+  const handleCreate = useCallback(async (text: string, signal?: AbortSignal) => {
+    const result = await createDebate(text, signal);
+    if (signal?.aborted) return;
     setDebate(result.debate);
     setActiveId(result.debate.id);
     setSelectedId(null);

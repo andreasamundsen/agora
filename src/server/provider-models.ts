@@ -1,4 +1,5 @@
 import { modelsEndpoint, providerUrlProblem } from "../shared/provider-url";
+import type { ThinkingCapability } from "../shared/thinking";
 import {
   ANTHROPIC_API_VERSION,
   anthropicModelsEndpoint,
@@ -6,12 +7,14 @@ import {
   providerProtocol
 } from "../shared/provider-protocol";
 import type { StoredSettings } from "./settings";
+import { isOpenRouterSettings, loadOpenRouterCatalog } from "./openrouter-catalog";
 
 export const PROVIDER_MODELS_TIMEOUT_MS = 15_000;
 
 export interface ProviderModelsResult {
   ok: boolean;
   models: string[];
+  capabilities?: Record<string, ThinkingCapability>;
   message?: string;
 }
 
@@ -30,12 +33,21 @@ interface ModelsPayload {
 export async function listProviderModels(
   settings: StoredSettings,
   fetchImpl: FetchLike = fetch,
-  timeoutMs = PROVIDER_MODELS_TIMEOUT_MS
+  timeoutMs = PROVIDER_MODELS_TIMEOUT_MS,
+  force = false
 ): Promise<ProviderModelsResult> {
   const problem = providerUrlProblem(settings.baseUrl, Boolean(settings.apiKey.trim()));
   if (problem) return { ok: false, models: [], message: problem };
   if (!settings.baseUrl.trim()) {
     return { ok: false, models: [], message: "Add a base URL first." };
+  }
+
+  if (isOpenRouterSettings(settings)) {
+    const catalog = await loadOpenRouterCatalog(settings, { fetchImpl, timeoutMs, force });
+    if (!catalog.ok) {
+      return { ok: false, models: [], message: catalog.message ?? "Could not load OpenRouter models." };
+    }
+    return { ok: true, models: catalog.models, capabilities: catalog.capabilities };
   }
 
   const protocol = providerProtocol(settings.provider);

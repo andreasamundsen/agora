@@ -16,6 +16,7 @@ describe("provider protocol helpers", () => {
     expect(providerProtocol("google")).toBe("gemini");
     expect(providerProtocol("gemini")).toBe("gemini");
     expect(providerProtocol("openai")).toBe("openai");
+    expect(providerProtocol("openrouter")).toBe("openai");
     expect(providerProtocol("custom")).toBe("openai");
   });
 

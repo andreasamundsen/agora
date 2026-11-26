@@ -18,6 +18,7 @@ interface CallOptions {
   temperature?: number;
   maxTokens?: number;
   jsonMode?: boolean;
+  signal?: AbortSignal;
 }
 
 const ANTHROPIC_VERSION = ANTHROPIC_API_VERSION;
@@ -94,6 +95,9 @@ export async function callAnthropic(
   body.max_tokens = maxTokens;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), style !== "none" && level !== "off" ? 240_000 : 150_000);
+  const signal = options.signal
+    ? AbortSignal.any([controller.signal, options.signal])
+    : controller.signal;
   let response: Response;
   try {
     response = await fetchImpl(anthropicMessagesEndpoint(settings.baseUrl), {
@@ -104,9 +108,10 @@ export async function callAnthropic(
         ...(settings.apiKey ? { Authorization: `Bearer ${settings.apiKey}` } : {})
       },
       body: JSON.stringify(body),
-      signal: controller.signal
+      signal
     });
   } catch (error) {
+    if (options.signal?.aborted) throw new Error("The Claude request was cancelled.");
     if (controller.signal.aborted) {
       throw new Error("Claude did not answer before the request timed out.");
     }

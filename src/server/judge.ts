@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Debate, DebateEdge, DebateNode } from "../core/model";
+import { buildLinkContext, type LinkContext } from "../core/link-context";
 import { cleanText, uid } from "../core/model";
 import {
   buildJudgmentRun,
@@ -126,12 +127,51 @@ ${premises}
 Conclusion: ${node.conclusion ? cleanText(node.conclusion) : "(not stated separately)"}`;
 }
 
-/** A local link prompt sees only the source, the target, and the relation type. */
+function linkRoleLabel(context: LinkContext): string {
+  switch (context.role) {
+    case "thesis itself":
+      return "the thesis itself";
+    case "direct case line":
+      return "direct case line (1 step from the thesis)";
+    case "first response":
+      return "first response (2 steps from the thesis)";
+    case "deeper response":
+      return `deeper response (${context.path.length} steps from the thesis)`;
+    case "no directed path":
+      return "no directed path to the thesis";
+  }
+}
+
+function linkPathSkeleton(context: LinkContext): string {
+  if (!context.path.length) {
+    return context.role === "thesis itself"
+      ? "the target is the thesis"
+      : "no directed path from the target to the thesis was found";
+  }
+  return context.path.reduce(
+    (skeleton, step) => `${skeleton} —${step.edge.type.toUpperCase()}→ “${step.to.title}”`,
+    `“${context.target.title}”`
+  );
+}
+
+/** A local link prompt sees the two endpoints, plus enough map context to place the target. */
 export function linkPrompt(debate: Debate, edge: DebateEdge): string {
   const source = debate.nodes.find((node) => node.id === edge.from);
   const target = debate.nodes.find((node) => node.id === edge.to);
   if (!source || !target) throw new Error("The link points at a missing argument.");
-  return `THE LINK
+
+  const context = buildLinkContext(debate, edge);
+  if (!context) throw new Error("The link target is missing from the map.");
+
+  return `THE DEBATE
+Motion: ${cleanText(debate.motion)}
+Thesis: ${cleanText(debate.thesisText) || cleanText(debate.motion)}
+
+TARGET'S PLACE IN THE MAP
+Role: ${linkRoleLabel(context)}
+Path to the thesis: ${linkPathSkeleton(context)}
+
+THE LINK
 Relation: ${edge.type.toUpperCase()}
 
 --- BEGIN UNTRUSTED ARGUMENT DATA ---
@@ -142,7 +182,7 @@ ${nodeBlock(target, "TARGET")}
 
 --- END UNTRUSTED ARGUMENT DATA ---
 
-Assess only this link. The rest of the map is not in evidence.`;
+Use the debate context only to interpret what the source and target refer to and how the target is positioned. Assess only this link. Do not decide the motion, weigh the branch, or treat the path or other arguments as evidence.`;
 }
 
 /** The clustering prompt sees every argument text, but no edges, rulings, or ratings. */

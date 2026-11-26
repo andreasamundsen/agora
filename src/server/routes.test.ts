@@ -68,6 +68,76 @@ afterEach(async () => {
 });
 
 describe("debate routes", () => {
+  it("does not save a map when the create request is cancelled", async () => {
+    const store = new DebateStore(dir);
+    vi.stubEnv("AGORA_PACKAGED", "0");
+    vi.stubEnv("AGORA_LLM_BASE_URL", "https://provider.example/v1");
+    vi.stubEnv("AGORA_LLM_MODEL", "test-model");
+    vi.stubEnv("AGORA_LLM_API_KEY", "test-key");
+    let resolveStarted!: () => void;
+    let resolveAborted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      resolveStarted = resolve;
+    });
+    const aborted = new Promise<void>((resolve) => {
+      resolveAborted = resolve;
+    });
+    const originalFetch = globalThis.fetch;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        resolveStarted();
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener(
+            "abort",
+            () => {
+              resolveAborted();
+              reject(new DOMException("aborted", "AbortError"));
+            },
+            { once: true }
+          );
+        });
+      })
+    );
+
+    try {
+      await start(store);
+      const port = Number(new URL(base).port);
+      const request = http.request({
+        hostname: "127.0.0.1",
+        port,
+        path: "/api/debates",
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      });
+      request.on("error", () => undefined);
+      request.end(JSON.stringify({ text: "A position worth cancelling" }));
+      await started;
+      request.destroy();
+      await aborted;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      expect((await store.list()).debates).toEqual([]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("saves a locally authored map when create succeeds", async () => {
+    const store = new DebateStore(dir);
+    await start(store);
+
+    const response = await fetch(`${base}/api/debates`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: "Cities should make public transit free at the point of use." })
+    });
+
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as { engine: string; debate: { id: string } };
+    expect(body.engine).toBe("local");
+    expect((await store.list()).debates.map((debate) => debate.id)).toContain(body.debate.id);
+  });
+
   it("returns library warnings without hiding healthy debates", async () => {
     const store = new DebateStore(dir);
     await fsp.writeFile(path.join(dir, "broken.json"), "not json", "utf8");

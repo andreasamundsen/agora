@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { callModel } from "./llm";
 import type { StoredSettings } from "./settings";
+import { clearOpenRouterCatalogCache } from "./openrouter-catalog";
 
 const localSettings: StoredSettings = {
   provider: "local",
@@ -47,6 +48,15 @@ const deepseekSettings: StoredSettings = {
   reasoningEffort: "high"
 };
 
+const openRouterSettings: StoredSettings = {
+  provider: "openai",
+  baseUrl: "https://openrouter.ai/api/v1",
+  model: "deepseek/deepseek-v4.1-flash-1017",
+  apiKey: "test-key",
+  temperature: 0.7,
+  reasoningEffort: "high"
+};
+
 function chatResponse(content: string, extra: Record<string, unknown> = {}): Response {
   return new Response(
     JSON.stringify({
@@ -58,6 +68,7 @@ function chatResponse(content: string, extra: Record<string, unknown> = {}): Res
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  clearOpenRouterCatalogCache();
 });
 
 describe("callModel output budgets", () => {
@@ -136,6 +147,38 @@ describe("callModel output budgets", () => {
     );
   });
 
+  it("keeps the timeout active while reading a stalled response body", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+          const stream = new ReadableStream({
+            start(controller) {
+              init?.signal?.addEventListener(
+                "abort",
+                () => controller.error(new DOMException("aborted", "AbortError")),
+                { once: true }
+              );
+            }
+          });
+          return new Response(stream, {
+            status: 200,
+            headers: { "Content-Type": "application/json" }
+          });
+        })
+      );
+
+      const pending = expect(
+        callModel(remoteSettings, [{ role: "user", content: "map this" }])
+      ).rejects.toThrow(/did not finish within 150 seconds/i);
+      await vi.advanceTimersByTimeAsync(150_000);
+      await pending;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("uses completion tokens and effort for an OpenAI reasoning model", async () => {
     const bodies: Record<string, unknown>[] = [];
     vi.stubGlobal(
@@ -211,6 +254,118 @@ describe("callModel output budgets", () => {
     expect(bodies[1]?.thinking).toEqual({ type: "disabled" });
     expect(bodies[1]?.reasoning_effort).toBeUndefined();
     expect(bodies[1]?.temperature).toBe(0.7);
+  });
+
+  it("uses OpenRouter's published metadata for the request shape and budget", async () => {
+    const urls: string[] = [];
+    const bodies: Record<string, unknown>[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        urls.push(url);
+        if (url.endsWith("/models")) {
+          return new Response(
+            JSON.stringify({
+              data: [
+                {
+                  id: "deepseek/deepseek-v4.1-flash-1017",
+                  supported_parameters: ["reasoning", "reasoning_effort"],
+                  reasoning: {
+                    mandatory: false,
+                    supported_efforts: ["max", "high", "low", "none"]
+                  }
+                }
+              ]
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          );
+        }
+        bodies.push(JSON.parse(String(init?.body)));
+        return chatResponse('{"reply":"ok"}');
+      })
+    );
+
+    await callModel(openRouterSettings, [{ role: "user", content: "map this" }], {
+      maxTokens: 1800
+    });
+
+    expect(urls).toEqual([
+      "https://openrouter.ai/api/v1/models",
+      "https://openrouter.ai/api/v1/chat/completions"
+    ]);
+    expect(bodies[0]?.max_tokens).toBe(16_384);
+    expect(bodies[0]?.max_completion_tokens).toBeUndefined();
+    expect(bodies[0]?.reasoning).toEqual({ effort: "high" });
+    expect(bodies[0]?.reasoning_effort).toBeUndefined();
+    expect(bodies[0]?.temperature).toBeUndefined();
+  });
+
+  it("sends an explicit OpenRouter off state without inventing an effort", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input).endsWith("/models")) {
+          return new Response(
+            JSON.stringify({
+              data: [
+                {
+                  id: "deepseek/deepseek-v4.1-flash-1017",
+                  supported_parameters: ["reasoning"],
+                  reasoning: { mandatory: false, supported_efforts: ["high", "none"] }
+                }
+              ]
+            }),
+            { status: 200 }
+          );
+        }
+        bodies.push(JSON.parse(String(init?.body)));
+        return chatResponse('{"reply":"ok"}');
+      })
+    );
+
+    await callModel(
+      { ...openRouterSettings, reasoningEffort: "off" },
+      [{ role: "user", content: "map this" }]
+    );
+
+    expect(bodies[0]?.reasoning).toEqual({ enabled: false });
+    expect(bodies[0]?.max_tokens).toBe(4200);
+  });
+
+  it("clamps an OpenRouter level the catalogue does not advertise", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input).endsWith("/models")) {
+          return new Response(
+            JSON.stringify({
+              data: [
+                {
+                  id: "deepseek/deepseek-v4.1-flash-1017",
+                  supported_parameters: ["reasoning"],
+                  reasoning: { mandatory: false, supported_efforts: ["high", "none"] }
+                }
+              ]
+            }),
+            { status: 200 }
+          );
+        }
+        bodies.push(JSON.parse(String(init?.body)));
+        return chatResponse('{"reply":"ok"}');
+      })
+    );
+
+    await callModel(
+      { ...openRouterSettings, reasoningEffort: "medium" },
+      [{ role: "user", content: "map this" }]
+    );
+
+    expect(bodies[0]?.reasoning).toBeUndefined();
+    expect(bodies[0]?.reasoning_effort).toBeUndefined();
+    expect(bodies[0]?.max_tokens).toBe(16_384);
   });
 
   it("maps xAI Max to xhigh without sending temperature", async () => {
